@@ -711,6 +711,68 @@ body.member-mode.senior-member .my-progress-goal-body {
 .sposuru-dropzone-icon { font-size: 1.6rem; line-height: 1; margin-bottom: 6px; }
 .sposuru-dropzone-title { font-size: .82rem; font-weight: 700; margin-bottom: 4px; }
 .sposuru-dropzone-hint { font-size: .66rem; color: var(--muted); line-height: 1.45; }
+
+/* タブレット（iPad 等）— スマホ用 480px だけではカバーできない幅 */
+@media (max-width: 1024px) {
+  .header-top { flex-wrap: wrap; align-items: stretch; }
+  .header-actions {
+    max-width: 100%;
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 6px;
+  }
+  body.member-mode .header-top { flex-direction: column; }
+  body.member-mode header h1 { font-size: .98rem; }
+  body.member-mode #memberHint { font-size: .68rem !important; line-height: 1.45; }
+  .view-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    margin-left: 10px;
+    margin-right: 10px;
+  }
+  .view-tabs::-webkit-scrollbar { display: none; }
+  .view-tab {
+    flex: 0 0 auto;
+    min-width: 7.2em;
+    max-width: 42vw;
+    font-size: .68rem;
+    padding: 10px 8px;
+    line-height: 1.25;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .league-tabs { padding-left: 10px; padding-right: 10px; }
+  main { padding: 8px 12px 18px; }
+  .card { padding: 12px; }
+  .player-item { flex-wrap: wrap; row-gap: 6px; }
+  .player-item input[data-rename-player] { flex: 1 1 140px; min-width: 0; }
+  .player-item .player-status { flex: 0 0 auto; }
+  .stripe-roster-row { grid-template-columns: 1fr; }
+  .stripe-roster-actions { flex-direction: row; flex-wrap: wrap; }
+  .stripe-roster-name-input { max-width: none; flex: 1 1 100px; }
+  .stripe-roster-sposuru-input { max-width: none; flex: 1 1 120px; }
+  .awards-filter-row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .awards-filter-label { min-width: 0; }
+  .special-award-row,
+  .special-award-head { grid-template-columns: 1fr; }
+  .settings-grid { grid-template-columns: 1fr; }
+  body.embedded { padding-bottom: 8px; }
+  body.embedded .grid-wrap,
+  body.embedded .grid-wrap-split { max-height: min(68vh, 760px); }
+}
+@media (min-width: 481px) and (max-width: 1024px) {
+  main { max-width: 920px; margin-left: auto; margin-right: auto; }
+  .view-tab { min-width: 8.5em; font-size: .72rem; }
+  .standing-row { grid-template-columns: 36px 1fr auto auto; }
+}
+
 @media (max-width: 480px) {
   main { padding: 8px 10px 18px; }
   .card { padding: 12px; border-radius: 12px; }
