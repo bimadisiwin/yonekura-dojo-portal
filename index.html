@@ -394,6 +394,14 @@ body.member-mode .cell-readonly { pointer-events: none; }
 body.member-mode .header-actions .member-me-only { display: inline-flex !important; }
 body.member-mode.senior-member .league-tabs { display: none !important; }
 body.member-mode.senior-member .view-tabs { display: none !important; }
+body.member-mode.senior-member .my-progress-hero {
+  background: linear-gradient(135deg, #3d4f6a 0%, #2a3548 100%);
+}
+body.member-mode.senior-member .my-progress-goal-body {
+  font-size: .92rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
 .my-progress-comment-body {
   font-size: .84rem; line-height: 1.65; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
 }
@@ -1009,7 +1017,7 @@ body.embedded.player-modal-open {
     </div>
   </div>
   <div class="sub no-print" id="archiveBanner" style="display:none;margin-top:4px;font-size:.72rem;background:rgba(255,255,255,.15);padding:4px 8px;border-radius:8px"></div>
-  <div class="sub no-print member-me-only" id="memberHint" style="display:none;font-size:.72rem;opacity:.85;margin-top:4px">👀 会員閲覧モード（右上の🎗マイ進捗ボタンから名前＋誕生日を入力）</div>
+  <div class="sub no-print member-me-only" id="memberHint" style="display:none;font-size:.72rem;opacity:.85;margin-top:4px">👀 会員閲覧モード（🎗マイ進捗／🎯マイ目標は右上ボタンから）</div>
   <button type="button" class="sync-status no-print admin-only" id="syncStatus" style="display:inline-block;margin-top:4px;font-size:.72rem;font-weight:700;cursor:pointer;background:transparent;border:none;color:inherit;padding:4px 0">☁︎ 同期オフ</button>
 </header>
 <div class="league-tabs no-print" id="leagueTabs"></div>
@@ -1052,16 +1060,16 @@ body.embedded.player-modal-open {
 </div>
 <div class="modal-overlay no-print" id="memberLoginModal">
   <div class="modal" style="max-width:400px">
-    <h3>🎗 マイ進捗の確認</h3>
+    <h3 id="memberLoginModalTitle">本人確認</h3>
     <p style="font-size:.78rem;color:var(--muted);line-height:1.55;margin:0 0 12px">
       道場での<strong>名前</strong>と<strong>誕生日（月日4桁）</strong>を続けて入力してください。
     </p>
     <div class="form-row">
       <label for="memberLoginInput">合言葉</label>
-      <input id="memberLoginInput" type="text" inputmode="text" autocomplete="off" placeholder="例：ゆうすけ0610" style="font-size:16px">
+      <input id="memberLoginInput" type="text" inputmode="text" autocomplete="off" placeholder="例：ゆうすけ0610／きゅうた0620" style="font-size:16px">
     </div>
     <p id="memberLoginError" style="display:none;font-size:.72rem;color:#b83232;margin:8px 0 0"></p>
-    <p style="font-size:.64rem;color:var(--muted);line-height:1.45;margin:10px 0 0">※ 順位表・星取表は入力なしで閲覧できます。マイ進捗（ストライプ・出席）のみ確認が必要です。</p>
+    <p id="memberLoginModalNote" style="font-size:.64rem;color:var(--muted);line-height:1.45;margin:10px 0 0">※ 小学生は🎗マイ進捗（ストライプ・出席）、中学生以上は🎯マイ目標（今シーズンの目標・指導員メッセージ）の確認に使います。順位表・星取表は入力なしで閲覧できます。</p>
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">
       <button type="button" class="btn btn-primary btn-block" data-action="submitMemberLogin">確認する</button>
       <button type="button" class="btn btn-ghost btn-block" data-action="closeMemberLogin">あとで（順位表を見る）</button>
@@ -1395,6 +1403,22 @@ function syncSeniorMemberUI() {
   }
 }
 
+function getMemberProgressButtonLabel() {
+  if (myRosterId) {
+    var m = findRosterMember(myRosterId);
+    if (m && isSeniorMember(m)) return "🎯 マイ目標";
+  }
+  return "🎗 マイ進捗";
+}
+
+function updateMemberProgressUI() {
+  syncSeniorMemberUI();
+  if (!isMemberMode) return;
+  var btn = document.getElementById("btnMyProgress");
+  if (btn) btn.textContent = getMemberProgressButtonLabel();
+  updateMemberHint();
+}
+
 function activateMyRoster(rosterId) {
   if (!rosterId) return false;
   var m = findRosterMember(rosterId);
@@ -1402,9 +1426,9 @@ function activateMyRoster(rosterId) {
   myRosterId = rosterId;
   document.body.className = document.body.className.replace(/\s*has-my-roster/g, "");
   document.body.className += " has-my-roster";
-  syncSeniorMemberUI();
   saveMemberSessionRosterId(rosterId);
-  updateMemberHint();
+  updateMemberProgressUI();
+  if (isMemberMode && isSeniorMember(m)) setView("myprogress");
   return true;
 }
 
@@ -1420,7 +1444,7 @@ function updateMemberHint() {
         : "👀 " + m.name + "さんとして確認中（マイ進捗）")
       : "👀 マイ進捗確認中";
   } else {
-    hint.textContent = "👀 会員閲覧モード（右上の🎗マイ進捗ボタンで名前＋誕生日を入力）";
+    hint.textContent = "👀 会員閲覧モード（🎗マイ進捗／🎯マイ目標は右上ボタンから）";
   }
 }
 
@@ -1476,13 +1500,18 @@ function submitMemberLogin() {
 }
 
 function logoutMemberSession() {
+  var wasSenior = false;
+  if (myRosterId) {
+    var prev = findRosterMember(myRosterId);
+    wasSenior = !!(prev && isSeniorMember(prev));
+  }
   clearMemberSessionRosterId();
   myRosterId = "";
   document.body.className = document.body.className.replace(/\s*has-my-roster/g, "").replace(/\s*senior-member/g, "");
-  updateMemberHint();
+  updateMemberProgressUI();
   if (currentView === "myprogress") setView("main");
   else render();
-  showToast("マイ進捗の確認を終了しました");
+  showToast(wasSenior ? "マイ目標の確認を終了しました" : "マイ進捗の確認を終了しました");
 }
 
 function detectMemberMode() {
@@ -1531,9 +1560,8 @@ function applyMemberModeUI() {
   var themeMeta = document.querySelector('meta[name="theme-color"]');
   if (themeMeta) themeMeta.content = "#4a3f35";
   myRosterId = resolveMyRosterId();
-  syncSeniorMemberUI();
   currentView = "main";
-  updateMemberHint();
+  updateMemberProgressUI();
 }
 
 const SEASON_DEFS = [
@@ -2552,6 +2580,9 @@ function renderSeniorMyProgressPage(rosterId) {
     '<div class="my-progress-hero-name">' + esc(member.name) + "さん</div>" +
     '<div class="my-progress-hero-level">' + esc(member.group || "シニア") + "</div>" +
     "</div>" +
+    '<div class="card" style="background:var(--bg);border-style:dashed">' +
+    '<p style="font-size:.76rem;color:var(--muted);margin:0;line-height:1.65">指導員と一緒に決めた<strong>今シーズンの目標</strong>と、稽古を踏まえた<strong>指導員からのメッセージ</strong>を確認できます。更新はシーズンごとに行います。</p>' +
+    "</div>" +
     '<div class="card">' +
     '<div class="card-title">今シーズンの目標（' + esc(periodLabel) + "）</div>" +
     goalHtml +
@@ -2559,7 +2590,7 @@ function renderSeniorMyProgressPage(rosterId) {
     '<div class="card my-progress-comment-card">' +
     '<div class="card-title">指導員からのメッセージ</div>' +
     msgHtml +
-    '<p class="my-progress-note">※ 中学生以上はストライプ・Jリーグの対象外です。目標と指導員メッセージを確認できます。</p>' +
+    '<p class="my-progress-note">※ 中学生以上はストライプ・Jリーグの対象外です。目標と指導員メッセージをここで確認できます。</p>' +
     "</div>" +
     '<div class="card"><button type="button" class="btn btn-ghost btn-block" data-action="logoutMember">確認を終了する</button></div>';
 }
@@ -5461,7 +5492,7 @@ function render() {
   if (masterBtn) masterBtn.classList.toggle("active", currentView === "master");
   var myBtn = document.getElementById("btnMyProgress");
   if (myBtn) myBtn.classList.toggle("active", currentView === "myprogress");
-  if (isMemberMode) updateMemberHint();
+  if (isMemberMode) updateMemberProgressUI();
   renderLeagueTabs();
   const main = document.getElementById("mainContent");
   if (isMemberMode && !memberApiReady()) {
@@ -6561,7 +6592,7 @@ async function initMemberCloud() {
       myRosterId = "";
       document.body.className = document.body.className.replace(/\s*has-my-roster/g, "");
     }
-    updateMemberHint();
+    updateMemberProgressUI();
     render();
   } catch (e) {
     showToast((e && e.message) ? e.message : "データ読込に失敗しました", { type: "error", duration: 5000 });
