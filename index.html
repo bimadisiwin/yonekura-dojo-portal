@@ -175,15 +175,20 @@ main { padding: 10px 12px 20px; }
 .standings { display: flex; flex-direction: column; gap: 6px; }
 .standing-row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) minmax(52px, max-content) minmax(48px, max-content);
+  grid-template-columns: 32px minmax(0, 1fr) auto;
   align-items: center; gap: 6px 8px; padding: 8px 10px;
   border-radius: 10px; background: var(--bg);
 }
 .standing-row > :nth-child(2) { min-width: 0; }
-.standing-row > :nth-child(3),
-.standing-row > :nth-child(4) {
+.standing-stats-col {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.standing-stat {
   text-align: center;
-  justify-self: end;
+  min-width: 44px;
   flex-shrink: 0;
 }
 .standing-row.top1 { background: linear-gradient(90deg, #fff9e0, var(--bg)); border-left: 3px solid var(--gold); }
@@ -760,10 +765,12 @@ body.member-mode.senior-member .my-progress-goal-body {
   main { padding: 8px 12px 18px; max-width: none; }
   .card { padding: 12px; }
   .standing-row {
-    grid-template-columns: 32px minmax(0, 1fr) minmax(50px, max-content) minmax(46px, max-content);
+    grid-template-columns: 32px minmax(0, 1fr) auto;
     gap: 6px 6px;
     padding: 8px 8px;
   }
+  .standing-stats-col { gap: 8px; }
+  .standing-stat { min-width: 40px; }
   .player-item { flex-wrap: wrap; row-gap: 6px; }
   .player-item input[data-rename-player] { flex: 1 1 140px; min-width: 0; }
   .player-item .player-status { flex: 0 0 auto; }
@@ -790,10 +797,12 @@ body.member-mode.senior-member .my-progress-goal-body {
   .card { padding: 12px; border-radius: 12px; }
   .card-title { font-size: .76rem; margin-bottom: 8px; }
   .standing-row {
-    grid-template-columns: 28px minmax(0, 1fr) minmax(46px, max-content) minmax(42px, max-content);
+    grid-template-columns: 28px minmax(0, 1fr) auto;
     gap: 4px 6px;
     padding: 8px 6px;
   }
+  .standing-stats-col { gap: 6px; }
+  .standing-stat { min-width: 36px; }
   .points { font-size: 1rem; min-width: 28px; }
   .points-label { font-size: .56rem; }
   .unplayed-count { font-size: .92rem; min-width: 22px; }
@@ -5275,16 +5284,20 @@ function renderStandings(league, sorted) {
         <div class="rank-badge">${p.rank}</div>
         <div>${renderPlayerNameLine(p, false)}
           <div class="player-stats">${p.wins}勝 ${p.draws}分 ${p.losses}敗 (${p.played}試合)</div></div>
-        <div>${renderUnplayedBlock(unplayed)}</div>
-        <div><div class="points">${p.points}</div><div class="points-label">勝点</div></div>
+        <div class="standing-stats-col">
+          <div class="standing-stat">${renderUnplayedBlock(unplayed)}</div>
+          <div class="standing-stat"><div class="points">${p.points}</div><div class="points-label">勝点</div></div>
+        </div>
       </div>`;
     }).join("")}${inactivePlayers.map(function(p) {
       return `<div class="standing-row" style="opacity:.6">
         <div class="rank-badge">—</div>
         <div>${renderPlayerNameLine(p, false)}
           <div class="player-stats">未参加</div></div>
-        <div><div class="unplayed-count">—</div><div class="points-label">残試合</div></div>
-        <div><div class="points">—</div><div class="points-label">勝点</div></div>
+        <div class="standing-stats-col">
+          <div class="standing-stat"><div class="unplayed-count">—</div><div class="points-label">残試合</div></div>
+          <div class="standing-stat"><div class="points">—</div><div class="points-label">勝点</div></div>
+        </div>
       </div>`;
     }).join("")}</div>
     <table class="standings-print">
