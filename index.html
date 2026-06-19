@@ -2233,15 +2233,7 @@ function ensureRosterLinks(s) {
         m = byName[p.name];
         p.rosterId = m.id;
       } else {
-        m = normalizeRosterMember({
-          id: "r-" + p.id,
-          name: p.name,
-          stripes: p.stripes || 0
-        });
-        s.roster.push(m);
-        byName[m.name] = m;
-        byId[m.id] = m;
-        p.rosterId = m.id;
+        continue;
       }
       var ps = parseInt(p.stripes, 10);
       if (!isNaN(ps) && ps > m.stripes) m.stripes = Math.min(ps, STRIPE_MAX);
@@ -2737,16 +2729,26 @@ function adjustRosterAttendance(rosterId, delta) {
   render();
 }
 
+function purgeLeaguePlayerResults(league, playerId) {
+  if (!league || !league.results || !playerId) return;
+  Object.keys(league.results).forEach(function(key) {
+    if (key.indexOf(playerId) >= 0) delete league.results[key];
+  });
+}
+
 function removeRosterMember(rosterId) {
   if (isMemberMode || isReadonly()) return;
   var m = findRosterMember(rosterId);
   if (!m) return;
-  if (!confirm(m.name + " を館員台帳から削除しますか？\n（リーグの選手データは残ります）")) return;
+  if (!confirm(m.name + " を館員台帳から削除しますか？\n（全リーグからも除外され、関連する対戦結果も削除されます）")) return;
   state.roster = (state.roster || []).filter(function(x) { return x.id !== rosterId; });
   state.leagues.forEach(function(league) {
+    var removeIds = [];
     league.players.forEach(function(p) {
-      if (p.rosterId === rosterId) delete p.rosterId;
+      if (p.rosterId === rosterId) removeIds.push(p.id);
     });
+    league.players = league.players.filter(function(p) { return p.rosterId !== rosterId; });
+    removeIds.forEach(function(playerId) { purgeLeaguePlayerResults(league, playerId); });
   });
   saveState();
   render();
@@ -5777,10 +5779,20 @@ function setPlayerActive(id, isActive) {
 function removePlayer(id) {
   const league = getLeague(currentLeagueId);
   if (league.players.length <= 2) { showToast("最低2名必要"); return; }
-  if (!confirm("この選手を削除しますか？関連する対戦結果も消えます。")) return;
-  league.players = league.players.filter(p => p.id !== id);
-  for (const key of Object.keys(league.results)) {
-    if (key.includes(id)) delete league.results[key];
+  var p = league.players.find(function(x) { return x.id === id; });
+  if (!p) return;
+  if (!confirm("この選手を削除しますか？関連する対戦結果も消えます。" + (p.rosterId ? "\n\n館員台帳に登録がある場合、他リーグにいなければ台帳からも削除されます。" : ""))) return;
+  var rosterId = p.rosterId || "";
+  league.players = league.players.filter(function(x) { return x.id !== id; });
+  purgeLeaguePlayerResults(league, id);
+  if (rosterId) {
+    var stillInLeague = false;
+    state.leagues.forEach(function(lg) {
+      if (lg.players.some(function(x) { return x.rosterId === rosterId; })) stillInLeague = true;
+    });
+    if (!stillInLeague) {
+      state.roster = (state.roster || []).filter(function(x) { return x.id !== rosterId; });
+    }
   }
   saveState(); render();
 }
