@@ -1360,6 +1360,12 @@ function normalizeBirthMd(raw) {
   return String(month).padStart(2, "0") + String(day).padStart(2, "0");
 }
 
+function formatBirthMdDisplay(birthMd) {
+  var md = normalizeBirthMd(birthMd);
+  if (!md) return "";
+  return parseInt(md.slice(0, 2), 10) + "/" + parseInt(md.slice(2, 4), 10);
+}
+
 function parseMemberLoginInput(raw) {
   var s = String(raw || "").trim().replace(/\s+/g, "");
   if (!s) return null;
@@ -3886,7 +3892,7 @@ function renderRosterLedgerMemberRow(m) {
     (senior ? "" : "出席: " + (m.attendanceCount || 0) + "回 ／ ") +
     (m.group ? esc(m.group) : "") +
     (leagues.length ? " ／ 所属: " + esc(leagues.join("・")) : "") +
-    (m.birthMd ? " ／ 合言葉: " + esc(m.name + m.birthMd) : " ／ <span style=\"color:#b83232\">誕生日未登録</span>") +
+    (m.birthMd ? " ／ 誕生日: " + esc(formatBirthMdDisplay(m.birthMd)) : " ／ <span style=\"color:#b83232\">誕生日未登録</span>") +
     "</div>" +
     (senior ? "" : '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">' +
     '<input type="number" min="0" value="' + (m.attendanceCount || 0) + '" data-roster-field="attendanceCount" data-roster-id="' + esc(m.id) + '" style="width:64px;font-size:.72rem;padding:4px 6px;border:1px solid var(--line);border-radius:8px" title="累計出席">' +
@@ -3920,7 +3926,7 @@ function renderRosterLedgerSeniorCard() {
   return '<div class="card stripe-roster-card">' +
     '<div class="card-title">🎯 中学生・高校生以上（' + roster.length + "名）</div>" +
     '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' +
-    "今シーズンの目標と指導員メッセージを管理します。ログインは <b>名前＋誕生日</b>（例：ゆうすけ0610）。会員一覧CSVから一括追加できます。</p>" +
+    "今シーズンの目標と指導員メッセージを管理します。ログインは <b>名前＋誕生日（月日4桁）</b>。会員一覧CSVから一括追加できます。</p>" +
     '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">' +
     '<button type="button" class="btn btn-ghost btn-sm" data-action="importMemberListCsv">📋 会員一覧CSV（シニア追加）</button></div>' +
     (rows || '<p style="font-size:.82rem;color:var(--muted);padding:8px">館員がいません</p>') +
