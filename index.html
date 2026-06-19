@@ -783,9 +783,10 @@ body.member-mode.senior-member .my-progress-goal-body {
   .special-award-row,
   .special-award-head { grid-template-columns: 1fr; }
   .settings-grid { grid-template-columns: 1fr; }
-  body.embedded { padding-bottom: 8px; overflow-x: hidden; }
+  body.embedded { padding-bottom: 8px; overflow-x: hidden; width: 100%; max-width: 100%; }
+  body.embedded header { position: relative; }
   body.embedded .grid-wrap,
-  body.embedded .grid-wrap-split { max-height: min(68vh, 760px); }
+  body.embedded .grid-wrap-split { max-height: min(62vh, 640px); }
 }
 @media (min-width: 481px) and (max-width: 1180px) {
   main { max-width: 920px; margin-left: auto; margin-right: auto; }
@@ -1626,6 +1627,46 @@ function detectEmbedded() {
   } catch (e) {
     return true;
   }
+}
+
+var _embedResizeTimer = null;
+function notifyEmbedResize() {
+  if (!detectEmbedded()) return;
+  try {
+    var doc = document.documentElement;
+    var body = document.body;
+    var h = Math.max(
+      doc ? doc.scrollHeight : 0,
+      body ? body.scrollHeight : 0,
+      doc ? doc.offsetHeight : 0,
+      body ? body.offsetHeight : 0
+    );
+    window.parent.postMessage({ type: "yonekura-portal-resize", height: h }, "*");
+  } catch (e) { /* ignore */ }
+}
+function scheduleEmbedResize() {
+  if (!detectEmbedded()) return;
+  if (_embedResizeTimer) clearTimeout(_embedResizeTimer);
+  _embedResizeTimer = setTimeout(notifyEmbedResize, 60);
+}
+function initEmbedResize() {
+  if (!detectEmbedded()) return;
+  var notify = scheduleEmbedResize;
+  window.addEventListener("resize", notify, false);
+  window.addEventListener("orientationchange", function() {
+    setTimeout(notify, 120);
+    setTimeout(notify, 400);
+  }, false);
+  if (typeof ResizeObserver !== "undefined") {
+    try {
+      var ro = new ResizeObserver(notify);
+      if (document.body) ro.observe(document.body);
+      if (document.documentElement) ro.observe(document.documentElement);
+    } catch (e) { /* ignore */ }
+  }
+  setTimeout(notify, 0);
+  setTimeout(notify, 350);
+  setTimeout(notify, 1200);
 }
 
 function setPlayerModalOpen(isOpen) {
@@ -5647,6 +5688,12 @@ function render() {
   }
 }
 
+var _renderBase = render;
+render = function() {
+  _renderBase();
+  scheduleEmbedResize();
+};
+
 function applySeasonSettings() {
   if (isReadonly()) { showToast("アーカイブ閲覧中は変更できません"); return; }
   var fyEl = document.getElementById("fiscalYearInput");
@@ -6315,6 +6362,7 @@ state = loadState();
 isMemberMode = detectMemberMode();
 applyMemberModeUI();
 if (detectEmbedded()) document.body.className += " embedded";
+if (detectEmbedded()) initEmbedResize();
 if (!currentLeagueId) currentLeagueId = state.leagues[0] ? state.leagues[0].id : null;
 var cellModalEl = document.getElementById("cellModal");
 if (cellModalEl) {
