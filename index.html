@@ -174,9 +174,17 @@ main { padding: 10px 12px 20px; }
 }
 .standings { display: flex; flex-direction: column; gap: 6px; }
 .standing-row {
-  display: grid; grid-template-columns: 32px 1fr auto auto;
-  align-items: center; gap: 8px; padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) minmax(52px, max-content) minmax(48px, max-content);
+  align-items: center; gap: 6px 8px; padding: 8px 10px;
   border-radius: 10px; background: var(--bg);
+}
+.standing-row > :nth-child(2) { min-width: 0; }
+.standing-row > :nth-child(3),
+.standing-row > :nth-child(4) {
+  text-align: center;
+  justify-self: end;
+  flex-shrink: 0;
 }
 .standing-row.top1 { background: linear-gradient(90deg, #fff9e0, var(--bg)); border-left: 3px solid var(--gold); }
 .standing-row.top2 { border-left: 3px solid var(--silver); }
@@ -712,8 +720,8 @@ body.member-mode.senior-member .my-progress-goal-body {
 .sposuru-dropzone-title { font-size: .82rem; font-weight: 700; margin-bottom: 4px; }
 .sposuru-dropzone-hint { font-size: .66rem; color: var(--muted); line-height: 1.45; }
 
-/* タブレット（iPad 等）— スマホ用 480px だけではカバーできない幅 */
-@media (max-width: 1024px) {
+/* タブレット（iPad mini 等）— スマホ用 480px だけではカバーできない幅 */
+@media (max-width: 1180px) {
   .header-top { flex-wrap: wrap; align-items: stretch; }
   .header-actions {
     max-width: 100%;
@@ -749,8 +757,13 @@ body.member-mode.senior-member .my-progress-goal-body {
     justify-content: center;
   }
   .league-tabs { padding-left: 10px; padding-right: 10px; }
-  main { padding: 8px 12px 18px; }
+  main { padding: 8px 12px 18px; max-width: none; }
   .card { padding: 12px; }
+  .standing-row {
+    grid-template-columns: 32px minmax(0, 1fr) minmax(50px, max-content) minmax(46px, max-content);
+    gap: 6px 6px;
+    padding: 8px 8px;
+  }
   .player-item { flex-wrap: wrap; row-gap: 6px; }
   .player-item input[data-rename-player] { flex: 1 1 140px; min-width: 0; }
   .player-item .player-status { flex: 0 0 auto; }
@@ -763,20 +776,27 @@ body.member-mode.senior-member .my-progress-goal-body {
   .special-award-row,
   .special-award-head { grid-template-columns: 1fr; }
   .settings-grid { grid-template-columns: 1fr; }
-  body.embedded { padding-bottom: 8px; }
+  body.embedded { padding-bottom: 8px; overflow-x: hidden; }
   body.embedded .grid-wrap,
   body.embedded .grid-wrap-split { max-height: min(68vh, 760px); }
 }
-@media (min-width: 481px) and (max-width: 1024px) {
+@media (min-width: 481px) and (max-width: 1180px) {
   main { max-width: 920px; margin-left: auto; margin-right: auto; }
   .view-tab { min-width: 8.5em; font-size: .72rem; }
-  .standing-row { grid-template-columns: 36px 1fr auto auto; }
 }
 
 @media (max-width: 480px) {
-  main { padding: 8px 10px 18px; }
+  main { padding: 8px 10px 18px; max-width: none; }
   .card { padding: 12px; border-radius: 12px; }
   .card-title { font-size: .76rem; margin-bottom: 8px; }
+  .standing-row {
+    grid-template-columns: 28px minmax(0, 1fr) minmax(46px, max-content) minmax(42px, max-content);
+    gap: 4px 6px;
+    padding: 8px 6px;
+  }
+  .points { font-size: 1rem; min-width: 28px; }
+  .points-label { font-size: .56rem; }
+  .unplayed-count { font-size: .92rem; min-width: 22px; }
   .view-tab {
     font-size: .62rem; padding: 10px 4px; line-height: 1.25;
     white-space: normal; word-break: keep-all; overflow-wrap: anywhere;
