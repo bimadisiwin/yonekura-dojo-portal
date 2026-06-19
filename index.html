@@ -1066,7 +1066,7 @@ body.embedded.player-modal-open {
     </p>
     <div class="form-row">
       <label for="memberLoginInput">合言葉</label>
-      <input id="memberLoginInput" type="text" inputmode="text" autocomplete="off" placeholder="例：ゆうすけ0610／きゅうた0620" style="font-size:16px">
+      <input id="memberLoginInput" type="text" inputmode="text" autocomplete="off" placeholder="例：ゆうすけ0610" style="font-size:16px">
     </div>
     <p id="memberLoginError" style="display:none;font-size:.72rem;color:#b83232;margin:8px 0 0"></p>
     <p id="memberLoginModalNote" style="font-size:.64rem;color:var(--muted);line-height:1.45;margin:10px 0 0">※ 小学生は🎗マイ進捗（ストライプ・出席）、中学生以上は🎯マイ目標（今シーズンの目標・指導員メッセージ）の確認に使います。順位表・星取表は入力なしで閲覧できます。</p>
@@ -3920,7 +3920,7 @@ function renderRosterLedgerSeniorCard() {
   return '<div class="card stripe-roster-card">' +
     '<div class="card-title">🎯 中学生・高校生以上（' + roster.length + "名）</div>" +
     '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' +
-    "今シーズンの目標と指導員メッセージを管理します。ログインは <b>名前＋誕生日</b>（例：きゅうた0620）。会員一覧CSVから一括追加できます。</p>" +
+    "今シーズンの目標と指導員メッセージを管理します。ログインは <b>名前＋誕生日</b>（例：ゆうすけ0610）。会員一覧CSVから一括追加できます。</p>" +
     '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">' +
     '<button type="button" class="btn btn-ghost btn-sm" data-action="importMemberListCsv">📋 会員一覧CSV（シニア追加）</button></div>' +
     (rows || '<p style="font-size:.82rem;color:var(--muted);padding:8px">館員がいません</p>') +
