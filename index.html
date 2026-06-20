@@ -89,8 +89,14 @@ header {
   flex: 1;
   min-width: 0;
 }
-header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; line-height: 1.3; }
-header .sub { font-size: .72rem; opacity: .75; margin-top: 2px; }
+header h1 {
+  font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; line-height: 1.3;
+  word-break: break-word;
+}
+header .sub {
+  font-size: .72rem; opacity: .75; margin-top: 2px;
+  line-height: 1.45; word-break: break-word;
+}
 .header-actions {
   display: flex;
   gap: 6px;
@@ -99,6 +105,16 @@ header .sub { font-size: .72rem; opacity: .75; margin-top: 2px; }
   flex: 0 0 auto;
   max-width: 58%;
   margin-top: 0;
+}
+.header-meta {
+  margin-top: 6px;
+}
+.header-meta .sub,
+.header-meta .sync-status {
+  display: block;
+  max-width: 100%;
+  word-break: break-word;
+  line-height: 1.45;
 }
 .header-actions .btn-master.active {
   background: rgba(255,255,255,.22);
@@ -725,18 +741,48 @@ body.member-mode.senior-member .my-progress-goal-body {
 .sposuru-dropzone-title { font-size: .82rem; font-weight: 700; margin-bottom: 4px; }
 .sposuru-dropzone-hint { font-size: .66rem; color: var(--muted); line-height: 1.45; }
 
-/* タブレット（iPad mini 等）— スマホ用 480px だけではカバーできない幅 */
-@media (max-width: 1180px) {
-  .header-top { flex-wrap: wrap; align-items: stretch; }
+/* タブレット（iPad 等）— スマホ用 480px だけではカバーできない幅 */
+@media (max-width: 1366px) {
+  header { padding: calc(8px + var(--safe-t)) 12px 8px; }
+  .header-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .header-title-block { width: 100%; flex: none; }
   .header-actions {
-    max-width: 100%;
+    max-width: none;
     width: 100%;
     justify-content: flex-start;
+    margin-top: 0;
+    gap: 8px;
+  }
+  body.member-mode .header-top {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+  }
+  body.member-mode .header-title-block {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+  body.member-mode .header-actions {
+    flex: 0 0 auto;
+    width: auto;
+    justify-content: flex-end;
+    margin-top: 0;
+  }
+  body.member-mode header h1 { font-size: .95rem; line-height: 1.25; }
+  body.member-mode #seasonLabel { font-size: .68rem; }
+  body.member-mode #memberHint {
+    font-size: .66rem !important;
+    line-height: 1.45;
     margin-top: 6px;
   }
-  body.member-mode .header-top { flex-direction: column; }
-  body.member-mode header h1 { font-size: .98rem; }
-  body.member-mode #memberHint { font-size: .68rem !important; line-height: 1.45; }
+  body.embedded header { padding: 8px 10px 6px; }
+  body.embedded.member-mode header h1 { font-size: .92rem; }
   .view-tabs {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -788,7 +834,7 @@ body.member-mode.senior-member .my-progress-goal-body {
   body.embedded .grid-wrap,
   body.embedded .grid-wrap-split { max-height: min(62vh, 640px); }
 }
-@media (min-width: 481px) and (max-width: 1180px) {
+@media (min-width: 481px) and (max-width: 1366px) {
   main { max-width: 920px; margin-left: auto; margin-right: auto; }
   .view-tab { min-width: 8.5em; font-size: .72rem; }
 }
@@ -813,10 +859,11 @@ body.member-mode.senior-member .my-progress-goal-body {
     display: flex; align-items: center; justify-content: center;
     min-height: 44px;
   }
-  body.member-mode .header-top { flex-direction: column; align-items: stretch; }
-  body.member-mode .header-actions { max-width: none; width: 100%; justify-content: flex-start; margin-top: 6px; }
-  body.member-mode header h1 { font-size: .95rem; }
-  body.member-mode #memberHint { font-size: .66rem !important; line-height: 1.45; }
+  body.member-mode .header-top { flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 8px; }
+  body.member-mode .header-title-block { flex: 1 1 auto; width: auto; min-width: 0; }
+  body.member-mode .header-actions { flex: 0 0 auto; width: auto; max-width: none; justify-content: flex-end; margin-top: 0; }
+  body.member-mode header h1 { font-size: .9rem; line-height: 1.25; }
+  body.member-mode #memberHint { font-size: .64rem !important; line-height: 1.45; margin-top: 4px; }
   .my-progress-hero { padding: 14px 10px 10px; }
   .my-progress-hero-name { font-size: 1.05rem; }
   .my-progress-hero-level { font-size: .76rem; line-height: 1.4; }
@@ -1108,9 +1155,11 @@ body.embedded.player-modal-open {
       <button type="button" class="btn btn-primary btn-sm admin-only" id="btnExportPDF">📄 PDF保存</button>
     </div>
   </div>
-  <div class="sub no-print" id="archiveBanner" style="display:none;margin-top:4px;font-size:.72rem;background:rgba(255,255,255,.15);padding:4px 8px;border-radius:8px"></div>
-  <div class="sub no-print member-me-only" id="memberHint" style="display:none;font-size:.72rem;opacity:.85;margin-top:4px">👀 会員閲覧モード（🎗マイ進捗／🎯マイ目標は右上ボタンから）</div>
-  <button type="button" class="sync-status no-print admin-only" id="syncStatus" style="display:inline-block;margin-top:4px;font-size:.72rem;font-weight:700;cursor:pointer;background:transparent;border:none;color:inherit;padding:4px 0">☁︎ 同期オフ</button>
+  <div class="header-meta no-print">
+    <div class="sub" id="archiveBanner" style="display:none;font-size:.72rem;background:rgba(255,255,255,.15);padding:4px 8px;border-radius:8px"></div>
+    <div class="sub member-me-only" id="memberHint" style="display:none;font-size:.72rem;opacity:.85">👀 会員閲覧（🎗マイ進捗／🎯マイ目標は上のボタンから）</div>
+    <button type="button" class="sync-status admin-only" id="syncStatus" style="display:inline-block;font-size:.72rem;font-weight:700;cursor:pointer;background:transparent;border:none;color:inherit;padding:4px 0">☁︎ 同期オフ</button>
+  </div>
 </header>
 <div class="league-tabs no-print" id="leagueTabs"></div>
 <div class="view-tabs no-print" id="viewTabs">
@@ -1542,7 +1591,7 @@ function updateMemberHint() {
         : "👀 " + m.name + "さんとして確認中（マイ進捗）")
       : "👀 マイ進捗確認中";
   } else {
-    hint.textContent = "👀 会員閲覧モード（🎗マイ進捗／🎯マイ目標は右上ボタンから）";
+    hint.textContent = "👀 会員閲覧（🎗マイ進捗／🎯マイ目標は上のボタンから）";
   }
 }
 
