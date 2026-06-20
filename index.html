@@ -1322,6 +1322,7 @@ let myRosterId = "";
 let feedbackRosterId = "";
 let feedbackSearchQuery = "";
 const FEEDBACK_ROSTER_KEY = "yonekura-feedback-roster";
+let memberCloudRefreshBound = false;
 
 function resolveMyRosterId() {
   var fromSession = loadMemberSessionRosterId();
@@ -2140,8 +2141,10 @@ const GH_FIXED_CFG = { owner: "bimadisiwin", repo: "jl-hoshitori-e306758bbd", br
 let ghCfg = loadGhCfg();
 let ghSha = null;
 let ghPushTimer = null;
+let ghPushInFlight = null;
 let ghSyncState = "off";
 let ghLastMsg = "";
+let ghPullInFlight = null;
 
 function loadGhCfg() {
   var cfg = Object.assign({}, GH_DEFAULTS, GH_FIXED_CFG);
@@ -2210,30 +2213,50 @@ async function cloudPull() {
 }
 
 async function cloudPush() {
-  if (!ghReady()) { setSyncState("off"); return; }
+  if (!ghReady()) { setSyncState("off"); return false; }
+  if (ghPushInFlight) return ghPushInFlight;
   setSyncState("syncing");
-  try {
-    if (ghSha === null) { try { ghSha = await ghGetSha(); } catch (e) {} }
-    const body = {
-      message: `データ更新 (${new Date().toISOString()})`,
-      content: b64Encode(JSON.stringify(state, null, 2)),
-      branch: ghCfg.branch
-    };
-    if (ghSha) body.sha = ghSha;
-    const opts = () => ({ method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, ghHeaders()), body: JSON.stringify(body) });
-    let res = await fetch(ghApiUrl(), opts());
-    if (res.status === 409) {
-      ghSha = await ghGetSha();
-      if (ghSha) body.sha = ghSha; else delete body.sha;
-      res = await fetch(ghApiUrl(), opts());
+  ghPushInFlight = (async function() {
+    try {
+      if (ghSha === null) { try { ghSha = await ghGetSha(); } catch (e) {} }
+      const body = {
+        message: `データ更新 (${new Date().toISOString()})`,
+        content: b64Encode(JSON.stringify(state, null, 2)),
+        branch: ghCfg.branch
+      };
+      if (ghSha) body.sha = ghSha;
+      const opts = () => ({ method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, ghHeaders()), body: JSON.stringify(body) });
+      let res = await fetch(ghApiUrl(), opts());
+      if (res.status === 409) {
+        var remote = null;
+        try { remote = await cloudPull(); } catch (pullErr) { remote = null; }
+        if (remote && (remote.updatedAt || 0) > (state.updatedAt || 0)) {
+          state = normalizeState(remote);
+          viewingArchiveId = null;
+          if (!getLeague(currentLeagueId)) currentLeagueId = state.leagues[0] ? state.leagues[0].id : null;
+          saveLocal();
+          render();
+          setSyncState("synced", "他端末の更新を反映 " + new Date().toLocaleTimeString("ja-JP"));
+          showToast("他端末の方が新しいデータです。クラウドの内容を反映しました", { type: "warn", duration: 4500 });
+          return true;
+        }
+        ghSha = await ghGetSha();
+        if (ghSha) body.sha = ghSha; else delete body.sha;
+        res = await fetch(ghApiUrl(), opts());
+      }
+      if (!res.ok) { const t = await res.text(); throw new Error("PUT " + res.status + " " + t.slice(0, 140)); }
+      const j = await res.json();
+      ghSha = (j.content && j.content.sha) ? j.content.sha : ghSha;
+      setSyncState("synced", "保存 " + new Date().toLocaleTimeString("ja-JP"));
+      return true;
+    } catch (e) {
+      setSyncState("error", String(e.message || e));
+      return false;
+    } finally {
+      ghPushInFlight = null;
     }
-    if (!res.ok) { const t = await res.text(); throw new Error("PUT " + res.status + " " + t.slice(0, 140)); }
-    const j = await res.json();
-    ghSha = (j.content && j.content.sha) ? j.content.sha : ghSha;
-    setSyncState("synced", "保存 " + new Date().toLocaleTimeString("ja-JP"));
-  } catch (e) {
-    setSyncState("error", String(e.message || e));
-  }
+  })();
+  return ghPushInFlight;
 }
 
 async function testGhToken() {
@@ -2244,11 +2267,89 @@ async function testGhToken() {
   return true;
 }
 
-function schedulePush() {
-  if (!ghReady()) { setSyncState("off"); return; }
+function schedulePush(immediate) {
+  if (!ghReady()) { setSyncState("off"); return Promise.resolve(false); }
   if (ghPushTimer) clearTimeout(ghPushTimer);
   setSyncState("syncing");
-  ghPushTimer = setTimeout(cloudPush, 1200);
+  if (immediate) {
+    ghPushTimer = null;
+    return cloudPush();
+  }
+  return new Promise(function(resolve) {
+    ghPushTimer = setTimeout(function() {
+      ghPushTimer = null;
+      cloudPush().then(resolve);
+    }, 400);
+  });
+}
+
+function flushPendingPush() {
+  if (!ghReady()) return Promise.resolve(false);
+  if (ghPushTimer) {
+    clearTimeout(ghPushTimer);
+    ghPushTimer = null;
+    return cloudPush();
+  }
+  if (ghPushInFlight) return ghPushInFlight;
+  if (ghSyncState === "syncing") return cloudPush();
+  return Promise.resolve(true);
+}
+
+function hasPendingCloudPush() {
+  return !!(ghPushTimer || ghPushInFlight || ghSyncState === "syncing");
+}
+
+async function cloudPullIfNewer(silent) {
+  if (!ghReady() || isMemberMode) return false;
+  if (ghPullInFlight) return ghPullInFlight;
+  ghPullInFlight = (async function() {
+    try {
+      const remote = await cloudPull();
+      if (!remote) return false;
+      var localT = state.updatedAt || 0;
+      var remoteT = remote.updatedAt || 0;
+      if (remoteT > localT) {
+        state = normalizeState(remote);
+        viewingArchiveId = null;
+        if (!getLeague(currentLeagueId)) currentLeagueId = state.leagues[0] ? state.leagues[0].id : null;
+        saveLocal();
+        render();
+        setSyncState("synced", "読込 " + new Date().toLocaleTimeString("ja-JP"));
+        if (!silent) showToast("クラウドの最新データを反映しました", { type: "ok", duration: 2500 });
+        return true;
+      }
+      return false;
+    } catch (e) {
+      if (!silent) setSyncState("error", String(e.message || e));
+      return false;
+    } finally {
+      ghPullInFlight = null;
+    }
+  })();
+  return ghPullInFlight;
+}
+
+function initCloudSyncLifecycle() {
+  if (isMemberMode) return;
+  document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "hidden") {
+      flushPendingPush();
+      return;
+    }
+    if (document.visibilityState === "visible" && ghReady()) {
+      cloudPullIfNewer(true);
+    }
+  });
+  window.addEventListener("pagehide", function() {
+    if (hasPendingCloudPush()) flushPendingPush();
+  });
+  window.addEventListener("beforeunload", function(e) {
+    if (hasPendingCloudPush()) {
+      flushPendingPush();
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
 }
 
 function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -2317,10 +2418,10 @@ function saveLocal() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function saveState() {
+function saveState(immediate) {
   state.updatedAt = Date.now();
   saveLocal();
-  schedulePush();
+  return schedulePush(!!immediate);
 }
 
 function getLeague(id) {
@@ -4361,7 +4462,7 @@ function saveFeedbackFromPage(rosterId) {
     m.personalGoal = goalEl.value || "";
     m.personalGoalPeriodKey = getCurrentPeriodKey();
   }
-  saveState();
+  saveState(true);
   render();
   showToast(m.name + "さんのフィードバックを保存しました ✓", { type: "ok", duration: 2500 });
 }
@@ -6906,6 +7007,11 @@ function handleAppTap(e) {
   if (view) { setView(view); return; }
   if (target.id === "syncStatus") {
     if (ghSyncState === "error" && ghLastMsg) showToast(formatGhError(ghLastMsg));
+    else if (ghReady()) {
+      cloudPullIfNewer(false).then(function(updated) {
+        if (!updated && ghSyncState === "synced") showToast("クラウドは最新です", { type: "ok", duration: 2000 });
+      });
+    }
     setView("master");
     return;
   }
@@ -7125,7 +7231,7 @@ async function initMemberCloud() {
   }
   try {
     var cfg = getMemberApiConfig();
-    var payload = await memberApiFetch("/data?token=" + encodeURIComponent(cfg.accessToken));
+    var payload = await memberApiFetch("/data?token=" + encodeURIComponent(cfg.accessToken) + "&_t=" + Date.now());
     state = normalizeState(payload.data || {});
     viewingArchiveId = null;
     if (!getLeague(currentLeagueId)) currentLeagueId = state.leagues[0] ? state.leagues[0].id : null;
@@ -7133,7 +7239,7 @@ async function initMemberCloud() {
     if (resolved) {
       try {
         var sess = await memberApiFetch("/member-session?token=" + encodeURIComponent(cfg.accessToken) +
-          "&rosterId=" + encodeURIComponent(resolved));
+          "&rosterId=" + encodeURIComponent(resolved) + "&_t=" + Date.now());
         mergeMemberIntoState(sess.member);
         activateMyRoster(sess.rosterId);
       } catch (sessErr) {
@@ -7147,13 +7253,24 @@ async function initMemberCloud() {
     }
     updateMemberProgressUI();
     render();
+    initMemberCloudRefresh();
   } catch (e) {
     showToast((e && e.message) ? e.message : "データ読込に失敗しました", { type: "error", duration: 5000 });
   }
 }
 
+function initMemberCloudRefresh() {
+  if (!memberApiReady() || memberCloudRefreshBound) return;
+  memberCloudRefreshBound = true;
+  document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState !== "visible") return;
+    initMemberCloud().catch(function() {});
+  });
+}
+
 async function initCloud() {
   if (!ghReady()) { setSyncState("off"); return; }
+  initCloudSyncLifecycle();
   setSyncState("syncing");
   try {
     const remote = await cloudPull();
