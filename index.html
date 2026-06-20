@@ -2164,15 +2164,42 @@ function ghApiUrl() {
   const p = ghCfg.path.split("/").map(encodeURIComponent).join("/");
   return `https://api.github.com/repos/${ghCfg.owner}/${ghCfg.repo}/contents/${p}`;
 }
-function b64Encode(str) { return btoa(unescape(encodeURIComponent(str))); }
-function b64Decode(b64) { return decodeURIComponent(escape(atob(b64.replace(/\s/g, "")))); }
+function b64Encode(str) {
+  if (typeof TextEncoder !== "undefined") {
+    var bytes = new TextEncoder().encode(str);
+    var bin = "";
+    var step = 0x8000;
+    for (var i = 0; i < bytes.length; i += step) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
+    }
+    return btoa(bin);
+  }
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function b64Decode(b64) {
+  var clean = String(b64 || "").replace(/\s/g, "");
+  var bin = atob(clean);
+  if (typeof TextDecoder !== "undefined") {
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  return decodeURIComponent(escape(bin));
+}
+
+function stateJsonForCloud() {
+  return JSON.stringify(state);
+}
 
 function formatGhError(msg) {
   var s = String(msg || "");
+  if (/Maximum call stack|InvalidCharacterError|encoding/i.test(s)) return "データ量が多いためエンコードに失敗しました。ページを再読み込みして再保存してください";
+  if (/Failed to fetch|NetworkError|Load failed|network/i.test(s)) return "ネットワークエラーです。通信を確認して再試行してください";
   if (/401|Bad credentials/i.test(s)) return "GitHubトークンが無効または期限切れです。📋マスターで再入力してください";
   if (/403/.test(s)) return "トークンの権限不足です（リポジトリの Contents: Read and write が必要）";
   if (/404/.test(s)) return "同期先ファイルが見つかりません（repo / path を確認）";
   if (/409/.test(s)) return "他端末と競合しました。↓クラウドから読込 後に再保存してください";
+  if (/422/.test(s)) return "GitHubへの送信形式エラーです。ページを再読み込みして再保存してください";
   return s.length > 120 ? s.slice(0, 120) + "…" : s;
 }
 
@@ -2219,9 +2246,15 @@ async function cloudPush() {
   ghPushInFlight = (async function() {
     try {
       if (ghSha === null) { try { ghSha = await ghGetSha(); } catch (e) {} }
+      var encoded = "";
+      try {
+        encoded = b64Encode(stateJsonForCloud());
+      } catch (encErr) {
+        throw new Error("encode " + (encErr && encErr.message ? encErr.message : encErr));
+      }
       const body = {
         message: `データ更新 (${new Date().toISOString()})`,
-        content: b64Encode(JSON.stringify(state, null, 2)),
+        content: encoded,
         branch: ghCfg.branch
       };
       if (ghSha) body.sha = ghSha;
@@ -2241,6 +2274,7 @@ async function cloudPush() {
           return true;
         }
         ghSha = await ghGetSha();
+        body.content = b64Encode(stateJsonForCloud());
         if (ghSha) body.sha = ghSha; else delete body.sha;
         res = await fetch(ghApiUrl(), opts());
       }
@@ -2291,12 +2325,11 @@ function flushPendingPush() {
     return cloudPush();
   }
   if (ghPushInFlight) return ghPushInFlight;
-  if (ghSyncState === "syncing") return cloudPush();
   return Promise.resolve(true);
 }
 
 function hasPendingCloudPush() {
-  return !!(ghPushTimer || ghPushInFlight || ghSyncState === "syncing");
+  return !!(ghPushTimer || ghPushInFlight);
 }
 
 async function cloudPullIfNewer(silent) {
@@ -2333,21 +2366,11 @@ function initCloudSyncLifecycle() {
   if (isMemberMode) return;
   document.addEventListener("visibilitychange", function() {
     if (document.visibilityState === "hidden") {
-      flushPendingPush();
+      if (ghPushTimer) flushPendingPush();
       return;
     }
-    if (document.visibilityState === "visible" && ghReady()) {
+    if (document.visibilityState === "visible" && ghReady() && !ghPushInFlight) {
       cloudPullIfNewer(true);
-    }
-  });
-  window.addEventListener("pagehide", function() {
-    if (hasPendingCloudPush()) flushPendingPush();
-  });
-  window.addEventListener("beforeunload", function(e) {
-    if (hasPendingCloudPush()) {
-      flushPendingPush();
-      e.preventDefault();
-      e.returnValue = "";
     }
   });
 }
