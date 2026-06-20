@@ -743,20 +743,39 @@ body.member-mode.senior-member .my-progress-goal-body {
 
 /* タブレット（iPad 等）— スマホ用 480px だけではカバーできない幅 */
 @media (max-width: 1366px) {
-  header { padding: calc(8px + var(--safe-t)) 12px 8px; }
+  header { padding: calc(8px + var(--safe-t)) 12px 8px; overflow-x: hidden; }
   .header-top {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
   }
-  .header-title-block { width: 100%; flex: none; }
-  .header-actions {
+  /* 指導者管理画面：タイトル左・操作ボタン右の1行レイアウト */
+  body:not(.member-mode) .header-top {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+  body:not(.member-mode) .header-title-block {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+  }
+  body:not(.member-mode) header h1 { font-size: .98rem; line-height: 1.25; }
+  body:not(.member-mode) #seasonLabel { font-size: .68rem; }
+  body:not(.member-mode) .header-actions {
+    flex: 0 0 auto;
+    width: auto;
     max-width: none;
-    width: 100%;
-    justify-content: flex-start;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    gap: 6px;
     margin-top: 0;
-    gap: 8px;
   }
+  body:not(.member-mode) .header-actions .btn-sm {
+    padding: 6px 8px;
+    font-size: .68rem;
+    white-space: nowrap;
+  }
+  body:not(.member-mode) .header-meta { margin-top: 4px; }
+  /* 会員閲覧：タイトル左・マイ進捗右 */
   body.member-mode .header-top {
     flex-direction: row;
     flex-wrap: nowrap;
@@ -790,24 +809,30 @@ body.member-mode.senior-member .my-progress-goal-body {
     flex-wrap: nowrap;
     margin-left: 10px;
     margin-right: 10px;
+    max-width: calc(100% - 20px);
   }
   .view-tabs::-webkit-scrollbar { display: none; }
   .view-tab {
     flex: 0 0 auto;
-    min-width: 7.2em;
-    max-width: 42vw;
-    font-size: .68rem;
-    padding: 10px 8px;
+    min-width: 6.8em;
+    max-width: none;
+    font-size: .66rem;
+    padding: 8px 6px;
     line-height: 1.25;
-    white-space: normal;
+    white-space: nowrap;
     word-break: keep-all;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
     min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
-  .league-tabs { padding-left: 10px; padding-right: 10px; }
+  body:not(.member-mode) .view-tab { min-width: 6.2em; font-size: .64rem; }
+  .league-tabs {
+    padding-left: 10px;
+    padding-right: 10px;
+    max-width: 100%;
+  }
   main { padding: 8px 12px 18px; max-width: none; }
   .card { padding: 12px; }
   .standing-row {
@@ -834,9 +859,15 @@ body.member-mode.senior-member .my-progress-goal-body {
   body.embedded .grid-wrap,
   body.embedded .grid-wrap-split { max-height: min(62vh, 640px); }
 }
+
+/* iPad Pro 横向きなど、幅が広くてもタッチ端末では指導者ヘッダーを調整 */
+@media (min-width: 1367px) and (hover: none) and (pointer: coarse) {
+  body:not(.member-mode) .header-actions { max-width: none; flex-wrap: nowrap; }
+  body:not(.member-mode) .view-tabs { overflow-x: auto; flex-wrap: nowrap; }
+  body:not(.member-mode) .view-tab { flex: 0 0 auto; min-width: 6.5em; white-space: nowrap; }
+}
 @media (min-width: 481px) and (max-width: 1366px) {
   main { max-width: 920px; margin-left: auto; margin-right: auto; }
-  .view-tab { min-width: 8.5em; font-size: .72rem; }
 }
 
 @media (max-width: 480px) {
@@ -853,6 +884,16 @@ body.member-mode.senior-member .my-progress-goal-body {
   .points { font-size: 1rem; min-width: 28px; }
   .points-label { font-size: .56rem; }
   .unplayed-count { font-size: .92rem; min-width: 22px; }
+  body:not(.member-mode) .header-top { flex-wrap: wrap; }
+  body:not(.member-mode) .header-actions {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  body:not(.member-mode) .header-actions .btn-sm {
+    flex: 1 1 calc(33.33% - 6px);
+    min-width: 0;
+  }
   .view-tab {
     font-size: .62rem; padding: 10px 4px; line-height: 1.25;
     white-space: normal; word-break: keep-all; overflow-wrap: anywhere;
