@@ -765,6 +765,15 @@ body.member-mode.senior-member .my-progress-goal-body {
   font-size: .66rem; padding: 6px 8px; background: var(--bg); border-radius: 8px;
   border: 1px solid var(--line); margin-bottom: 4px; line-height: 1.45;
 }
+.stripe-history-item.kind-review { border-left: 3px solid var(--accent); }
+.stripe-history-item.kind-message { border-left: 3px solid var(--accent2); background: #f8fdf9; }
+.stripe-history-kind {
+  font-size: .62rem; font-weight: 800; margin-bottom: 4px; letter-spacing: .02em;
+}
+.stripe-history-item.kind-review .stripe-history-kind { color: var(--accent); }
+.stripe-history-item.kind-message .stripe-history-kind { color: #2e7d32; }
+.stripe-history-body { color: var(--text); white-space: pre-wrap; margin-top: 4px; font-size: .68rem; line-height: 1.5; }
+.stripe-history-meta { color: var(--muted); font-size: .62rem; }
 .stripe-history-row {
   display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px;
 }
@@ -1294,7 +1303,7 @@ body.embedded.player-modal-open {
 </div>
 <div class="modal-overlay no-print" id="reviewHistoryModal">
   <div class="modal" style="max-width:480px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch">
-    <h3 id="reviewHistoryTitle">審査履歴</h3>
+    <h3 id="reviewHistoryTitle">履歴（審査・メッセージ）</h3>
     <div id="reviewHistoryBody"></div>
     <button type="button" class="btn btn-ghost btn-block" style="margin-top:12px" data-action="closeReviewHistory">閉じる</button>
   </div>
@@ -1937,7 +1946,7 @@ function getReviewsForPeriod(member, periodKey) {
 }
 
 function analyzeReviewsForDraft(member, periodKey) {
-  var reviews = getReviewsForPeriod(member, periodKey).slice().sort(function(a, b) {
+  var reviews = getReviewsForPeriod(member, periodKey).filter(isStripeReviewEntry).slice().sort(function(a, b) {
     return (a.at || 0) - (b.at || 0);
   });
   if (!reviews.length) return null;
@@ -2046,6 +2055,7 @@ function draftMemberCommentFromReviews(rosterId, forceReplace) {
     source: "auto-draft",
     status: "draft"
   };
+  appendMemberMessageHistory(m, draft, "auto-draft");
   saveState();
   render();
   showToast(m.name + "さんのコメント下書きを生成しました ✓", { type: "ok" });
@@ -2060,6 +2070,7 @@ function saveRosterMemberDisplay(rosterId) {
   if (commentEl) {
     m.memberComment = commentEl.value || "";
     touchMemberCommentMeta(m, true);
+    appendMemberMessageHistory(m, m.memberComment, "manual");
   }
   if (goalEl) {
     m.personalGoal = goalEl.value || "";
@@ -2090,6 +2101,7 @@ function batchDraftMemberComments() {
       source: "auto-draft",
       status: "draft"
     };
+    appendMemberMessageHistory(m, draft, "auto-draft");
     count++;
   }
   saveState();
@@ -2529,7 +2541,7 @@ function normalizeRosterMember(raw) {
     personalGoalPeriodKey: m.personalGoalPeriodKey || "",
     memberComment: m.memberComment || "",
     memberCommentMeta: m.memberCommentMeta && typeof m.memberCommentMeta === "object" ? m.memberCommentMeta : null,
-    reviews: Array.isArray(m.reviews) ? m.reviews : []
+    reviews: Array.isArray(m.reviews) ? m.reviews.map(normalizeReviewEntry) : []
   };
 }
 
@@ -2538,6 +2550,7 @@ function ensureRosterLinks(s) {
   var i, j, league, p, m, byName = {}, byId = {};
   for (i = 0; i < s.roster.length; i++) {
     s.roster[i] = normalizeRosterMember(s.roster[i]);
+    ensureMessageHistoryFromComment(s.roster[i]);
     byName[s.roster[i].name] = s.roster[i];
     byId[s.roster[i].id] = s.roster[i];
   }
@@ -2641,15 +2654,89 @@ function formatStripeReviewResultLabel(result) {
   return "保留";
 }
 
+function isStripeReviewEntry(r) {
+  return !!r && r.kind !== "message";
+}
+
+function isMessageEntry(r) {
+  return !!r && r.kind === "message";
+}
+
+function normalizeReviewEntry(r) {
+  if (!r || typeof r !== "object") return r;
+  if (r.kind === "message") return r;
+  return Object.assign({}, r, { kind: r.kind || "review" });
+}
+
+function getLatestMessageEntry(member) {
+  var reviews = (member.reviews || []).filter(isMessageEntry);
+  reviews.sort(function(a, b) { return (b.at || 0) - (a.at || 0); });
+  return reviews[0] || null;
+}
+
+function appendMemberMessageHistory(m, text, source) {
+  text = (text || "").trim();
+  if (!text) return false;
+  var latest = getLatestMessageEntry(m);
+  if (latest && String(latest.memo || "").trim() === text) return false;
+  if (!m.reviews) m.reviews = [];
+  m.reviews.push({
+    id: "sr-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+    at: Date.now(),
+    periodKey: getCurrentPeriodKey(),
+    kind: "message",
+    memo: text,
+    source: source || "manual"
+  });
+  return true;
+}
+
+function ensureMessageHistoryFromComment(m) {
+  var text = (m.memberComment || "").trim();
+  if (!text) return;
+  if ((m.reviews || []).some(isMessageEntry)) return;
+  var meta = m.memberCommentMeta || {};
+  if (!m.reviews) m.reviews = [];
+  m.reviews.push({
+    id: "sr-mig-" + (meta.updatedAt || meta.generatedAt || Date.now()),
+    at: meta.updatedAt || meta.generatedAt || Date.now(),
+    periodKey: meta.periodKey || getCurrentPeriodKey(),
+    kind: "message",
+    memo: text,
+    source: meta.source || "legacy"
+  });
+}
+
+function formatMessageSourceLabel(source) {
+  if (source === "auto-draft") return "（自動下書き）";
+  if (source === "legacy") return "（移行）";
+  return "";
+}
+
 function renderStripeReviewHistoryItem(r, opts) {
   opts = opts || {};
+  if (isMessageEntry(r)) {
+    var msgBody = (r.memo || "").trim();
+    var item = '<div class="stripe-history-item kind-message">' +
+      '<div class="stripe-history-kind">💬 指導員メッセージ' + esc(formatMessageSourceLabel(r.source)) + "</div>" +
+      '<div class="stripe-history-meta">' + esc(formatConfirmDate(r.at)) + "</div>" +
+      (msgBody ? '<div class="stripe-history-body">' + esc(msgBody) + "</div>" : "") +
+      "</div>";
+    if (!opts.deletable) return item;
+    return '<div class="stripe-history-row">' + item +
+      '<button type="button" class="btn btn-danger btn-sm" data-action="deleteStripeReview" data-roster-id="' + esc(opts.rosterId) + '" data-review-id="' + esc(r.id) + '">削除</button>' +
+      "</div>";
+  }
   var resultLabel = formatStripeReviewResultLabel(r.result);
   var scorePart = r.checkSummary ? " ／ ○" + r.checkSummary.ok + " ×" + r.checkSummary.ng : "";
   var levelLabel = (getStripeLevelDef(r.targetLevel) || {}).label || "";
   var style = r.result === "pass" ? "color:var(--win)" : "color:var(--draw)";
-  var body = esc(formatConfirmDate(r.at)) + " ／ " + r.targetLevel + "本目（" + esc(levelLabel) + "） ／ " + resultLabel + scorePart +
-    (r.memo ? "<br><span style=\"color:var(--muted)\">" + esc(r.memo) + "</span>" : "");
-  var item = '<div class="stripe-history-item" style="' + style + '">' + body + "</div>";
+  var reviewMeta = esc(formatConfirmDate(r.at)) + " ／ " + r.targetLevel + "本目（" + esc(levelLabel) + "） ／ " + resultLabel + scorePart;
+  var item = '<div class="stripe-history-item kind-review">' +
+    '<div class="stripe-history-kind" style="' + style + '">🎗 ストライプ審査</div>' +
+    '<div class="stripe-history-meta">' + reviewMeta + "</div>" +
+    (r.memo ? '<div class="stripe-history-body" style="color:var(--muted)">' + esc(r.memo) + "</div>" : "") +
+    "</div>";
   if (!opts.deletable) return item;
   return '<div class="stripe-history-row">' + item +
     '<button type="button" class="btn btn-danger btn-sm" data-action="deleteStripeReview" data-roster-id="' + esc(opts.rosterId) + '" data-review-id="' + esc(r.id) + '">削除</button>' +
@@ -2661,7 +2748,7 @@ function renderStripeReviewHistoryHtml(reviews, limit, rosterId) {
   var rows = (reviews || []).slice().reverse().slice(0, limit).map(function(r) {
     return renderStripeReviewHistoryItem(r, rosterId ? { deletable: false, rosterId: rosterId } : null);
   }).join("");
-  return rows || '<div class="stripe-history-item" style="color:var(--muted)">審査履歴はまだありません</div>';
+  return rows || '<div class="stripe-history-item" style="color:var(--muted)">履歴はまだありません</div>';
 }
 
 function buildStripeCheckLabelsSnapshot(def, checks) {
@@ -2677,7 +2764,7 @@ function buildStripeCheckLabelsSnapshot(def, checks) {
 
 function getLatestStripeReviewForLevel(member, targetLevel) {
   var reviews = (member.reviews || []).filter(function(r) {
-    return r.targetLevel === targetLevel;
+    return isStripeReviewEntry(r) && r.targetLevel === targetLevel;
   });
   reviews.sort(function(a, b) { return (b.at || 0) - (a.at || 0); });
   return reviews[0] || null;
@@ -2716,7 +2803,7 @@ function applyStripeReviewChecksToDom() {
 }
 
 function getLatestStripeReview(member) {
-  var reviews = (member.reviews || []).slice();
+  var reviews = (member.reviews || []).filter(isStripeReviewEntry);
   reviews.sort(function(a, b) { return (b.at || 0) - (a.at || 0); });
   return reviews[0] || null;
 }
@@ -2760,6 +2847,18 @@ function isManualMemberComment(member) {
 }
 
 function getInstructorMessageForMember(member) {
+  var latestMsg = getLatestMessageEntry(member);
+  if (latestMsg && (latestMsg.memo || "").trim()) {
+    var msgText = String(latestMsg.memo).trim();
+    var senior = isSeniorMember(member);
+    var latestReview = senior ? null : getLatestStripeReview(member);
+    var ngItems = senior ? [] : getNgItemsFromReview(latestReview);
+    var text = appendNgItemsToMessage(msgText, ngItems);
+    if (!text) return null;
+    var at = latestMsg.at || 0;
+    if (latestReview && (latestReview.at || 0) > at) at = latestReview.at;
+    return { text: text, at: at || null, source: "message", ngItems: ngItems };
+  }
   var comment = (member.memberComment || "").trim();
   var meta = member.memberCommentMeta || {};
   var commentAt = meta.updatedAt || meta.generatedAt || 0;
@@ -2775,6 +2874,7 @@ function getInstructorMessageForMember(member) {
     var i, r, memo;
     for (i = 0; i < (member.reviews || []).length; i++) {
       r = member.reviews[i];
+      if (!isStripeReviewEntry(r)) continue;
       memo = r.memo && String(r.memo).trim();
       if (!memo) continue;
       if (!latestReviewMemo || (r.at || 0) > (latestReviewMemo.at || 0)) {
@@ -2812,7 +2912,7 @@ function renderInstructorMessagePreview(member) {
 }
 
 function renderMyProgressReviewHistory(member) {
-  return renderStripeReviewHistoryHtml(member.reviews, 8);
+  return renderStripeReviewHistoryHtml(member.reviews, 12);
 }
 
 function renderMyProgressLeagueStats(rosterId) {
@@ -2882,6 +2982,7 @@ function renderSeniorMyProgressPage(rosterId) {
     msgHtml +
     '<p class="my-progress-note">※ 中学生以上はストライプ・Jリーグの対象外です。目標と指導員メッセージをここで確認できます。</p>' +
     "</div>" +
+    '<div class="card"><div class="card-title">履歴（メッセージ）</div>' + renderMyProgressReviewHistory(member) + "</div>" +
     '<div class="card"><button type="button" class="btn btn-ghost btn-block" data-action="logoutMember">確認を終了する</button></div>';
 }
 
@@ -2947,7 +3048,7 @@ function renderMyProgressPage(rosterId) {
     "</div>" +
     '<div class="card"><div class="card-title">リーグ戦の状況</div>' + renderMyProgressLeagueStats(member.id) + "</div>" +
     nextSection +
-    '<div class="card"><div class="card-title">審査履歴</div>' + renderMyProgressReviewHistory(member) + "</div>" +
+    '<div class="card"><div class="card-title">履歴（審査・メッセージ）</div>' + renderMyProgressReviewHistory(member) + "</div>" +
     '<div class="card"><button type="button" class="btn btn-ghost btn-block" data-action="logoutMember">別のお子さまの確認／終了</button></div>';
 }
 
@@ -3818,7 +3919,7 @@ var reviewHistoryMemberId = null;
 
 function renderReviewHistoryButton(m) {
   var count = (m.reviews || []).length;
-  var label = count ? "📝 審査履歴（" + count + "）" : "📝 審査履歴";
+  var label = count ? "📝 履歴（" + count + "）" : "📝 履歴";
   return '<button type="button" class="btn btn-ghost btn-sm" data-action="openReviewHistory" data-roster-id="' + esc(m.id) + '">' + label + "</button>";
 }
 
@@ -3841,10 +3942,10 @@ function renderReviewHistoryModalBody(m) {
   var reviews = (m.reviews || []).slice().sort(function(a, b) { return (b.at || 0) - (a.at || 0); });
   var rows = reviews.length
     ? reviews.map(function(r) { return renderStripeReviewHistoryItem(r, { deletable: true, rosterId: m.id }); }).join("")
-    : '<div class="stripe-history-item" style="color:var(--muted)">審査履歴はまだありません</div>';
+    : '<div class="stripe-history-item" style="color:var(--muted)">履歴はまだありません</div>';
   var titleEl = document.getElementById("reviewHistoryTitle");
   var bodyEl = document.getElementById("reviewHistoryBody");
-  if (titleEl) titleEl.textContent = m.name + "さんの審査履歴";
+  if (titleEl) titleEl.textContent = m.name + "さんの履歴（審査・メッセージ）";
   if (bodyEl) {
     bodyEl.innerHTML = rows +
       '<p style="font-size:.62rem;color:var(--muted);margin:10px 0 0;line-height:1.45">不要な記録は削除できます。合格記録を削除すると、ストライプ本数を残りの合格記録から再計算します。</p>';
@@ -3963,7 +4064,7 @@ function renderStripeReviewModal(member, targetLevel) {
     '<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">' +
     '<button type="button" class="btn btn-primary btn-block" data-action="submitStripeReview" data-result="pass">✓ 合格（ストライプ授与）</button>' +
     '<button type="button" class="btn btn-ghost btn-block" data-action="submitStripeReview" data-result="hold">保留として記録</button></div>' +
-    '<div class="stripe-review-section"><h4>審査履歴</h4>' + historyHtml + "</div>";
+    '<div class="stripe-review-section"><h4>履歴（審査・メッセージ）</h4>' + historyHtml + "</div>";
 
   var targetSel = document.getElementById("stripeReviewTarget");
   if (targetSel) {
@@ -3977,6 +4078,7 @@ function renderStripeReviewModal(member, targetLevel) {
 function recalcMemberStripesFromReviews(m) {
   var maxPass = 0;
   (m.reviews || []).forEach(function(r) {
+    if (!isStripeReviewEntry(r)) return;
     if (r.result === "pass" && (r.targetLevel || 0) > maxPass) maxPass = r.targetLevel;
   });
   m.stripes = maxPass;
@@ -3992,13 +4094,26 @@ function deleteStripeReview(rosterId, reviewId) {
   for (i = 0; i < m.reviews.length; i++) {
     if (m.reviews[i].id === reviewId) { review = m.reviews[i]; break; }
   }
-  if (!review) { showToast("審査記録が見つかりません"); return; }
-  var levelLabel = (getStripeLevelDef(review.targetLevel) || {}).label || "";
-  if (!confirm(m.name + "さんの審査記録を削除しますか？\n\n" +
-    formatConfirmDate(review.at) + " ／ " + review.targetLevel + "本目（" + levelLabel + "） ／ " + formatStripeReviewResultLabel(review.result) +
-    (review.result === "pass" ? "\n\n※ 合格記録の削除に伴い、ストライプ本数を再計算します。" : ""))) return;
+  if (!review) { showToast("履歴が見つかりません"); return; }
+  var confirmText;
+  if (isMessageEntry(review)) {
+    confirmText = m.name + "さんの指導員メッセージを削除しますか？\n\n" + formatConfirmDate(review.at) +
+      (review.memo ? "\n\n" + String(review.memo).trim().slice(0, 120) : "");
+  } else {
+    var levelLabel = (getStripeLevelDef(review.targetLevel) || {}).label || "";
+    confirmText = m.name + "さんの審査記録を削除しますか？\n\n" +
+      formatConfirmDate(review.at) + " ／ " + review.targetLevel + "本目（" + levelLabel + "） ／ " + formatStripeReviewResultLabel(review.result) +
+      (review.result === "pass" ? "\n\n※ 合格記録の削除に伴い、ストライプ本数を再計算します。" : "");
+  }
+  if (!confirm(confirmText)) return;
   m.reviews = m.reviews.filter(function(r) { return r.id !== reviewId; });
-  recalcMemberStripesFromReviews(m);
+  if (isMessageEntry(review)) {
+    var latestMsg = getLatestMessageEntry(m);
+    m.memberComment = latestMsg ? (latestMsg.memo || "") : "";
+    if (latestMsg) touchMemberCommentMeta(m, true);
+  } else {
+    recalcMemberStripesFromReviews(m);
+  }
   saveState();
   var keepOpen = reviewHistoryMemberId === rosterId;
   render();
@@ -4012,7 +4127,7 @@ function deleteStripeReview(rosterId, reviewId) {
       closeReviewHistoryModal();
     }
   }
-  showToast("審査記録を削除しました ✓");
+  showToast(isMessageEntry(review) ? "指導員メッセージを削除しました ✓" : "審査記録を削除しました ✓");
 }
 
 function submitStripeReview(result) {
@@ -4051,6 +4166,7 @@ function submitStripeReview(result) {
     id: "sr-" + Date.now(),
     at: Date.now(),
     periodKey: getCurrentPeriodKey(),
+    kind: "review",
     targetLevel: targetLevel,
     result: result,
     checks: checks,
@@ -4287,6 +4403,7 @@ function saveFeedbackFromPage(rosterId) {
   if (commentEl) {
     m.memberComment = commentEl.value || "";
     touchMemberCommentMeta(m, true);
+    appendMemberMessageHistory(m, m.memberComment, "manual");
   }
   if (goalEl) {
     m.personalGoal = goalEl.value || "";
