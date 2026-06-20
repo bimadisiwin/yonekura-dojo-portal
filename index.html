@@ -440,7 +440,25 @@ main {
   background: var(--card); color: var(--muted); cursor: pointer;
 }
 .awards-history-card { margin-top: var(--fluid-space-lg); }
-.player-name { font-weight: 700; font-size: var(--fluid-text-md); }
+.player-name { font-weight: 700; font-size: var(--fluid-text-md); word-break: keep-all; line-height: var(--fluid-line-tight); }
+.player-stats {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--fluid-space-xs) var(--fluid-space-sm);
+  margin-top: var(--fluid-space-xs);
+  font-size: var(--fluid-text-xs); line-height: 1.2; word-break: keep-all;
+}
+.player-stat-item {
+  display: inline-flex; align-items: center; justify-content: center;
+  white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums;
+  min-width: 2.6em; padding: 3px 8px; border-radius: var(--fluid-radius-sm);
+}
+.player-stat-win { background: var(--win-bg); color: var(--win); }
+.player-stat-draw { background: var(--draw-bg); color: var(--draw); }
+.player-stat-loss { background: var(--lose-bg); color: var(--lose); }
+.player-stat-played {
+  min-width: 0; padding: 0; background: none; color: var(--muted);
+  font-weight: 600; font-size: var(--fluid-text-2xs);
+}
 .player-tap {
   display: inline-block; background: none; border: none; padding: 2px 0;
   font: inherit; font-weight: 700; font-size: inherit; color: inherit;
@@ -449,8 +467,7 @@ main {
   -webkit-appearance: none; appearance: none;
 }
 .player-tap:active { opacity: .7; }
-.grid-table tbody th .player-tap { display: block; width: 100%; white-space: nowrap; }
-.player-stats { font-size: var(--fluid-text-2xs); color: var(--muted); }
+.grid-table tbody th .player-tap { display: block; width: 100%; white-space: nowrap; word-break: keep-all; }
 .player-history-list { display: flex; flex-direction: column; gap: var(--fluid-space-sm); max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .player-history-item {
   display: grid; grid-template-columns: 1fr auto auto; gap: var(--fluid-space-sm); align-items: center;
@@ -705,11 +722,13 @@ body.member-mode.senior-member .my-progress-goal-body {
   display: flex; align-items: center; justify-content: center;
   width: 100%; height: 100%; min-height: var(--fluid-touch);
   border: none; background: transparent; cursor: pointer;
-  font-size: calc(9px + 0.12vw); font-weight: 700; line-height: var(--fluid-line-tight);
+  font-size: calc(12px + 0.28vw); font-weight: 800; line-height: 1;
+  white-space: nowrap; word-break: keep-all;
   padding: var(--fluid-space-2xs); -webkit-tap-highlight-color: transparent;
   touch-action: pan-x pan-y; position: relative; z-index: 2;
   -webkit-user-select: none; user-select: none;
 }
+.cell-btn.empty { font-size: calc(9px + 0.12vw); font-weight: 500; }
 .cell-btn.pressing { box-shadow: inset 0 0 0 2px var(--accent); background: rgba(201,162,39,.18) !important; }
 .cell-btn.empty {
   background: var(--empty-bg);
@@ -2705,11 +2724,7 @@ function formatMatchDate(playedAt) {
 }
 
 function resultStatusLabel(playerId, result) {
-  if (!result) return "";
-  if (result.r === "draw") return "引き分け";
-  var won = result.w === playerId;
-  if (result.r === "ippon") return won ? "一本勝ち" : "一本負け";
-  return won ? "優勢勝ち" : "優勢負け";
+  return cellLabel(playerId, result) || (result && result.r === "draw" ? "引分" : "");
 }
 
 function findPlayerName(league, playerId) {
@@ -4921,6 +4936,14 @@ function cellLabel(playerId, result) {
   return won ? "優勢勝" : "優勢負";
 }
 
+function cellSymbol(playerId, result) {
+  if (!result) return "";
+  if (result.r === "draw") return "△";
+  var won = result.w === playerId;
+  if (result.r === "ippon") return won ? "◎" : "✕";
+  return won ? "○" : "▲";
+}
+
 function cellClass(playerId, result) {
   if (!result) return "empty";
   if (result.r === "draw") return "draw";
@@ -6017,7 +6040,7 @@ function renderStandings(league, sorted) {
       return `<div class="standing-row${cls}">
         <div class="rank-badge">${p.rank}</div>
         <div>${renderPlayerNameLine(p, false)}
-          <div class="player-stats">${p.wins}勝 ${p.draws}分 ${p.losses}敗 (${p.played}試合)</div></div>
+          <div class="player-stats"><span class="player-stat-item player-stat-win">${p.wins}勝</span><span class="player-stat-item player-stat-draw">${p.draws}分</span><span class="player-stat-item player-stat-loss">${p.losses}敗</span><span class="player-stat-item player-stat-played">${p.played}試合</span></div></div>
         <div class="standing-stats-col">
           <div class="standing-stat">${renderUnplayedBlock(unplayed)}</div>
           <div class="standing-stat"><div class="points">${p.points}</div><div class="points-label">勝点</div></div>
@@ -6089,13 +6112,14 @@ function renderGrid(league, sorted, opts) {
         body += `<td class="diag diag-inactive">未</td>`;
       } else {
         const r = getResult(league, row.id, col.id);
-        const lbl = cellLabel(row.id, r);
+        const lbl = cellSymbol(row.id, r);
         const cls = cellClass(row.id, r);
+        const aria = r ? cellLabel(row.id, r) : "未入力";
         if (isMemberMode) {
-          body += `<td><span class="cell-btn cell-readonly ${cls}">${lbl}</span></td>`;
+          body += `<td><span class="cell-btn cell-readonly ${cls}" aria-label="${esc(aria)}" title="${esc(aria)}">${lbl}</span></td>`;
         } else {
           var pkAttr = playoffKey ? ' data-playoff-key="' + esc(playoffKey) + '"' : "";
-          body += `<td><button type="button" class="cell-btn ${cls}" data-cell-a="${esc(row.id)}" data-cell-b="${esc(col.id)}"${pkAttr}>${lbl}</button></td>`;
+          body += `<td><button type="button" class="cell-btn ${cls}" data-cell-a="${esc(row.id)}" data-cell-b="${esc(col.id)}" aria-label="${esc(aria)}" title="${esc(aria)}"${pkAttr}>${lbl}</button></td>`;
         }
       }
     }
@@ -6517,12 +6541,12 @@ function openCellModal(idA, idB, playoffKey) {
     ? `現在: ${pA.name}=${cellLabel(idA, existing)} / ${pB.name}=${cellLabel(idB, existing)}`
     : "結果未入力";
   document.getElementById("modalActions").innerHTML = `
-    <button type="button" class="btn btn-win" data-modal-r="ippon" data-modal-w="${esc(idA)}">${esc(pA.name)} 一本勝</button>
-    <button type="button" class="btn btn-win" data-modal-r="yusei" data-modal-w="${esc(idA)}">${esc(pA.name)} 優勢勝</button>
-    <button type="button" class="btn btn-win" data-modal-r="ippon" data-modal-w="${esc(idB)}">${esc(pB.name)} 一本勝</button>
-    <button type="button" class="btn btn-win" data-modal-r="yusei" data-modal-w="${esc(idB)}">${esc(pB.name)} 優勢勝</button>
-    <button type="button" class="btn btn-draw" data-modal-r="draw" data-modal-w="">引分</button>
-    <button type="button" class="btn btn-danger" data-modal-r="" data-modal-w="">クリア</button>`;
+    <button type="button" class="btn btn-win modal-result-btn" data-modal-r="ippon" data-modal-w="${esc(idA)}"><span class="modal-result-name">${esc(pA.name)}</span><span class="modal-result-type">一本勝</span></button>
+    <button type="button" class="btn btn-win modal-result-btn" data-modal-r="yusei" data-modal-w="${esc(idA)}"><span class="modal-result-name">${esc(pA.name)}</span><span class="modal-result-type">優勢勝</span></button>
+    <button type="button" class="btn btn-win modal-result-btn" data-modal-r="ippon" data-modal-w="${esc(idB)}"><span class="modal-result-name">${esc(pB.name)}</span><span class="modal-result-type">一本勝</span></button>
+    <button type="button" class="btn btn-win modal-result-btn" data-modal-r="yusei" data-modal-w="${esc(idB)}"><span class="modal-result-name">${esc(pB.name)}</span><span class="modal-result-type">優勢勝</span></button>
+    <button type="button" class="btn btn-draw modal-result-btn modal-result-btn-single" data-modal-r="draw" data-modal-w=""><span class="modal-result-type">引分</span></button>
+    <button type="button" class="btn btn-danger modal-result-btn modal-result-btn-single" data-modal-r="" data-modal-w=""><span class="modal-result-type">クリア</span></button>`;
   document.getElementById("cellModal").classList.add("open");
   var modal = document.getElementById("cellModal");
   if (modal) {
