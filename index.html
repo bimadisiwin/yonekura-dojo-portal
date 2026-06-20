@@ -512,6 +512,63 @@ body.member-mode.senior-member .my-progress-goal-body {
 .roster-comment-actions {
   display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;
 }
+/* スマホ向け・練習フィードバック */
+.feedback-page-note {
+  font-size: .72rem; color: var(--muted); line-height: 1.55; margin: 0 0 12px;
+}
+.feedback-search-wrap {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--bg); padding: 0 0 10px; margin-bottom: 4px;
+}
+.feedback-search {
+  width: 100%; font-size: 16px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: #fff; box-sizing: border-box;
+}
+.feedback-member-grid {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+}
+.feedback-member-chip {
+  flex: 0 1 auto; min-height: 44px; padding: 8px 14px;
+  border-radius: 999px; border: 1px solid var(--line);
+  background: #fff; font-size: .82rem; font-weight: 700;
+  color: var(--text); cursor: pointer;
+}
+.feedback-member-chip.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.feedback-member-chip.has-comment:not(.active) {
+  border-color: var(--accent2); background: #f0fdf4;
+}
+.feedback-editor-card {
+  border: 2px solid var(--accent); border-radius: 14px;
+}
+.feedback-editor-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.feedback-editor-name { font-size: 1.05rem; font-weight: 800; }
+.feedback-editor-meta { font-size: .66rem; color: var(--muted); line-height: 1.45; }
+.feedback-field-label {
+  display: block; font-size: .72rem; font-weight: 700;
+  margin: 10px 0 6px; color: var(--text);
+}
+.feedback-textarea {
+  width: 100%; min-height: 140px; font-size: 16px; line-height: 1.55;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px;
+  resize: vertical; box-sizing: border-box; font-family: inherit;
+}
+.feedback-preview {
+  margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+  background: #f8fafc; border: 1px dashed var(--line);
+  font-size: .74rem; line-height: 1.55; white-space: pre-wrap;
+}
+.feedback-save-btn {
+  margin-top: 14px; min-height: 48px; font-size: .92rem; font-weight: 700;
+}
+.feedback-empty {
+  font-size: .82rem; color: var(--muted); padding: 16px 8px; text-align: center;
+}
 .points { font-size: 1.1rem; font-weight: 800; color: var(--accent2); min-width: 36px; text-align: right; }
 .points-label { font-size: .62rem; color: var(--muted); text-align: right; }
 .standings-print { display: none; }
@@ -1191,6 +1248,7 @@ body.embedded.player-modal-open {
     </div>
     <div class="header-actions no-print">
       <button type="button" class="btn btn-secondary btn-sm member-me-only" id="btnMyProgress">🎗 マイ進捗</button>
+      <button type="button" class="btn btn-secondary btn-sm btn-master admin-only" id="btnFeedback" title="練習フィードバック">💬 FB</button>
       <button type="button" class="btn btn-secondary btn-sm btn-master admin-only" id="btnMasterSettings">📋 マスター</button>
       <button type="button" class="btn btn-primary btn-sm admin-only" id="btnExportImage">🖼 画像保存</button>
       <button type="button" class="btn btn-primary btn-sm admin-only" id="btnExportPDF">📄 PDF保存</button>
@@ -1207,6 +1265,7 @@ body.embedded.player-modal-open {
   <button type="button" class="view-tab active" data-view="main">📊 順位・星取表</button>
   <button type="button" class="view-tab" data-view="playoff">🔄 入れ替え戦</button>
   <button type="button" class="view-tab" data-view="awards">🏆 MVP・表彰</button>
+  <button type="button" class="view-tab admin-only" data-view="feedback">💬 フィードバック</button>
   <button type="button" class="view-tab admin-only" data-view="stripes">🎗 ストライプ</button>
   <button type="button" class="view-tab admin-only" data-view="settings">⚙️ リーグ設定</button>
 </div>
@@ -1299,6 +1358,9 @@ let modalCtx = null;
 let viewingArchiveId = null;
 let isMemberMode = false;
 let myRosterId = "";
+let feedbackRosterId = "";
+let feedbackSearchQuery = "";
+const FEEDBACK_ROSTER_KEY = "yonekura-feedback-roster";
 
 function resolveMyRosterId() {
   var fromSession = loadMemberSessionRosterId();
@@ -4164,6 +4226,149 @@ function renderRosterLedgerSection() {
   return renderSposuruSyncCard() + renderRosterLedgerCard() + renderRosterToLeagueCard();
 }
 
+function parseUrlViewParam() {
+  if (isMemberMode) return null;
+  var search = window.location.search || "";
+  if (search.charAt(0) === "?") search = search.slice(1);
+  if (!search) return null;
+  var part = search.split("&"), i, kv, params = {};
+  for (i = 0; i < part.length; i++) {
+    kv = part[i].split("=");
+    if (kv[0]) params[decodeURIComponent(kv[0])] = decodeURIComponent((kv[1] || "").replace(/\+/g, " "));
+  }
+  return params.view || null;
+}
+
+function restoreFeedbackRosterSelection() {
+  if (feedbackRosterId) return;
+  try {
+    var saved = sessionStorage.getItem(FEEDBACK_ROSTER_KEY);
+    if (saved && findRosterMember(saved)) feedbackRosterId = saved;
+  } catch (e) {}
+}
+
+function flushFeedbackInputsFromDom() {
+  if (!feedbackRosterId) return;
+  var m = findRosterMember(feedbackRosterId);
+  if (!m) return;
+  var commentEl = document.getElementById("feedbackCommentInput");
+  var goalEl = document.getElementById("feedbackGoalInput");
+  if (commentEl) m.memberComment = commentEl.value || "";
+  if (goalEl) m.personalGoal = goalEl.value || "";
+}
+
+function filterRosterForFeedback(list, query) {
+  var q = (query || "").trim().toLowerCase();
+  if (!q) return list;
+  return list.filter(function(m) {
+    return (m.name || "").toLowerCase().indexOf(q) >= 0 ||
+      (m.sposuruName || "").toLowerCase().indexOf(q) >= 0 ||
+      (m.group || "").toLowerCase().indexOf(q) >= 0;
+  });
+}
+
+function selectFeedbackMember(rosterId) {
+  if (isMemberMode || isReadonly()) return;
+  flushFeedbackInputsFromDom();
+  feedbackRosterId = rosterId || "";
+  try {
+    if (feedbackRosterId) sessionStorage.setItem(FEEDBACK_ROSTER_KEY, feedbackRosterId);
+    else sessionStorage.removeItem(FEEDBACK_ROSTER_KEY);
+  } catch (e) {}
+  render();
+}
+
+function saveFeedbackFromPage(rosterId) {
+  if (isMemberMode || isReadonly()) return;
+  var m = findRosterMember(rosterId);
+  if (!m) return;
+  var commentEl = document.getElementById("feedbackCommentInput");
+  var goalEl = document.getElementById("feedbackGoalInput");
+  if (commentEl) {
+    m.memberComment = commentEl.value || "";
+    touchMemberCommentMeta(m, true);
+  }
+  if (goalEl) {
+    m.personalGoal = goalEl.value || "";
+    m.personalGoalPeriodKey = getCurrentPeriodKey();
+  }
+  saveState();
+  render();
+  showToast(m.name + "さんのフィードバックを保存しました ✓", { type: "ok", duration: 2500 });
+}
+
+function renderFeedbackEditor(m) {
+  var senior = isSeniorMember(m);
+  var leagues = getMemberLeagueLabels(m.id);
+  var metaBits = [];
+  if (m.group) metaBits.push(esc(m.group));
+  if (!senior) metaBits.push("🎗 " + (m.stripes || 0) + "本");
+  if (!senior) metaBits.push("出席 " + (m.attendanceCount || 0) + "回");
+  if (leagues.length) metaBits.push(esc(leagues.join("・")));
+  var preview = getInstructorMessageForMember(m);
+  var previewHtml = preview
+    ? '<div class="feedback-field-label">会員に表示される内容（プレビュー）</div>' +
+      '<div class="feedback-preview">' + esc(preview.text) + "</div>"
+    : "";
+  var goalField = senior
+    ? '<label class="feedback-field-label">今シーズンの目標（' + esc(formatSeasonLabelFromPeriodKey(getCurrentPeriodKey())) + "）</label>" +
+      '<textarea id="feedbackGoalInput" class="feedback-textarea" rows="3" placeholder="例：得意技の連技を試合で1回決める">' + esc(m.personalGoal || "") + "</textarea>"
+    : "";
+  var commentLabel = senior ? "指導員メッセージ（本人に表示）" : "マイ進捗コメント（保護者・本人に表示）";
+  var commentPlaceholder = senior
+    ? "例：打ち込みの再現性が上がってきました。次は試合で使いましょう。"
+    : "例：今日は礼法がとても良かったです。次は受け身からの反撃を意識しましょう。";
+  return '<div class="card feedback-editor-card">' +
+    '<div class="feedback-editor-head">' +
+    '<div class="feedback-editor-name">' + esc(m.name) + "さん</div>" +
+    (m.sposuruName && m.sposuruName !== m.name ? '<div class="feedback-editor-meta">' + esc(m.sposuruName) + "</div>" : "") +
+    "</div>" +
+    (metaBits.length ? '<div class="feedback-editor-meta">' + metaBits.join(" ／ ") + "</div>" : "") +
+    goalField +
+    '<label class="feedback-field-label">' + esc(commentLabel) + "</label>" +
+    '<textarea id="feedbackCommentInput" class="feedback-textarea" rows="5" placeholder="' + esc(commentPlaceholder) + '">' + esc(m.memberComment || "") + "</textarea>" +
+    previewHtml +
+    '<button type="button" class="btn btn-primary btn-block feedback-save-btn" data-action="saveFeedback" data-roster-id="' + esc(m.id) + '">💾 保存して会員に反映</button>' +
+    renderMemberCommentMetaHint(m) +
+    "</div>";
+}
+
+function renderFeedbackPage() {
+  restoreFeedbackRosterSelection();
+  var roster = sortRosterByName(getRosterList());
+  var searchEl = document.getElementById("feedbackSearchInput");
+  if (searchEl) feedbackSearchQuery = searchEl.value;
+  var query = feedbackSearchQuery;
+  var filtered = filterRosterForFeedback(roster, query);
+  if (feedbackRosterId && !findRosterMember(feedbackRosterId)) feedbackRosterId = "";
+  if (!feedbackRosterId && filtered.length === 1) feedbackRosterId = filtered[0].id;
+  var chips = filtered.map(function(m) {
+    var hasComment = !!(m.memberComment && String(m.memberComment).trim());
+    return '<button type="button" class="feedback-member-chip' +
+      (m.id === feedbackRosterId ? " active" : "") +
+      (hasComment ? " has-comment" : "") +
+      '" data-action="selectFeedbackMember" data-roster-id="' + esc(m.id) + '">' +
+      esc(m.name) + "</button>";
+  }).join("");
+  var selected = feedbackRosterId ? findRosterMember(feedbackRosterId) : null;
+  var editorHtml = selected
+    ? renderFeedbackEditor(selected)
+    : '<div class="feedback-empty">👆 上から選手を選んで、練習後のコメントを入力してください</div>';
+  var syncHint = ghReady()
+    ? '<p style="font-size:.64rem;color:var(--muted);margin:12px 0 0;line-height:1.45">保存するとクラウドに自動同期されます。保護者は会員ページの🎗マイ進捗から確認できます。</p>'
+    : '<p style="font-size:.64rem;color:#b83232;margin:12px 0 0;line-height:1.45">⚠️ クラウド同期が未設定です。📋マスターでGitHubトークンを設定してください。</p>';
+  return '<div class="print-title">💬 練習フィードバック ｜ ' + esc(getActiveContext().seasonLabel) + "</div>" +
+    '<p class="feedback-page-note">稽古後にスマホから<strong>マイ進捗コメント</strong>を更新できます。会員ページの🎗マイ進捗にそのまま反映されます。</p>' +
+    '<div class="card">' +
+    '<div class="feedback-search-wrap">' +
+    '<input type="search" id="feedbackSearchInput" class="feedback-search" placeholder="名前で検索（例：なぎ、だいと）" value="' + esc(query) + '" autocomplete="off" enterkeyhint="search">' +
+    "</div>" +
+    '<div class="feedback-member-grid">' + (chips || '<span class="feedback-empty">該当する選手がいません</span>') + "</div>" +
+    editorHtml +
+    syncHint +
+    "</div>";
+}
+
 function renderStripesPage() {
   var roster = getRosterList().filter(function(m) { return !isSeniorMember(m); }).slice().sort(function(a, b) {
     if (b.stripes !== a.stripes) return b.stripes - a.stripes;
@@ -5337,11 +5542,14 @@ function setView(v) {
   }
   if (v === "match") v = "main";
   currentView = v;
+  if (v === "feedback") restoreFeedbackRosterSelection();
   document.querySelectorAll(".view-tab").forEach(el => {
     el.classList.toggle("active", el.dataset.view === v);
   });
   var masterBtn = document.getElementById("btnMasterSettings");
   if (masterBtn) masterBtn.classList.toggle("active", v === "master");
+  var feedbackBtn = document.getElementById("btnFeedback");
+  if (feedbackBtn) feedbackBtn.classList.toggle("active", v === "feedback");
   var myBtn = document.getElementById("btnMyProgress");
   if (myBtn) myBtn.classList.toggle("active", v === "myprogress");
   render();
@@ -5354,7 +5562,7 @@ function selectLeague(id) {
 
 function renderLeagueTabs() {
   const el = document.getElementById("leagueTabs");
-  if (currentView === "playoff" || currentView === "awards" || currentView === "stripes" || currentView === "myprogress" || currentView === "master") {
+  if (currentView === "playoff" || currentView === "awards" || currentView === "stripes" || currentView === "myprogress" || currentView === "master" || currentView === "feedback") {
     el.innerHTML = "";
     el.style.display = "none";
     return;
@@ -5710,7 +5918,7 @@ async function manualPull() {
 }
 
 function render() {
-  if (!currentLeagueId && currentView !== "playoff" && currentView !== "awards" && currentView !== "stripes" && currentView !== "master" && currentView !== "myprogress") {
+  if (!currentLeagueId && currentView !== "playoff" && currentView !== "awards" && currentView !== "stripes" && currentView !== "master" && currentView !== "myprogress" && currentView !== "feedback") {
     var ctxLeagues = getActiveContext().leagues;
     currentLeagueId = ctxLeagues[0] ? ctxLeagues[0].id : null;
   }
@@ -5742,6 +5950,22 @@ function render() {
   }
   if (currentView === "stripes") {
     main.innerHTML = renderStripesPage();
+    return;
+  }
+  if (currentView === "feedback") {
+    if (ctx.readonly) {
+      main.innerHTML = '<div class="card"><div style="font-size:.82rem;color:var(--muted);padding:8px">アーカイブ閲覧中はフィードバックを変更できません。</div><button type="button" class="btn btn-primary btn-block" data-action="exitArchive">現在シーズンに戻る</button></div>';
+    } else {
+      main.innerHTML = renderFeedbackPage();
+      var fbSearch = document.getElementById("feedbackSearchInput");
+      if (fbSearch && document.activeElement !== fbSearch && feedbackSearchQuery) {
+        fbSearch.focus();
+        try {
+          var len = fbSearch.value.length;
+          fbSearch.setSelectionRange(len, len);
+        } catch (focusErr) {}
+      }
+    }
     return;
   }
   if (currentView === "myprogress" && isMemberMode) {
@@ -6585,6 +6809,7 @@ function findTapTarget(start) {
       n.hasAttribute("data-modal-r") ||
       n.id === "btnExportImage" ||
       n.id === "btnExportPDF" ||
+      n.id === "btnFeedback" ||
       n.id === "btnMasterSettings" ||
       n.id === "btnMyProgress" ||
       n.id === "syncStatus" ||
@@ -6617,6 +6842,7 @@ function handleAppTap(e) {
   }
   if (target.id === "btnExportImage") { exportImage(); return; }
   if (target.id === "btnExportPDF") { exportPDF(); return; }
+  if (target.id === "btnFeedback") { setView("feedback"); return; }
   if (target.id === "btnMasterSettings") { setView("master"); return; }
   if (target.id === "btnMyProgress") { openMyProgress(); return; }
   var leagueId = target.getAttribute("data-league-id");
@@ -6658,6 +6884,8 @@ function handleAppTap(e) {
   else if (action === "importMemberListCsv") importMemberListCsvPrompt();
   else if (action === "batchDraftMemberComments") batchDraftMemberComments();
   else if (action === "saveRosterMemberDisplay") saveRosterMemberDisplay(target.getAttribute("data-roster-id"));
+  else if (action === "selectFeedbackMember") selectFeedbackMember(target.getAttribute("data-roster-id"));
+  else if (action === "saveFeedback") saveFeedbackFromPage(target.getAttribute("data-roster-id"));
   else if (action === "openReviewHistory") openReviewHistoryModal(target.getAttribute("data-roster-id"));
   else if (action === "closeReviewHistory") closeReviewHistoryModal();
   else if (action === "deleteStripeReview") deleteStripeReview(target.getAttribute("data-roster-id"), target.getAttribute("data-review-id"));
@@ -6761,7 +6989,22 @@ function bindAppEvents() {
   }
   document.addEventListener("input", function(e) {
     var t = e.target;
-    if (!t || !t.getAttribute || !t.getAttribute("data-roster-id")) return;
+    if (!t || !t.getAttribute) return;
+    if (t.id === "feedbackSearchInput") {
+      feedbackSearchQuery = t.value || "";
+      flushFeedbackInputsFromDom();
+      render();
+      var fbSearch = document.getElementById("feedbackSearchInput");
+      if (fbSearch) {
+        fbSearch.focus();
+        try {
+          var len = fbSearch.value.length;
+          fbSearch.setSelectionRange(len, len);
+        } catch (focusErr) {}
+      }
+      return;
+    }
+    if (!t.getAttribute("data-roster-id")) return;
     var field = t.getAttribute("data-roster-field");
     if (field !== "sposuruName" && field !== "name") return;
     var m = findRosterMember(t.getAttribute("data-roster-id"));
@@ -6792,6 +7035,8 @@ window.exportPDF = exportPDF;
 try {
   markLegacyIOS();
   bindAppEvents();
+  var urlView = parseUrlViewParam();
+  if (urlView === "feedback" && !isMemberMode) currentView = "feedback";
   render();
   window.addEventListener("resize", function() { initLegacyGridScroll(); }, false);
   if (isMemberMode) {
