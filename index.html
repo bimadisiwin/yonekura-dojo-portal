@@ -2895,7 +2895,7 @@ function stripeCheckItems(labels) {
 var STRIPE_LEVEL_DEFS = [
   { level: 1, label: "ベーシック", theme: "あいさつと安全のきほん", minMonths: 0, minAttendance: 8, prevStripes: 0, leagueHint: "J3参戦可",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["累計8回前後の出席", "道着・帯・つめ・髪の安全確認"]) },
+      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["8回前後の出席（初回）", "道着・帯・つめ・髪の安全確認"]) },
       { key: "shin", label: "心", required: false, items: stripeCheckItems(["道場に入る時と出る時にあいさつができる", "「お願いします」「ありがとうございました」が言える", "先生の話を見て聞ける", "友だちに危ないことをしない"]) },
       { key: "gi", label: "技", required: false, items: stripeCheckItems(["立礼・座礼ができる", "後ろ受け身で頭を打たない", "横受け身の手のつき方ができる", "前受け身・前回り受け身にチャレンジできる", "寝技のルールがわかる"]) },
       { key: "tai", label: "体", required: false, items: stripeCheckItems(["準備運動を最後までやりきる", "正座や基本姿勢を保てる", "回転運動を安全にできる"]) },
@@ -2903,7 +2903,7 @@ var STRIPE_LEVEL_DEFS = [
     ] },
   { level: 2, label: "アドバンス", theme: "受け身の完成と安全行動", minMonths: 0, minAttendance: 24, prevStripes: 1, leagueHint: "J2参戦可",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["累計24回前後の出席", "1本目を取得済み"]) },
+      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["前回合格から16回前後の出席", "1本目を取得済み"]) },
       { key: "shin", label: "心", required: false, items: stripeCheckItems(["自分の道着・帯を整えようとする", "練習に集中できる", "指示を聞いて落ち着いて行動できる"]) },
       { key: "gi", label: "技", required: false, items: stripeCheckItems(["後ろ受け身が正確にできる", "前受け身が正確にできる", "横受け身が正確にできる", "前回り受け身が左右でできる", "打ち込みで姿勢が大きく崩れない"]) },
       { key: "tai", label: "体", required: false, items: stripeCheckItems(["反復練習を最後まで継続できる", "体幹が弱く、すぐ崩れることが少ない", "息が切れても安全に動きを続けられる"]) },
@@ -2911,7 +2911,7 @@ var STRIPE_LEVEL_DEFS = [
     ] },
   { level: 3, label: "選手コース", theme: "得意技と実戦のきほん", minMonths: 0, minAttendance: 48, prevStripes: 2, leagueHint: "J1参戦可（別条件あり）",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["累計48回前後の出席", "2本目を取得済み"]) },
+      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["前回合格から24回前後の出席", "2本目を取得済み"]) },
       { key: "shin", label: "心", required: false, items: stripeCheckItems(["自分から準備・片付けができる", "勝っても負けても礼ができる", "練習相手を思いやった言動ができる", "苦しくても投げやりにならない"]) },
       { key: "gi", label: "技", required: false, items: stripeCheckItems(["得意技を1つ以上言える", "試合のルールがわかる", "初歩の投げ込みを安全にできる", "寝技（抑え込み・逃れ）の基本ができる", "乱取りで引き手を離して相手を落とさない"]) },
       { key: "tai", label: "体", required: false, items: stripeCheckItems(["3分に近い運動を継続できる", "投げる時に姿勢が崩れにくい", "寝技で首を守る動きができる"]) },
@@ -2919,7 +2919,7 @@ var STRIPE_LEVEL_DEFS = [
     ] },
   { level: 4, label: "対外試合主力", theme: "試合マナーと実戦力", minMonths: 0, minAttendance: 72, prevStripes: 3, leagueHint: "J1主力候補",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["累計72回前後の出席", "3本目を取得済み"]) },
+      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["前回合格から24回前後の出席", "3本目を取得済み"]) },
       { key: "shin", label: "心", required: false, items: stripeCheckItems(["試合前後の礼が正しくできる", "勝敗に関係なく相手を尊重できる", "指導者・審判の指示を守れる", "道場代表として落ち着いた態度ができる"]) },
       { key: "gi", label: "技", required: false, items: stripeCheckItems(["動く相手に自分から技を掛けにいける", "連絡技・変化技を1つ以上使える", "相手に崩されても立て直せる", "立技から寝技へ安全に移行できる", "乱取りで相手保護を優先できる"]) },
       { key: "tai", label: "体", required: false, items: stripeCheckItems(["3分間動き続ける体力がある", "組み手で姿勢を維持できる", "疲れても雑な動きになりにくい"]) },
@@ -2927,7 +2927,7 @@ var STRIPE_LEVEL_DEFS = [
     ] },
   { level: 5, label: "リーダー", theme: "リーダーとしてのふるまい", minMonths: 0, minAttendance: 96, prevStripes: 4, leagueHint: "道場代表",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["累計96回前後の出席", "4本目を取得済み"]) },
+      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["前回合格から24回前後の出席", "4本目を取得済み"]) },
       { key: "shin", label: "心", required: false, items: stripeCheckItems(["下級生に優しく声かけ・手助けができる", "保護者・指導者・仲間への感謝を言葉にできる", "道場の約束を自分から守り、周りにも伝えられる", "困っている仲間を放っておかない"]) },
       { key: "gi", label: "技", required: false, items: stripeCheckItems(["得意技で試合を組み立てる意識がある", "立技と寝技の切り替えができる", "乱取りで相手を傷つけない技の使い方ができる", "実戦で一本・技ありにつながる内容がある", "技の見本を下級生に見せられる"]) },
       { key: "tai", label: "体", required: false, items: stripeCheckItems(["組み手で姿勢を保てる", "試合や連戦に必要な持久力がある", "疲労時も安全動作を維持できる"]) },
@@ -3071,12 +3071,14 @@ function getStripeLevelSummary(stripes) {
   return { label: def.label + "（" + stripes + "本目）", theme: def.theme };
 }
 
-function renderMyProgressAttendanceBar(current, target) {
-  var pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
-  var remain = Math.max(0, target - current);
+function renderMyProgressAttendanceBar(progress, span, opts) {
+  opts = opts || {};
+  var pct = span > 0 ? Math.min(100, Math.round((progress / span) * 100)) : 0;
+  var remain = Math.max(0, span - progress);
+  var prefix = opts.prefix ? esc(opts.prefix) + " " : "";
   return '<div class="my-progress-meter">' +
     '<div class="my-progress-bar"><div class="my-progress-fill" style="width:' + pct + '%"></div></div>' +
-    '<div class="my-progress-meta"><span>' + current + " / " + target + "回</span>" +
+    '<div class="my-progress-meta"><span>' + prefix + progress + " / " + span + "回</span>" +
     (remain > 0 ? "<span>あと" + remain + "回が目安</span>" : "<span>目安を達成</span>") +
     "</div></div>";
 }
@@ -3109,7 +3111,11 @@ function isMessageEntry(r) {
 function normalizeReviewEntry(r) {
   if (!r || typeof r !== "object") return r;
   if (r.kind === "message") return r;
-  return Object.assign({}, r, { kind: r.kind || "review" });
+  var out = Object.assign({}, r, { kind: r.kind || "review" });
+  if (out.result === "pass" && out.attendanceAtPass != null) {
+    out.attendanceAtPass = Math.max(0, parseInt(out.attendanceAtPass, 10) || 0);
+  }
+  return out;
 }
 
 function getLatestMessageEntry(member) {
@@ -3225,6 +3231,44 @@ function buildStripeCheckLabelsSnapshot(def, checks) {
     }
   }
   return out;
+}
+
+function getLatestPassReviewForLevel(member, level) {
+  var reviews = (member.reviews || []).filter(function(r) {
+    return isStripeReviewEntry(r) && r.result === "pass" && r.targetLevel === level;
+  });
+  reviews.sort(function(a, b) { return (b.at || 0) - (a.at || 0); });
+  return reviews[0] || null;
+}
+
+function getStripeAttendanceBaseline(member) {
+  var stripes = member.stripes || 0;
+  if (stripes <= 0) return 0;
+  var passReview = getLatestPassReviewForLevel(member, stripes);
+  if (passReview && passReview.attendanceAtPass != null) {
+    return Math.max(0, parseInt(passReview.attendanceAtPass, 10) || 0);
+  }
+  var prevDef = getStripeLevelDef(stripes - 1);
+  if (prevDef) return prevDef.minAttendance;
+  return 0;
+}
+
+function getStripeAttendanceProgress(member, targetLevel) {
+  var def = getStripeLevelDef(targetLevel);
+  if (!def) return null;
+  var current = member.attendanceCount || 0;
+  var cumulativeRequired = def.minAttendance;
+  var baseline = getStripeAttendanceBaseline(member);
+  var span = Math.max(1, cumulativeRequired - baseline);
+  var progress = Math.max(0, current - baseline);
+  return {
+    baseline: baseline,
+    current: current,
+    progress: progress,
+    span: span,
+    cumulativeRequired: cumulativeRequired,
+    ok: current >= cumulativeRequired
+  };
 }
 
 function getLatestStripeReviewForLevel(member, targetLevel) {
@@ -3482,15 +3526,21 @@ function renderMyProgressPage(rosterId) {
   }
   var nextSection = "";
   if (nextDef) {
+    var attProgress = getStripeAttendanceProgress(member, nextLevel);
+    var attSpan = attProgress ? attProgress.span : nextDef.minAttendance;
+    var attLabel = (member.stripes || 0) > 0
+      ? "柔道クラス出席（前回合格から目安 " + attSpan + "回）"
+      : "柔道クラス出席（目安 " + attSpan + "回）";
     nextSection = '<div class="card">' +
       '<div class="card-title">次の目標：' + nextLevel + "本目（" + esc(nextDef.label) + "）</div>" +
       '<p style="font-size:.72rem;color:var(--muted);margin:-4px 0 8px">' + esc(nextDef.theme) + " ／ " + esc(nextDef.leagueHint) + "</p>" +
       eligHtml +
-      '<p style="font-size:.66rem;font-weight:700;color:var(--accent2);margin:10px 0 6px">柔道クラス出席（目安 ' + nextDef.minAttendance + "回）</p>" +
-      renderMyProgressAttendanceBar(member.attendanceCount || 0, nextDef.minAttendance) +
+      '<p style="font-size:.66rem;font-weight:700;color:var(--accent2);margin:10px 0 6px">' + attLabel + "</p>" +
+      renderMyProgressAttendanceBar(attProgress ? attProgress.progress : 0, attSpan,
+        (member.stripes || 0) > 0 ? { prefix: "前回合格から" } : null) +
       '<p style="font-size:.66rem;color:var(--muted);margin:10px 0 4px">審査で確認する項目（参考）</p>' +
       renderMyProgressChecklist(nextDef) +
-      '<p class="my-progress-note">※ 出席数はスポスル取込の柔道クラス出席です。審査の合否は指導員が心技体を総合して判定します。</p>' +
+      '<p class="my-progress-note">※ 出席数はスポスル取込の柔道クラス出席です。前回合格時の出席を起点に次の目安を表示します。審査の合否は指導員が心技体を総合して判定します。</p>' +
       "</div>";
   }
   return '<div class="print-title">🎗 ' + esc(member.name) + "さんのマイ進捗 ｜ " + esc(getActiveContext().seasonLabel) + "</div>" +
@@ -3546,10 +3596,16 @@ function checkStripeEligibility(member, targetLevel) {
   if ((member.stripes || 0) < def.prevStripes) {
     reasons.push("現在" + member.stripes + "本（" + def.prevStripes + "本以上が必要）");
   }
-  if ((member.attendanceCount || 0) < def.minAttendance) {
-    reasons.push("出席" + (member.attendanceCount || 0) + "回（目安" + def.minAttendance + "回以上）");
+  var att = getStripeAttendanceProgress(member, targetLevel);
+  if (att && !att.ok) {
+    var remain = Math.max(0, att.span - att.progress);
+    if ((member.stripes || 0) > 0) {
+      reasons.push("前回合格から " + att.progress + "回（目安" + att.span + "回・あと" + remain + "回）");
+    } else {
+      reasons.push("出席" + att.current + "回（目安" + att.span + "回・あと" + remain + "回）");
+    }
   }
-  return { ok: reasons.length === 0, reasons: reasons, def: def };
+  return { ok: reasons.length === 0, reasons: reasons, def: def, attendance: att };
 }
 
 function addRosterMember(name) {
@@ -4627,7 +4683,7 @@ function submitStripeReview(result) {
   }
 
   if (!m.reviews) m.reviews = [];
-  m.reviews.push({
+  var reviewEntry = {
     id: "sr-" + Date.now(),
     at: Date.now(),
     periodKey: getCurrentPeriodKey(),
@@ -4639,7 +4695,11 @@ function submitStripeReview(result) {
     checkSummary: summary,
     safetyOk: validation.ok,
     memo: memo
-  });
+  };
+  if (result === "pass") {
+    reviewEntry.attendanceAtPass = Math.max(0, m.attendanceCount || 0);
+  }
+  m.reviews.push(reviewEntry);
 
   saveState();
   if (result === "hold") {
