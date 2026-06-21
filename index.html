@@ -692,13 +692,7 @@ body.member-mode.senior-member .my-progress-goal-body {
   overflow: visible;
 }
 .grid-table tbody th .player-name-line { min-width: 0; }
-.grid-table thead th .grid-col-head {
-  display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-end;
-  gap: 2px; line-height: var(--fluid-line-tight); word-break: keep-all;
-}
-.grid-table thead th .grid-col-name { display: block; }
 .grid-table thead th .grid-col-inactive { font-size: calc(8px + 0.08vw); opacity: .85; font-weight: 500; }
-.grid-table thead th .stripe-visual-sm { margin: 0; flex-shrink: 0; }
 .grid-table .diag {
   background: var(--empty); color: var(--empty-text);
   font-size: calc(8px + 0.1vw); font-weight: 400; pointer-events: none;
@@ -6166,12 +6160,6 @@ function renderGridPlayerNameCell(p) {
     '</span>';
 }
 
-function renderGridColumnHead(p) {
-  var suffix = p.active === false ? '<span class="grid-col-inactive">未参加</span>' : "";
-  return '<span class="grid-col-head"><span class="grid-col-name">' + esc(p.name) + '</span>' +
-    renderStripeVisual(p, true) + suffix + '</span>';
-}
-
 function renderGrid(league, sorted, opts) {
   opts = opts || {};
   var playoffKey = opts.playoffKey || null;
@@ -6200,7 +6188,8 @@ function renderGrid(league, sorted, opts) {
   }
   let hdr = `<tr><th></th>`;
   players.forEach(function(p) {
-    hdr += `<th>${renderGridColumnHead(p)}</th>`;
+    const suffix = p.active === false ? `<div class="grid-col-inactive">未参加</div>` : "";
+    hdr += `<th>${esc(p.name)}${suffix}</th>`;
   });
   hdr += `<th class="remain-col">残</th><th class="total-col">勝点</th><th class="rank-col">順</th></tr>`;
   let body = "";
