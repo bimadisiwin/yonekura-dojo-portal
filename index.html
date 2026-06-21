@@ -641,6 +641,8 @@ body.member-mode.senior-member .my-progress-goal-body {
   border-radius: var(--fluid-radius-md); border: 1px solid var(--line);
   max-height: min(calc(60vh + 2vw), 70vh); touch-action: pan-x pan-y;
   position: relative;
+  --grid-name-scale: 1;
+  --grid-head-scale: 1;
 }
 .grid-table {
   border-collapse: separate; border-spacing: 0;
@@ -661,6 +663,8 @@ body.member-mode.senior-member .my-progress-goal-body {
   display: -webkit-box; display: flex;
   -webkit-box-orient: vertical; flex-direction: column;
   overflow: hidden; max-height: min(calc(60vh + 2vw), 70vh);
+  --grid-name-scale: 1;
+  --grid-head-scale: 1;
 }
 .grid-split-head {
   -webkit-box-flex: 0; flex: 0 0 auto;
@@ -674,13 +678,13 @@ body.member-mode.senior-member .my-progress-goal-body {
 }
 .grid-table thead th {
   background: var(--ink); color: #fff; font-weight: 600;
-  position: -webkit-sticky; position: sticky; top: 0; z-index: 2; font-size: calc(9px + 0.12vw);
+  position: -webkit-sticky; position: sticky; top: 0; z-index: 2;
+  font-size: calc((9px + 0.12vw) * var(--grid-head-scale, 1));
   padding: var(--fluid-space-xs) var(--fluid-space-2xs); writing-mode: horizontal-tb; height: auto;
-  max-width: none; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; word-break: keep-all; line-height: var(--fluid-line-tight);
+  overflow: visible; white-space: nowrap; word-break: keep-all; line-height: var(--fluid-line-tight);
   vertical-align: bottom; pointer-events: none;
 }
-.grid-table thead th.grid-col-head { max-width: 0; }
+.grid-table thead th.grid-col-head { font-size: calc((9px + 0.12vw) * var(--grid-head-scale, 1)); }
 .grid-table thead th:first-child {
   left: 0; z-index: 4;
   position: -webkit-sticky; position: sticky;
@@ -689,20 +693,21 @@ body.member-mode.senior-member .my-progress-goal-body {
   background: var(--empty); font-weight: 700; text-align: left;
   padding: var(--fluid-space-xs) var(--fluid-space-sm);
   position: -webkit-sticky; position: sticky; left: 0; z-index: 3;
-  font-size: var(--fluid-text-sm); min-width: calc(64px + 1vw);
-  overflow: hidden; max-width: 0;
+  font-size: calc((11px + 0.18vw) * var(--grid-name-scale, 1));
+  min-width: calc(64px + 1vw); overflow: visible;
 }
 .grid-table tbody th .player-name-line {
   display: flex; align-items: center; flex-wrap: nowrap;
-  min-width: 0; max-width: 100%; overflow: hidden; gap: 4px;
+  min-width: 0; gap: 3px; overflow: visible;
 }
 .grid-table tbody th .player-name-line .player-tap {
-  flex: 1 1 auto; min-width: 0; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap;
+  flex: 0 1 auto; min-width: 0; white-space: nowrap;
+  padding: 0; font-size: inherit;
 }
 .grid-table tbody th .player-name-line .stripe-visual,
 .grid-table tbody th .player-name-line .stripe-visual-sm {
   flex: 0 0 auto; flex-shrink: 0; margin-left: 0;
+  transform: scale(var(--grid-name-scale, 1)); transform-origin: center left;
 }
 .grid-table thead th .grid-col-inactive {
   display: inline; font-size: calc(8px + 0.08vw); opacity: .85; font-weight: 500;
@@ -1108,7 +1113,7 @@ body.embedded .grid-wrap-split {
   max-width: 100%;
   box-sizing: border-box;
   max-height: none;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: visible;
 }
 body.embedded .grid-table {
@@ -1123,23 +1128,20 @@ body.embedded .grid-table td {
   min-height: calc(26px + 0.35vw);
 }
 body.embedded .grid-table tbody th {
-  overflow: hidden;
-  font-size: var(--fluid-text-xs);
+  font-size: calc((10px + 0.14vw) * var(--grid-name-scale, 1));
   padding: var(--fluid-space-2xs) var(--fluid-space-xs);
 }
 body.embedded .grid-table tbody th .player-name-line {
   flex-wrap: nowrap;
-  max-width: 100%;
-  overflow: hidden;
 }
-body.embedded .grid-table thead th {
-  font-size: calc(8px + 0.06vw);
-  padding: var(--fluid-space-2xs) 1px;
+body.embedded .grid-table thead th,
+body.embedded .grid-table thead th.grid-col-head {
+  font-size: calc((8px + 0.06vw) * var(--grid-head-scale, 1));
+  padding: var(--fluid-space-2xs) 2px;
   line-height: 1.15;
   white-space: nowrap;
   word-break: keep-all;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
 }
 body.embedded .grid-table .total-col,
 body.embedded .grid-table .rank-col,
@@ -1880,7 +1882,7 @@ function scheduleEmbedResize() {
 function initEmbedResize() {
   if (!detectEmbedded()) return;
   var notify = function() {
-    fitEmbeddedGridColumns();
+    fitGridColumns();
     scheduleEmbedResize();
   };
   window.addEventListener("resize", notify, false);
@@ -6545,11 +6547,11 @@ render = function() {
   _renderBase();
   setTimeout(function() {
     initLegacyGridScroll();
-    fitEmbeddedGridColumns();
+    fitGridColumns();
     scheduleEmbedResize();
   }, 0);
   setTimeout(function() {
-    fitEmbeddedGridColumns();
+    fitGridColumns();
     scheduleEmbedResize();
   }, 280);
 };
@@ -7292,29 +7294,41 @@ function applyGridColWidths(table, widths) {
   return total;
 }
 
-function measureGridNameColWidth(table, avail) {
-  var maxW = 56;
+function applyGridNameScale(table, scale) {
+  var wrap = table.closest(".grid-wrap, .grid-wrap-split");
+  if (!wrap) return;
+  var s = String(Math.max(0.68, Math.min(1, scale)));
+  wrap.style.setProperty("--grid-name-scale", s);
+  wrap.style.setProperty("--grid-head-scale", s);
+}
+
+function measureGridNameColNeed(table) {
+  var maxW = 44;
   var lines = table.querySelectorAll("tbody th .player-name-line");
   var i, line, tap, stripe, w;
   for (i = 0; i < lines.length; i++) {
     line = lines[i];
     tap = line.querySelector(".player-tap");
     stripe = line.querySelector(".stripe-visual-sm, .stripe-visual");
-    w = 8;
+    w = 10;
     if (tap) w += tap.scrollWidth;
     if (stripe) w += stripe.offsetWidth + 4;
     maxW = Math.max(maxW, w);
   }
-  return Math.min(Math.max(maxW, 56), Math.floor(avail * 0.26), 128);
+  return maxW;
 }
 
-function fitEmbeddedGridColumns() {
-  if (!detectEmbedded()) return;
+function measureGridHeadColNeed(th) {
+  if (!th) return 24;
+  return Math.max(24, th.scrollWidth + 6);
+}
+
+function fitGridColumns() {
   var wraps = document.querySelectorAll(".grid-wrap, .grid-wrap-split");
+  var embedded = detectEmbedded();
   for (var wi = 0; wi < wraps.length; wi++) {
     var wrap = wraps[wi];
-    var avail = wrap.clientWidth;
-    if (avail < 80) continue;
+    var avail = wrap.clientWidth || 0;
     var tables = wrap.querySelectorAll(".grid-table, .grid-table-head, .grid-table-body");
     for (var ti = 0; ti < tables.length; ti++) {
       var table = tables[ti];
@@ -7324,16 +7338,59 @@ function fitEmbeddedGridColumns() {
       var statCols = 3;
       var dataCols = n - 1 - statCols;
       if (dataCols < 1) continue;
-      var nameW = measureGridNameColWidth(table, avail);
-      var statW = Math.min(36, Math.max(28, Math.floor(avail * 0.055)));
-      var dataW = Math.max(20, Math.floor((avail - nameW - statW * statCols) / dataCols));
+      var statW = 34;
+      var minData = 22;
+      var scale = 1;
+      var nameW, dataWidths, total, d, slack;
+
+      while (scale >= 0.68) {
+        applyGridNameScale(table, scale);
+        void table.offsetWidth;
+        nameW = measureGridNameColNeed(table);
+        dataWidths = [];
+        for (d = 0; d < dataCols; d++) {
+          dataWidths.push(Math.max(minData, measureGridHeadColNeed(headers[d + 1])));
+        }
+        total = nameW + statW * statCols;
+        for (d = 0; d < dataCols; d++) total += dataWidths[d];
+        if (!embedded || !avail || total <= avail) break;
+        scale = Math.round((scale - 0.04) * 100) / 100;
+      }
+
+      if (!embedded) {
+        applyGridNameScale(table, 1);
+        void table.offsetWidth;
+        nameW = measureGridNameColNeed(table);
+        for (d = 0; d < dataCols; d++) {
+          dataWidths[d] = Math.max(36, measureGridHeadColNeed(headers[d + 1]));
+        }
+      } else if (avail && total > avail) {
+        slack = avail - nameW - statW * statCols - minData * dataCols;
+        if (slack < 0) slack = 0;
+        total = 0;
+        for (d = 0; d < dataCols; d++) {
+          dataWidths[d] = minData + Math.floor(slack / dataCols);
+          total += dataWidths[d];
+        }
+      }
+
       var widths = [nameW];
-      var d;
-      for (d = 0; d < dataCols; d++) widths.push(dataW);
+      for (d = 0; d < dataCols; d++) widths.push(dataWidths[d]);
       widths.push(statW, statW, statW);
+      total = 0;
+      for (d = 0; d < widths.length; d++) total += widths[d];
+      if (embedded && avail && total < avail) widths[0] += avail - total;
       applyGridColWidths(table, widths);
+      if (embedded && avail) {
+        table.style.width = Math.min(total, avail) + "px";
+        table.style.maxWidth = "100%";
+      }
     }
   }
+}
+
+function fitEmbeddedGridColumns() {
+  fitGridColumns();
 }
 
 function initLegacyGridScroll() {
@@ -7636,7 +7693,7 @@ try {
   var urlView = parseUrlViewParam();
   if (urlView === "feedback" && !isMemberMode) currentView = "feedback";
   render();
-  window.addEventListener("resize", function() { initLegacyGridScroll(); }, false);
+  window.addEventListener("resize", function() { initLegacyGridScroll(); fitGridColumns(); }, false);
   if (isMemberMode) {
     setTimeout(function() { initMemberCloud(); }, 50);
   } else {
