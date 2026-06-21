@@ -676,10 +676,11 @@ body.member-mode.senior-member .my-progress-goal-body {
   background: var(--ink); color: #fff; font-weight: 600;
   position: -webkit-sticky; position: sticky; top: 0; z-index: 2; font-size: calc(9px + 0.12vw);
   padding: var(--fluid-space-xs) var(--fluid-space-2xs); writing-mode: horizontal-tb; height: auto;
-  max-width: none; overflow: visible; text-overflow: clip;
-  white-space: normal; word-break: keep-all; line-height: var(--fluid-line-tight);
+  max-width: none; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; word-break: keep-all; line-height: var(--fluid-line-tight);
   vertical-align: bottom; pointer-events: none;
 }
+.grid-table thead th.grid-col-head { max-width: 0; }
 .grid-table thead th:first-child {
   left: 0; z-index: 4;
   position: -webkit-sticky; position: sticky;
@@ -688,11 +689,25 @@ body.member-mode.senior-member .my-progress-goal-body {
   background: var(--empty); font-weight: 700; text-align: left;
   padding: var(--fluid-space-xs) var(--fluid-space-sm);
   position: -webkit-sticky; position: sticky; left: 0; z-index: 3;
-  font-size: var(--fluid-text-sm); white-space: nowrap; min-width: calc(64px + 1vw);
-  overflow: visible;
+  font-size: var(--fluid-text-sm); min-width: calc(64px + 1vw);
+  overflow: hidden; max-width: 0;
 }
-.grid-table tbody th .player-name-line { min-width: 0; }
-.grid-table thead th .grid-col-inactive { font-size: calc(8px + 0.08vw); opacity: .85; font-weight: 500; }
+.grid-table tbody th .player-name-line {
+  display: flex; align-items: center; flex-wrap: nowrap;
+  min-width: 0; max-width: 100%; overflow: hidden; gap: 4px;
+}
+.grid-table tbody th .player-name-line .player-tap {
+  flex: 1 1 auto; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.grid-table tbody th .player-name-line .stripe-visual,
+.grid-table tbody th .player-name-line .stripe-visual-sm {
+  flex: 0 0 auto; flex-shrink: 0; margin-left: 0;
+}
+.grid-table thead th .grid-col-inactive {
+  display: inline; font-size: calc(8px + 0.08vw); opacity: .85; font-weight: 500;
+  margin-left: 1px;
+}
 .grid-table .diag {
   background: var(--empty); color: var(--empty-text);
   font-size: calc(8px + 0.1vw); font-weight: 400; pointer-events: none;
@@ -1108,20 +1123,23 @@ body.embedded .grid-table td {
   min-height: calc(26px + 0.35vw);
 }
 body.embedded .grid-table tbody th {
-  overflow: visible;
-  text-overflow: clip;
+  overflow: hidden;
   font-size: var(--fluid-text-xs);
   padding: var(--fluid-space-2xs) var(--fluid-space-xs);
 }
 body.embedded .grid-table tbody th .player-name-line {
   flex-wrap: nowrap;
-  max-width: none;
+  max-width: 100%;
+  overflow: hidden;
 }
 body.embedded .grid-table thead th {
   font-size: calc(8px + 0.06vw);
   padding: var(--fluid-space-2xs) 1px;
   line-height: 1.15;
-  word-break: break-all;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 body.embedded .grid-table .total-col,
 body.embedded .grid-table .rank-col,
@@ -6188,8 +6206,8 @@ function renderGrid(league, sorted, opts) {
   }
   let hdr = `<tr><th></th>`;
   players.forEach(function(p) {
-    const suffix = p.active === false ? `<div class="grid-col-inactive">未参加</div>` : "";
-    hdr += `<th>${esc(p.name)}${suffix}</th>`;
+    const suffix = p.active === false ? `<span class="grid-col-inactive">未</span>` : "";
+    hdr += `<th class="grid-col-head">${esc(p.name)}${suffix}</th>`;
   });
   hdr += `<th class="remain-col">残</th><th class="total-col">勝点</th><th class="rank-col">順</th></tr>`;
   let body = "";
@@ -7274,6 +7292,22 @@ function applyGridColWidths(table, widths) {
   return total;
 }
 
+function measureGridNameColWidth(table, avail) {
+  var maxW = 56;
+  var lines = table.querySelectorAll("tbody th .player-name-line");
+  var i, line, tap, stripe, w;
+  for (i = 0; i < lines.length; i++) {
+    line = lines[i];
+    tap = line.querySelector(".player-tap");
+    stripe = line.querySelector(".stripe-visual-sm, .stripe-visual");
+    w = 8;
+    if (tap) w += tap.scrollWidth;
+    if (stripe) w += stripe.offsetWidth + 4;
+    maxW = Math.max(maxW, w);
+  }
+  return Math.min(Math.max(maxW, 56), Math.floor(avail * 0.26), 128);
+}
+
 function fitEmbeddedGridColumns() {
   if (!detectEmbedded()) return;
   var wraps = document.querySelectorAll(".grid-wrap, .grid-wrap-split");
@@ -7290,7 +7324,7 @@ function fitEmbeddedGridColumns() {
       var statCols = 3;
       var dataCols = n - 1 - statCols;
       if (dataCols < 1) continue;
-      var nameW = Math.min(Math.max(56, Math.floor(avail * 0.14)), 92);
+      var nameW = measureGridNameColWidth(table, avail);
       var statW = Math.min(36, Math.max(28, Math.floor(avail * 0.055)));
       var dataW = Math.max(20, Math.floor((avail - nameW - statW * statCols) / dataCols));
       var widths = [nameW];
