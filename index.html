@@ -775,7 +775,7 @@ body.member-mode.senior-member .my-progress-goal-body {
   font-size: calc(var(--grid-name-font) * var(--grid-name-scale, 1));
   line-height: var(--fluid-line-tight);
   white-space: nowrap; word-break: keep-all; overflow-wrap: normal;
-  min-width: calc(72px + 1.2vw); overflow: visible;
+  min-width: 0; overflow: visible;
 }
 .grid-table tbody th .player-name-line {
   display: flex; align-items: center; flex-wrap: nowrap;
@@ -7822,22 +7822,23 @@ function measureInlineTextWidth(text, fontSize, fontWeight, fontFamily) {
 }
 
 function measureGridNameColNeed(table) {
-  var maxW = 44;
+  var maxW = 52;
   var sampleTh = table.querySelector("tbody th");
   var cs = sampleTh ? window.getComputedStyle(sampleTh) : null;
   var lines = table.querySelectorAll("tbody th .player-name-line");
-  var i, line, tap, stripe, w, padX;
+  var i, line, tap, stripe, w, padX, lineW;
   padX = cs ? parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) : 12;
   for (i = 0; i < lines.length; i++) {
     line = lines[i];
     tap = line.querySelector(".player-tap");
     stripe = line.querySelector(".stripe-visual-sm, .stripe-visual");
-    w = padX + 4;
+    w = padX + 6;
     if (tap) w += measureInlineTextWidth(tap.textContent, cs && cs.fontSize, cs && cs.fontWeight, cs && cs.fontFamily);
     if (stripe) w += stripe.offsetWidth + 4;
-    maxW = Math.max(maxW, w);
+    lineW = line.scrollWidth + padX;
+    maxW = Math.max(maxW, w, lineW);
   }
-  return maxW;
+  return Math.ceil(maxW);
 }
 
 function measureGridHeadColNeed(th) {
@@ -7917,11 +7918,6 @@ function fitGridColumns() {
     var widths = [nameW];
     for (d = 0; d < dataCols; d++) widths.push(dataWidths[d]);
     widths.push(statW, statW, statW);
-    total = 0;
-    for (d = 0; d < widths.length; d++) total += widths[d];
-    if (isMemberMode && detectEmbedded() && avail && total < avail) {
-      widths[0] += avail - total;
-    }
 
     var applyTables = wrap.querySelectorAll(".grid-table, .grid-table-head, .grid-table-body");
     for (var ti = 0; ti < applyTables.length; ti++) {
