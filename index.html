@@ -1231,12 +1231,35 @@ body.embedded .card {
   box-sizing: border-box;
   padding: var(--fluid-space-md);
 }
-/* 会員 iframe：星取表は指導者画面（.grid-wrap 既定）と同じスクロール・列幅 */
-body.embedded.member-mode .grid-wrap,
+/* 会員 iframe：星取表は指導者と同じ列幅・内部スクロール（vh は iframe 高さ連動で暴走するため px 固定） */
+body.embedded.member-mode {
+  --embed-grid-max: 480px;
+}
+@media (max-width: 768px) {
+  body.embedded.member-mode {
+    --embed-grid-max: 360px;
+  }
+}
+body.embedded.member-mode .grid-wrap {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  max-height: var(--embed-grid-max);
+  overflow: scroll;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
 body.embedded.member-mode .grid-wrap-split {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  max-height: var(--embed-grid-max);
+  overflow: hidden;
+}
+body.embedded.member-mode .grid-split-body {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 body.embedded:not(.member-mode) .grid-wrap,
 body.embedded:not(.member-mode) .grid-wrap-split {
@@ -2079,18 +2102,38 @@ function detectEmbedded() {
 
 var _embedResizeTimer = null;
 var _embedResizePaused = false;
+var _lastEmbedReportedH = 0;
+
+function measureEmbedDocumentHeight() {
+  var body = document.body;
+  if (!body) return 0;
+  var sum = 0;
+  var nodes = document.querySelectorAll("header, .league-tabs, .view-tabs, main");
+  var i, node;
+  for (i = 0; i < nodes.length; i++) {
+    node = nodes[i];
+    if (!node) continue;
+    sum += node.offsetHeight;
+  }
+  var cs = window.getComputedStyle(body);
+  sum += parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  sum += parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
+  if (sum < 80) {
+    var doc = document.documentElement;
+    sum = Math.max(
+      doc ? doc.offsetHeight : 0,
+      body.offsetHeight || 0
+    );
+  }
+  return Math.ceil(Math.min(sum, 8000));
+}
 
 function notifyEmbedResize() {
   if (!detectEmbedded() || _embedResizePaused) return;
   try {
-    var doc = document.documentElement;
-    var body = document.body;
-    var h = Math.max(
-      doc ? doc.scrollHeight : 0,
-      body ? body.scrollHeight : 0,
-      doc ? doc.offsetHeight : 0,
-      body ? body.offsetHeight : 0
-    );
+    var h = measureEmbedDocumentHeight();
+    if (h > 0 && Math.abs(h - _lastEmbedReportedH) <= 1) return;
+    _lastEmbedReportedH = h;
     window.parent.postMessage({ type: "yonekura-portal-resize", height: h }, "*");
   } catch (e) { /* ignore */ }
 }
@@ -2120,8 +2163,9 @@ function initEmbedResize() {
   }, false);
   if (typeof ResizeObserver !== "undefined") {
     try {
-      var ro = new ResizeObserver(notify);
-      if (document.body) ro.observe(document.body);
+      var roTarget = document.querySelector("main") || document.body;
+      var ro = new ResizeObserver(scheduleEmbedResize);
+      if (roTarget) ro.observe(roTarget);
     } catch (e) { /* ignore */ }
   }
   setTimeout(notify, 0);
