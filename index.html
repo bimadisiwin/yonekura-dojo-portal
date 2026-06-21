@@ -942,8 +942,6 @@ body.member-mode.senior-member .my-progress-goal-body {
   .special-award-head { grid-template-columns: 1fr; }
   .settings-grid { grid-template-columns: 1fr; }
   body.embedded { padding-bottom: var(--fluid-space-sm); overflow-x: hidden; width: 100%; max-width: 100%; }
-  body.embedded .grid-wrap,
-  body.embedded .grid-wrap-split { max-height: min(62vh, calc(560px + 5vw)); }
 }
 
 @media (min-width: 1367px) and (hover: none) and (pointer: coarse) {
@@ -1054,6 +1052,78 @@ body.embedded.player-modal-open {
   width: 100%;
   left: 0;
   top: 0;
+}
+/* WordPress iframe 埋め込み — 画面幅100%・星取表をコンテナにフィット */
+html.embedded,
+body.embedded {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+body.embedded {
+  --fluid-content-max: 100%;
+  --fluid-pad-inline: calc(4px + 0.35vw);
+  padding-bottom: var(--fluid-space-sm);
+}
+body.embedded header { position: relative; }
+body.embedded .league-tabs,
+body.embedded .view-tabs {
+  padding-left: var(--fluid-pad-inline);
+  padding-right: var(--fluid-pad-inline);
+}
+body.embedded main {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: var(--fluid-space-sm) var(--fluid-pad-inline) var(--fluid-space-md);
+  box-sizing: border-box;
+}
+body.embedded .card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: var(--fluid-space-md);
+}
+body.embedded .grid-wrap,
+body.embedded .grid-wrap-split {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  max-height: none;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+body.embedded .grid-table {
+  table-layout: fixed;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+body.embedded .grid-table th,
+body.embedded .grid-table td {
+  min-width: 0 !important;
+  height: auto;
+  min-height: calc(26px + 0.35vw);
+}
+body.embedded .grid-table tbody th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fluid-text-xs);
+  padding: var(--fluid-space-2xs) var(--fluid-space-xs);
+}
+body.embedded .grid-table thead th {
+  font-size: calc(8px + 0.06vw);
+  padding: var(--fluid-space-2xs) 1px;
+  line-height: 1.15;
+  word-break: break-all;
+}
+body.embedded .grid-table .total-col,
+body.embedded .grid-table .rank-col,
+body.embedded .grid-table .remain-col {
+  font-size: var(--fluid-text-xs);
+}
+body.embedded .cell-btn:not(.empty) {
+  font-size: calc(11px + 0.2vw);
+  padding: 1px;
 }
 .modal h3 { font-size: var(--fluid-text-lg); margin-bottom: var(--fluid-space-xs); }
 .modal .match-info { font-size: var(--fluid-text-sm); color: var(--muted); margin-bottom: var(--fluid-space-lg); }
@@ -1784,7 +1854,10 @@ function scheduleEmbedResize() {
 }
 function initEmbedResize() {
   if (!detectEmbedded()) return;
-  var notify = scheduleEmbedResize;
+  var notify = function() {
+    fitEmbeddedGridColumns();
+    scheduleEmbedResize();
+  };
   window.addEventListener("resize", notify, false);
   window.addEventListener("orientationchange", function() {
     setTimeout(notify, 120);
@@ -6432,7 +6505,15 @@ function render() {
 var _renderBase = render;
 render = function() {
   _renderBase();
-  scheduleEmbedResize();
+  setTimeout(function() {
+    initLegacyGridScroll();
+    fitEmbeddedGridColumns();
+    scheduleEmbedResize();
+  }, 0);
+  setTimeout(function() {
+    fitEmbeddedGridColumns();
+    scheduleEmbedResize();
+  }, 280);
 };
 
 function applySeasonSettings() {
@@ -7102,8 +7183,11 @@ function buildPdfFromJpeg(jpeg, pxW, pxH, cssW, cssH) {
 state = loadState();
 isMemberMode = detectMemberMode();
 applyMemberModeUI();
-if (detectEmbedded()) document.body.className += " embedded";
-if (detectEmbedded()) initEmbedResize();
+if (detectEmbedded()) {
+  document.documentElement.className += " embedded";
+  document.body.className += " embedded";
+  initEmbedResize();
+}
 if (!currentLeagueId) currentLeagueId = state.leagues[0] ? state.leagues[0].id : null;
 var cellModalEl = document.getElementById("cellModal");
 if (cellModalEl) {
@@ -7168,6 +7252,34 @@ function applyGridColWidths(table, widths) {
   table.style.tableLayout = "fixed";
   table.style.width = total + "px";
   return total;
+}
+
+function fitEmbeddedGridColumns() {
+  if (!detectEmbedded()) return;
+  var wraps = document.querySelectorAll(".grid-wrap, .grid-wrap-split");
+  for (var wi = 0; wi < wraps.length; wi++) {
+    var wrap = wraps[wi];
+    var avail = wrap.clientWidth;
+    if (avail < 80) continue;
+    var tables = wrap.querySelectorAll(".grid-table, .grid-table-head, .grid-table-body");
+    for (var ti = 0; ti < tables.length; ti++) {
+      var table = tables[ti];
+      var headers = table.querySelectorAll("thead th");
+      if (!headers.length) continue;
+      var n = headers.length;
+      var statCols = 3;
+      var dataCols = n - 1 - statCols;
+      if (dataCols < 1) continue;
+      var nameW = Math.min(Math.max(48, Math.floor(avail * 0.11)), 76);
+      var statW = Math.min(36, Math.max(28, Math.floor(avail * 0.055)));
+      var dataW = Math.max(20, Math.floor((avail - nameW - statW * statCols) / dataCols));
+      var widths = [nameW];
+      var d;
+      for (d = 0; d < dataCols; d++) widths.push(dataW);
+      widths.push(statW, statW, statW);
+      applyGridColWidths(table, widths);
+    }
+  }
 }
 
 function initLegacyGridScroll() {
