@@ -3534,15 +3534,6 @@ function renderMyProgressPage(rosterId) {
   var warnings = getLeagueStripeWarning(member.id, stripes);
   var nextLevel = stripes < STRIPE_MAX ? stripes + 1 : null;
   var nextDef = nextLevel ? getStripeLevelDef(nextLevel) : null;
-  var elig = nextDef ? checkStripeEligibility(member, nextLevel, { summaryForMember: true }) : null;
-  var eligHtml = "";
-  if (nextDef && elig) {
-    eligHtml = elig.ok
-      ? '<div class="stripe-elig-box"><strong>✓ 次のストライプ：</strong>出席などの目安を満たしています（随時審査可）</div>'
-      : '<div class="stripe-elig-box warn"><strong>次のストライプ（参考）：</strong>' + esc(elig.reasons.join(" ／ ")) + "（随時審査可）</div>";
-  } else if (stripes >= STRIPE_MAX) {
-    eligHtml = '<div class="stripe-elig-box"><strong>✓ 最高ランク：</strong>リーダー（5本目）まで取得済みです</div>';
-  }
   var commentSection = "";
   var instructorMsg = getInstructorMessageForMember(member);
   if (instructorMsg) {
@@ -3562,7 +3553,6 @@ function renderMyProgressPage(rosterId) {
     nextSection = '<div class="card">' +
       '<div class="card-title">次の目標：' + nextLevel + "本目（" + esc(nextDef.label) + "）</div>" +
       '<p style="font-size:.72rem;color:var(--muted);margin:-4px 0 8px">' + esc(nextDef.theme) + " ／ " + esc(nextDef.leagueHint) + "</p>" +
-      eligHtml +
       '<p style="font-size:.66rem;font-weight:700;color:var(--accent2);margin:10px 0 6px">' + attLabel + "</p>" +
       renderMyProgressAttendanceBar(attProgress ? attProgress.progress : 0, attSpan,
         (member.stripes || 0) > 0 ? { prefix: "前回合格から" } : null) +
@@ -3617,8 +3607,7 @@ function getRecommendedLeagueLabel(stripes) {
   return "プレリーグ";
 }
 
-function checkStripeEligibility(member, targetLevel, opts) {
-  opts = opts || {};
+function checkStripeEligibility(member, targetLevel) {
   var def = getStripeLevelDef(targetLevel);
   if (!def) return { ok: false, reasons: ["審査定義がありません"] };
   var reasons = [];
@@ -3628,9 +3617,7 @@ function checkStripeEligibility(member, targetLevel, opts) {
   var att = getStripeAttendanceProgress(member, targetLevel);
   if (att && !att.ok) {
     var remain = Math.max(0, att.span - att.progress);
-    if (opts.summaryForMember) {
-      reasons.push("出席目安は下記をご覧ください（あと" + remain + "回）");
-    } else if ((member.stripes || 0) > 0) {
+    if ((member.stripes || 0) > 0) {
       reasons.push("前回合格から " + att.progress + " / " + att.span + "回（あと" + remain + "回）");
     } else {
       reasons.push("出席 " + att.current + " / " + att.span + "回（あと" + remain + "回）");
@@ -4589,8 +4576,8 @@ function renderStripeReviewModal(member, targetLevel) {
   var memoPrefill = latestReview && latestReview.memo ? String(latestReview.memo).trim() : "";
   var elig = checkStripeEligibility(member, targetLevel);
   var eligHtml = elig.ok
-    ? '<div class="stripe-elig-box"><strong>✓ 受験資格（参考）：</strong>目安を満たしています（随時審査可）</div>'
-    : '<div class="stripe-elig-box warn"><strong>受験資格（参考）：</strong>' + esc(elig.reasons.join(" ／ ")) + "（随時審査可）</div>";
+    ? '<div class="stripe-elig-box"><strong>✓ 受験資格（参考）：</strong>目安を満たしています</div>'
+    : '<div class="stripe-elig-box warn"><strong>受験資格（参考）：</strong>' + esc(elig.reasons.join(" ／ ")) + "</div>";
   var groupsHtml = getStripeCheckGroupsForMember(def, member, targetLevel).map(function(group) {
     return '<div class="stripe-review-section"><h4>' + esc(group.label) +
       (group.required ? "（必須・すべて○）" : "") + '</h4><div class="marubatsu-list">' +
