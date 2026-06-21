@@ -1256,6 +1256,29 @@ body.embedded.member-mode {
     --embed-grid-max: 360px;
   }
 }
+@media (min-width: 769px) {
+  body.embedded.member-mode {
+    --fluid-pad-inline: 12px;
+    --embed-grid-max: 580px;
+  }
+  body.embedded.member-mode header,
+  body.embedded.member-mode .league-tabs,
+  body.embedded.member-mode .view-tabs,
+  body.embedded.member-mode main,
+  body.embedded.member-mode .card,
+  body.embedded.member-mode .grid-wrap,
+  body.embedded.member-mode .grid-wrap-split {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+@media (min-width: 1024px) and (hover: hover) {
+  body.embedded.member-mode {
+    --fluid-pad-inline: 16px;
+    --embed-grid-max: 640px;
+  }
+}
 body.embedded.member-mode .grid-wrap {
   width: 100%;
   max-width: 100%;
@@ -7894,6 +7917,11 @@ function fitGridColumns() {
     var widths = [nameW];
     for (d = 0; d < dataCols; d++) widths.push(dataWidths[d]);
     widths.push(statW, statW, statW);
+    total = 0;
+    for (d = 0; d < widths.length; d++) total += widths[d];
+    if (isMemberMode && detectEmbedded() && avail && total < avail) {
+      widths[0] += avail - total;
+    }
 
     var applyTables = wrap.querySelectorAll(".grid-table, .grid-table-head, .grid-table-body");
     for (var ti = 0; ti < applyTables.length; ti++) {
