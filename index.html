@@ -544,6 +544,30 @@ body.member-mode.senior-member .my-progress-goal-body {
 .my-progress-hero-stripes { display: flex; justify-content: center; margin-bottom: var(--fluid-space-sm); }
 .my-progress-hero-stripes .stripe-visual { transform: scale(1.2); transform-origin: center; }
 .my-progress-hero-level { font-size: var(--fluid-text-md); color: var(--accent2); font-weight: 700; }
+.my-progress-hero-theme {
+  font-size: var(--fluid-text-md); font-weight: 800; color: #9a6b00;
+  margin-top: var(--fluid-space-xs); line-height: var(--fluid-line-tight); word-break: keep-all;
+}
+.my-progress-hero-tagline {
+  font-size: var(--fluid-text-sm); color: var(--muted); margin-top: var(--fluid-space-2xs);
+  line-height: var(--fluid-line-loose);
+}
+body.member-mode .my-progress-hero-theme { font-size: var(--fluid-text-lg); }
+body.member-mode .my-progress-hero-tagline { font-size: var(--fluid-text-md); }
+body.member-mode .my-progress-hero-level { font-size: var(--fluid-text-lg); }
+body.member-mode .my-progress-stat-label { font-size: var(--fluid-text-xs); font-weight: 600; }
+body.member-mode .my-progress-stat-value { font-size: var(--fluid-text-lg); }
+body.member-mode .my-progress-check-toggle { font-size: var(--fluid-text-md); min-height: calc(var(--fluid-touch) + 4px); }
+body.member-mode .my-progress-check-list { font-size: var(--fluid-text-sm); line-height: 1.65; padding-left: 1.4em; }
+body.member-mode .my-progress-check-list li { margin-bottom: 0.35em; }
+body.member-mode .my-progress-note { font-size: var(--fluid-text-xs); line-height: 1.6; }
+body.member-mode .my-progress-league-row { font-size: var(--fluid-text-md); }
+body.member-mode .my-progress-league-sub { font-size: var(--fluid-text-xs); }
+body.member-mode .my-progress-league-record { font-size: var(--fluid-text-md); font-weight: 700; }
+body.member-mode .my-progress-bar { height: calc(12px + 0.25vw); }
+body.member-mode .my-progress-meta { font-size: var(--fluid-text-xs); font-weight: 600; }
+body.member-mode .my-progress-comment-card .card-title { font-size: var(--fluid-text-md); }
+body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-text-md); font-weight: 800; }
 .my-progress-meter { margin: var(--fluid-space-sm) 0 var(--fluid-space-xs); }
 .my-progress-bar {
   height: calc(8px + 0.15vw); background: var(--line); border-radius: 999px; overflow: hidden;
@@ -3149,116 +3173,202 @@ function findPlayerName(league, playerId) {
 var STRIPE_MAX = 5;
 var LEAGUE_STRIPE_MIN = { pre: 0, j3: 1, j2: 2, j1: 3 };
 
-function stripeCheckItems(labels) {
-  return labels.map(function(label) { return { label: label }; });
+function stripeCheckItems(labels, labelsKid) {
+  return labels.map(function(label, i) {
+    return {
+      label: label,
+      labelKid: labelsKid && labelsKid[i] != null ? labelsKid[i] : label
+    };
+  });
+}
+
+function stripeItemLabel(item, memberFacing) {
+  if (!item) return "";
+  return memberFacing && item.labelKid ? item.labelKid : item.label;
+}
+
+function stripeGroupLabel(group, memberFacing) {
+  if (!group) return "";
+  return memberFacing && group.labelKid ? group.labelKid : group.label;
 }
 
 var JLEAGUE_GEAR_NOTE = "※ Jリーグ戦に出るときは、道着・帯・爪・髪の整えが必須です。";
+var JLEAGUE_GEAR_NOTE_KID = "試合の日は、道着・帯・つめ・かみを整えてね。";
 
 var STRIPE_LEVEL_DEFS = [
-  { level: 1, label: "ベーシック", theme: "あいさつと安全のきほん", minMonths: 0, minAttendance: 8, prevStripes: 0, leagueHint: "J3参戦可",
+  { level: 1, label: "ベーシック", theme: "あいさつと安全のきほん", themeKid: "「お願いします！」が言えるこ", taglineKid: "あいさつと、安全にうごける！", minMonths: 0, minAttendance: 8, prevStripes: 0, leagueHint: "J3参戦可", leagueHintKid: "J3の試合に出られるよ",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems([]) },
-      { key: "shin", label: "心", required: false, items: stripeCheckItems([
+      { key: "prereq", label: "受験資格", labelKid: "まずこれ", required: true, items: stripeCheckItems([]) },
+      { key: "shin", label: "心", labelKid: "こころ", required: false, items: stripeCheckItems([
         "道場に入る・出るとき、稽古相手・先生にあいさつできる",
         "「お願いします」「ありがとうございました」をはっきり言える",
         "先生の説明中、おしゃべりせず目を見て聞ける",
         "相手の目線に合わせた礼ができる"
+      ], [
+        "入るとき・出るとき・相手と先生にあいさつできる",
+        "「お願いします」「ありがとうございました」がはっきり言える",
+        "先生の話を、おしゃべりせず聞ける",
+        "相手に合わせたおれいができる"
       ]) },
-      { key: "gi", label: "技", required: false, items: stripeCheckItems([
+      { key: "gi", label: "技", labelKid: "わざ", required: false, items: stripeCheckItems([
         "立礼・座礼が正しくできる",
         "後ろ受け身で後頭部を畳に打たない",
         "横受け身の手のつき方ができる",
         "寝技の基本ルール（押さえ・参った）がわかる"
+      ], [
+        "立礼・座礼ができる",
+        "うしろ受け身で、頭を畳にうたない",
+        "よこ受け身の手のつき方ができる",
+        "寝技のルール（押さえ・まけの合図）がわかる"
       ]) },
-      { key: "tai", label: "体", required: false, items: stripeCheckItems([
+      { key: "tai", label: "体", labelKid: "からだ", required: false, items: stripeCheckItems([
         "準備運動を最後までやりきる",
+        "正座で姿勢を保てる",
+        "回転運動を安全にできる"
+      ], [
+        "準備運動を最後までやりきれる",
         "正座で姿勢を保てる",
         "回転運動を安全にできる"
       ]) }
     ] },
-  { level: 2, label: "アドバンス", theme: "受け身の完成", minMonths: 0, minAttendance: 24, prevStripes: 1, leagueHint: "J2参戦可",
+  { level: 2, label: "アドバンス", theme: "受け身の完成", themeKid: "転んでも、けがしないこ", taglineKid: "うけみぜんぶ、できるようになる！", minMonths: 0, minAttendance: 24, prevStripes: 1, leagueHint: "J2参戦可", leagueHintKid: "J2の試合に出られるよ",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["1本目を取得済み"]) },
-      { key: "shin", label: "心", required: false, items: stripeCheckItems([
+      { key: "prereq", label: "受験資格", labelKid: "まずこれ", required: true, items: stripeCheckItems(["1本目を取得済み"], ["1本目のストライプをもらっている"]) },
+      { key: "shin", label: "心", labelKid: "こころ", required: false, items: stripeCheckItems([
         "自分の道着・帯を、手伝ってもらいながら整えようとする",
         "ふざけて突き飛ばす・危ない遊びをしない",
         "指示を聞いて落ち着いて行動できる",
         "相手が「参った」と言ったらすぐ止まれる"
+      ], [
+        "道着・帯を、自分で整えようとする",
+        "ふざけて押したり、危ない遊びをしない",
+        "先生の言うことを聞いて、落ち着いて動ける",
+        "相手が「まけた」と言ったら、すぐ止まれる"
       ]) },
-      { key: "gi", label: "技", required: false, items: stripeCheckItems([
+      { key: "gi", label: "技", labelKid: "わざ", required: false, items: stripeCheckItems([
         "後ろ・前・横・前回り受身が、左右とも正確にできる",
         "受身のとき頭・首を守れる",
         "打ち込みで大きくつっこまない・姿勢が崩れにくい",
         "相手の技を受けて、安全に立ち上がれる"
+      ], [
+        "うしろ・まえ・よこ・まえ回り受け身が、左右できれる",
+        "受け身のとき、頭と首を守れる",
+        "打ち込みで、大きくつっこまない",
+        "技を受けて、安全に立ち上がれる"
       ]) },
-      { key: "tai", label: "体", required: false, items: stripeCheckItems([
+      { key: "tai", label: "体", labelKid: "からだ", required: false, items: stripeCheckItems([
         "反復練習を最後まで続けられる",
         "打ち込みでフラつかず動ける",
         "息切れしても無理な動きをせず続けられる"
+      ], [
+        "同じ練習を最後まで続けられる",
+        "打ち込みで、よろめかず動ける",
+        "息が切れても、無理な動きをしない"
       ]) }
     ] },
-  { level: 3, label: "コンペティション", theme: "得意技と実戦のきほん", minMonths: 0, minAttendance: 48, prevStripes: 2, leagueHint: "J1参戦可（別条件あり）",
+  { level: 3, label: "コンペティション", theme: "得意技と実戦のきほん", themeKid: "自分のわざで、たたかえる！", taglineKid: "じぶんの技で、相手と戦える！", minMonths: 0, minAttendance: 48, prevStripes: 2, leagueHint: "J1参戦可（別条件あり）", leagueHintKid: "J1の試合に出られるよ（順位もみるよ）",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["2本目を取得済み"]) },
-      { key: "shin", label: "心", required: false, items: stripeCheckItems([
+      { key: "prereq", label: "受験資格", labelKid: "まずこれ", required: true, items: stripeCheckItems(["2本目を取得済み"], ["2本目のストライプをもらっている"]) },
+      { key: "shin", label: "心", labelKid: "こころ", required: false, items: stripeCheckItems([
         "準備・片付けを自分からできる",
         "勝っても負けても、相手と先生に礼ができる",
         "練習相手を思いやる言動ができる",
         "苦しいときも投げやりにならず取り組める"
+      ], [
+        "準備・片付けを自分からできる",
+        "勝っても負けても、相手と先生におれいできる",
+        "練習相手を思いやれる",
+        "つらくても、投げやりにならずがんばれる"
       ]) },
-      { key: "gi", label: "技", required: false, items: stripeCheckItems([
+      { key: "gi", label: "技", labelKid: "わざ", required: false, items: stripeCheckItems([
         "得意技を1つ以上言え、形が再現できる",
         "試合・乱取りの基本ルール（開始・停止・判定）がわかる",
         "初歩の投げ込み・寝技（抑え・逃れ）が安全にできる",
         "乱取りで相手を無理に倒そうとしない"
+      ], [
+        "得意技を1つ言えて、形ができる",
+        "試合・乱取りのルール（はじまり・とまり方）がわかる",
+        "投げ込み・寝技（押さえ・ぬけ）が安全にできる",
+        "乱取りで、相手を無理に倒そうとしない"
       ]) },
-      { key: "tai", label: "体", required: false, items: stripeCheckItems([
+      { key: "tai", label: "体", labelKid: "からだ", required: false, items: stripeCheckItems([
         "3分に近い運動を続けられる",
         "投げるとき姿勢が崩れにくい",
         "寝技で首を守りながら逃れようとできる"
+      ], [
+        "3分くらい、動き続けられる",
+        "投げるとき、姿勢がくずれにくい",
+        "寝技で首を守りながら、ぬけようとできる"
       ]) }
     ] },
-  { level: 4, label: "エース", theme: "試合マナーと実戦力", minMonths: 0, minAttendance: 72, prevStripes: 3, leagueHint: "J1主力候補",
+  { level: 4, label: "エース", theme: "試合マナーと実戦力", themeKid: "大会に出ても、かっこいい！", taglineKid: "試合の礼も技も、ばっちり！", minMonths: 0, minAttendance: 72, prevStripes: 3, leagueHint: "J1主力候補", leagueHintKid: "J1でいちばん活躍できるレベル",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["3本目（コンペティション）を取得済み"]) },
-      { key: "shin", label: "心", required: false, items: stripeCheckItems([
+      { key: "prereq", label: "受験資格", labelKid: "まずこれ", required: true, items: stripeCheckItems(["3本目（コンペティション）を取得済み"], ["3本目のストライプをもらっている"]) },
+      { key: "shin", label: "心", labelKid: "こころ", required: false, items: stripeCheckItems([
         "試合前後の礼が正しくできる",
         "勝敗に関わらず相手を尊重できる",
         "指導者・審判の指示を守れる",
         "道場代表として落ち着いた態度ができる"
+      ], [
+        "試合の前とあとで、きちんとおれいできる",
+        "勝っても負けても、相手を大切にできる",
+        "先生・審判の言うことを守れる",
+        "道場の代表として、落ち着いていられる"
       ]) },
-      { key: "gi", label: "技", required: false, items: stripeCheckItems([
+      { key: "gi", label: "技", labelKid: "わざ", required: false, items: stripeCheckItems([
         "動く相手に自分から技を掛けにいける",
         "連絡技・変化技を1つ以上使える",
         "崩されても立て直し、立技から寝技へ安全に移行できる",
         "乱取り・試合で相手保護を優先できる"
+      ], [
+        "うごいている相手に、自分から技をかけにいける",
+        "つなぎ技・変化技を1つ以上使える",
+        "くずされても立て直し、立ち技から寝技へ安全に移れる",
+        "乱取り・試合で、相手を守ることを優先できる"
       ]) },
-      { key: "tai", label: "体", required: false, items: stripeCheckItems([
+      { key: "tai", label: "体", labelKid: "からだ", required: false, items: stripeCheckItems([
         "3分間動き続けられる",
         "組み手で姿勢を維持できる",
         "疲れても雑な動きになりにくい"
+      ], [
+        "3分間、動き続けられる",
+        "組み手で姿勢を保てる",
+        "つかれても、いい加減な動きをしない"
       ]) }
     ] },
-  { level: 5, label: "リーダー", theme: "リーダーとしてのふるまい", minMonths: 0, minAttendance: 96, prevStripes: 4, leagueHint: "道場代表",
+  { level: 5, label: "リーダー", theme: "リーダーとしてのふるまい", themeKid: "みんなのお手本、先輩", taglineKid: "下の子を助ける、すごい先輩！", minMonths: 0, minAttendance: 96, prevStripes: 4, leagueHint: "道場代表", leagueHintKid: "道場の代表として活躍",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["4本目（エース）を取得済み"]) },
-      { key: "shin", label: "心", required: false, items: stripeCheckItems([
+      { key: "prereq", label: "受験資格", labelKid: "まずこれ", required: true, items: stripeCheckItems(["4本目（エース）を取得済み"], ["4本目のストライプをもらっている"]) },
+      { key: "shin", label: "心", labelKid: "こころ", required: false, items: stripeCheckItems([
         "下級生に声かけ・手助けができる",
         "保護者・指導者・仲間に感謝を言葉にできる",
         "道場の約束を自分から守り、周りにも伝えられる",
         "困っている仲間を放っておかない"
+      ], [
+        "下の子に声をかけたり、手伝ったりできる",
+        "保護者・先生・仲間に「ありがとう」が言える",
+        "道場のルールを自分から守り、伝えられる",
+        "困っている友だちを放っておかない"
       ]) },
-      { key: "gi", label: "技", required: false, items: stripeCheckItems([
+      { key: "gi", label: "技", labelKid: "わざ", required: false, items: stripeCheckItems([
         "得意技で試合を組み立てる意識がある",
         "立技と寝技を状況に応じて切り替えられる",
         "実戦で一本・技ありにつながる技がある",
         "下級生に技の見本を安全に示せる"
+      ], [
+        "得意技で試合の流れをつくれる",
+        "立ち技と寝技を、場面に合わせて切り替えられる",
+        "試合で一本・技ありにつながる技がある",
+        "下の子に、安全に技の見本を見せられる"
       ]) },
-      { key: "tai", label: "体", required: false, items: stripeCheckItems([
+      { key: "tai", label: "体", labelKid: "からだ", required: false, items: stripeCheckItems([
         "組み手で有利な形を作れる",
         "試合・連戦に必要な持久力がある",
         "疲労時も安全な動きを保てる"
+      ], [
+        "組み手で、有利な形をつくれる",
+        "試合が続いても、体力がもつ",
+        "つかれても、安全な動きを保てる"
       ]) }
     ] }
 ];
@@ -3272,22 +3382,36 @@ function buildStripePrereqAttendanceLabel(member, targetLevel, attProgress) {
   return "柔道クラス出席 前回合格から 目安 " + attProgress.span + "回";
 }
 
-function getStripeCheckGroupsForMember(def, member, targetLevel) {
+function buildStripePrereqAttendanceLabelKid(member, targetLevel, attProgress) {
+  attProgress = attProgress || getStripeAttendanceProgress(member, targetLevel);
+  if (!attProgress) return "";
+  if ((member.stripes || 0) <= 0) {
+    return "稽古に来た回数の目安 " + attProgress.span + "回";
+  }
+  return "前のストライプから、目安 " + attProgress.span + "回くらい稽古に来る";
+}
+
+function getStripeCheckGroupsForMember(def, member, targetLevel, memberFacing) {
   var groups = getStripeCheckGroups(def);
   if (!member) return groups;
-  var attendanceLabel = buildStripePrereqAttendanceLabel(member, targetLevel);
+  var attendanceLabel = memberFacing
+    ? buildStripePrereqAttendanceLabelKid(member, targetLevel)
+    : buildStripePrereqAttendanceLabel(member, targetLevel);
   return groups.map(function(group) {
     if (group.key !== "prereq" || !attendanceLabel) return group;
+    var attItem = { label: attendanceLabel, labelKid: attendanceLabel };
     return {
       key: group.key,
       label: group.label,
+      labelKid: group.labelKid,
       required: group.required,
-      items: [{ label: attendanceLabel }].concat(group.items)
+      items: [attItem].concat(group.items)
     };
   });
 }
 
 var STRIPE_ATTENDANCE_NOTE = "※ 柔道クラス出席はスポスル取込の通算です（随時更新）。前回合格から、次のストライプまでの固定目安回数で表示します（早く合格しても次の目標回数は同じです）。審査の合否は指導員が心技体を総合して判定します。";
+var STRIPE_ATTENDANCE_NOTE_KID = "稽古に来た回数は、だいたいの目安です。ストライプをもらえるかは、先生が稽古を見て決めます。人より早くても遅くても、自分のペースで大丈夫です。";
 
 function getStripeLevelDef(level) {
   var i;
@@ -3419,11 +3543,22 @@ function findPlayersByRosterId(rosterId) {
   return out;
 }
 
-function getStripeLevelSummary(stripes) {
-  if (!stripes || stripes <= 0) return { label: "未取得", theme: "これから1本目を目指しましょう" };
+function getStripeLevelSummary(stripes, memberFacing) {
+  if (!stripes || stripes <= 0) {
+    return memberFacing
+      ? { label: "これから1本目！", theme: "「お願いします！」が言えるこ", tagline: "あいさつと、安全にうごける！" }
+      : { label: "未取得", theme: "これから1本目を目指しましょう", tagline: "" };
+  }
   var def = getStripeLevelDef(stripes);
-  if (!def) return { label: stripes + "本", theme: "" };
-  return { label: def.label + "（" + stripes + "本目）", theme: def.theme };
+  if (!def) return { label: stripes + "本", theme: "", tagline: "" };
+  if (memberFacing) {
+    return {
+      label: def.label + "（" + stripes + "本目）",
+      theme: def.themeKid || def.theme,
+      tagline: def.taglineKid || ""
+    };
+  }
+  return { label: def.label + "（" + stripes + "本目）", theme: def.theme, tagline: "" };
 }
 
 function renderMyProgressAttendanceBar(progress, span, opts) {
@@ -3431,31 +3566,33 @@ function renderMyProgressAttendanceBar(progress, span, opts) {
   var pct = span > 0 ? Math.min(100, Math.round((progress / span) * 100)) : 0;
   var remain = Math.max(0, span - progress);
   var prefix = opts.prefix ? esc(opts.prefix) + " " : "";
+  var doneLabel = opts.memberFacing ? "このくらい来られた！ あとは先生がみてくれるよ" : "目安を達成";
+  var remainLabel = opts.memberFacing ? "あと" + remain + "回くらい" : "あと" + remain + "回が目安";
   return '<div class="my-progress-meter">' +
     '<div class="my-progress-bar"><div class="my-progress-fill" style="width:' + pct + '%"></div></div>' +
     '<div class="my-progress-meta"><span>' + prefix + progress + " / " + span + "回</span>" +
-    (remain > 0 ? "<span>あと" + remain + "回が目安</span>" : "<span>目安を達成</span>") +
+    (remain > 0 ? "<span>" + remainLabel + "</span>" : "<span>" + doneLabel + "</span>") +
     "</div></div>";
 }
 
 function renderMyProgressChecklist(def, member, targetLevel) {
   if (!def) return "";
-  var groups = member ? getStripeCheckGroupsForMember(def, member, targetLevel) : getStripeCheckGroups(def);
+  var groups = member ? getStripeCheckGroupsForMember(def, member, targetLevel, true) : getStripeCheckGroups(def);
   return groups.map(function(group) {
     var items = group.items.map(function(item) {
-      return "<li>" + esc(item.label) + "</li>";
+      return "<li>" + esc(stripeItemLabel(item, true)) + "</li>";
     }).join("");
-    var title = esc(group.label) + (group.required ? "（審査時に確認）" : "");
+    var title = esc(stripeGroupLabel(group, true));
     return '<details class="my-progress-check-group">' +
       '<summary class="my-progress-check-toggle"><span>' + title + '</span><span class="my-progress-check-chevron" aria-hidden="true">▼</span></summary>' +
       '<ul class="my-progress-check-list">' + items + "</ul></details>";
   }).join("");
 }
 
-function formatStripeReviewResultLabel(result) {
-  if (result === "pass") return "合格";
-  if (result === "retry") return "保留";
-  return "保留";
+function formatStripeReviewResultLabel(result, memberFacing) {
+  if (result === "pass") return memberFacing ? "もらえた！" : "合格";
+  if (result === "retry") return memberFacing ? "もうすこし" : "保留";
+  return memberFacing ? "もうすこし" : "保留";
 }
 
 function isStripeReviewEntry(r) {
@@ -3523,11 +3660,13 @@ function formatMessageSourceLabel(source) {
 
 function renderStripeReviewHistoryItem(r, opts) {
   opts = opts || {};
+  var memberFacing = !!opts.memberFacing;
   if (isMessageEntry(r)) {
     var msgBody = (r.memo || "").trim();
     var sourceLabel = opts.hideSourceLabel ? "" : formatMessageSourceLabel(r.source);
+    var kindLabel = memberFacing ? "💬 先生からのメッセージ" : "💬 指導員メッセージ";
     var item = '<div class="stripe-history-item kind-message">' +
-      '<div class="stripe-history-kind">💬 指導員メッセージ' + esc(sourceLabel) + "</div>" +
+      '<div class="stripe-history-kind">' + esc(kindLabel + sourceLabel) + "</div>" +
       '<div class="stripe-history-meta">' + esc(formatConfirmDate(r.at)) + "</div>" +
       (msgBody ? '<div class="stripe-history-body">' + esc(msgBody) + "</div>" : "") +
       "</div>";
@@ -3536,12 +3675,15 @@ function renderStripeReviewHistoryItem(r, opts) {
       '<button type="button" class="btn btn-danger btn-sm" data-action="deleteStripeReview" data-roster-id="' + esc(opts.rosterId) + '" data-review-id="' + esc(r.id) + '">削除</button>' +
       "</div>";
   }
-  var resultLabel = formatStripeReviewResultLabel(r.result);
+  var resultLabel = formatStripeReviewResultLabel(r.result, memberFacing);
   var levelLabel = (getStripeLevelDef(r.targetLevel) || {}).label || "";
   var style = r.result === "pass" ? "color:var(--win)" : "color:var(--draw)";
-  var reviewMeta = esc(formatConfirmDate(r.at)) + " ／ " + r.targetLevel + "本目（" + esc(levelLabel) + "） ／ " + resultLabel;
+  var kindLabel = memberFacing ? "🎗 ストライプの結果" : "🎗 ストライプ審査";
+  var reviewMeta = memberFacing
+    ? esc(formatConfirmDate(r.at)) + " ／ " + r.targetLevel + "本目（" + esc(levelLabel) + "） ／ " + resultLabel
+    : esc(formatConfirmDate(r.at)) + " ／ " + r.targetLevel + "本目（" + esc(levelLabel) + "） ／ " + resultLabel;
   var item = '<div class="stripe-history-item kind-review">' +
-    '<div class="stripe-history-kind" style="' + style + '">🎗 ストライプ審査</div>' +
+    '<div class="stripe-history-kind" style="' + style + '">' + esc(kindLabel) + '</div>' +
     '<div class="stripe-history-meta">' + reviewMeta + "</div>" +
     (r.memo ? '<div class="stripe-history-body" style="color:var(--muted)">' + esc(r.memo) + "</div>" : "") +
     "</div>";
@@ -3554,6 +3696,7 @@ function renderStripeReviewHistoryItem(r, opts) {
 function renderStripeReviewHistoryHtml(reviews, limit, rosterId, extraOpts) {
   limit = limit || 8;
   extraOpts = extraOpts || {};
+  var memberFacing = !!extraOpts.memberFacing;
   var itemOpts = Object.assign({}, extraOpts);
   if (rosterId) {
     itemOpts.deletable = false;
@@ -3563,7 +3706,8 @@ function renderStripeReviewHistoryHtml(reviews, limit, rosterId, extraOpts) {
   var rows = sorted.slice(0, limit).map(function(r) {
     return renderStripeReviewHistoryItem(r, Object.keys(itemOpts).length ? itemOpts : null);
   }).join("");
-  return rows || '<div class="stripe-history-item" style="color:var(--muted)">履歴はまだありません</div>';
+  return rows || '<div class="stripe-history-item" style="color:var(--muted)">' +
+    (memberFacing ? "まだ記録はありません" : "履歴はまだありません") + "</div>";
 }
 
 function renderFeedbackHistorySection(m) {
@@ -3791,14 +3935,14 @@ function renderInstructorMessagePreview(member) {
 }
 
 function renderMyProgressReviewHistory(member) {
-  return renderStripeReviewHistoryHtml(member.reviews, 12, null, { hideSourceLabel: true });
+  return renderStripeReviewHistoryHtml(member.reviews, 12, null, { hideSourceLabel: true, memberFacing: true });
 }
 
 function renderMyProgressLeagueStats(rosterId) {
   var entries = findPlayersByRosterId(rosterId);
   var body;
   if (!entries.length) {
-    body = '<p style="font-size:.78rem;color:var(--muted);padding:4px 0">現在リーグに未所属です（指導員が追加します）</p>';
+    body = '<p style="font-size:.82rem;color:var(--muted);padding:4px 0;line-height:1.55">まだリーグに入っていません。先生が入れてくれます。</p>';
   } else {
     body = entries.map(function(entry) {
       var sorted = computeStats(entry.league).sorted;
@@ -3809,27 +3953,27 @@ function renderMyProgressLeagueStats(rosterId) {
       if (!stat) return "";
       var unplayed = getUnplayedCount(stat, Math.max(0, sorted.length - 1));
       return '<div class="my-progress-league-row"><div class="my-progress-league-main"><strong>' + esc(entry.league.name) + "</strong>" +
-        '<span class="my-progress-league-sub">' + stat.rank + "位 ／ " + stat.points + "勝点 ／ 残" + unplayed + "試合</span></div>" +
-        '<div class="my-progress-league-record">' + stat.wins + "勝 " + stat.draws + "分 " + stat.losses + "敗</div></div>";
+        '<span class="my-progress-league-sub">' + stat.rank + "位 ・ " + stat.points + "ポイント ・ あと" + unplayed + "試合</span></div>" +
+        '<div class="my-progress-league-record">' + stat.wins + "かち " + stat.draws + "ひきわけ " + stat.losses + "まけ</div></div>";
     }).join("");
   }
-  return body + '<p class="my-progress-note" style="margin-top:10px">' + JLEAGUE_GEAR_NOTE + "</p>";
+  return body + '<p class="my-progress-note" style="margin-top:10px">' + JLEAGUE_GEAR_NOTE_KID + "</p>";
 }
 
 function renderMemberLinkRequiredPage() {
   return '<div class="card">' +
-    '<div class="card-title">🎗 マイ進捗</div>' +
-    '<p style="font-size:.82rem;line-height:1.6;margin:0 0 12px">ストライプ・出席・次の目標を見るには、<strong>名前＋誕生日</strong>の確認が必要です。</p>' +
-    '<p style="font-size:.78rem;color:var(--muted);line-height:1.55;margin:0 0 12px">例：<strong>ゆうすけ0610</strong></p>' +
-    '<button type="button" class="btn btn-primary btn-block" data-action="openMemberLogin">合言葉を入力する</button>' +
+    '<div class="card-title my-progress-section-title">🎗 成長ノート</div>' +
+    '<p style="font-size:.88rem;line-height:1.65;margin:0 0 12px">お子さまの<strong>成長を見るには、合言葉</strong>が必要です。</p>' +
+    '<p style="font-size:.82rem;color:var(--muted);line-height:1.6;margin:0 0 12px">道場での<strong>名前</strong>と<strong>誕生日（4けた）</strong>を入れてね。<br>例：<strong>ゆうすけ0610</strong></p>' +
+    '<button type="button" class="btn btn-primary btn-block" data-action="openMemberLogin">合言葉を入れる</button>' +
     "</div>";
 }
 
 function renderMyProgressInvalidPage() {
   return '<div class="card">' +
-    '<div class="card-title">確認できません</div>' +
-    '<p style="font-size:.82rem;line-height:1.6;margin:0 0 12px;color:var(--muted)">館員データが見つかりません。合言葉を入力し直すか、指導員にお問い合わせください。</p>' +
-    '<button type="button" class="btn btn-primary btn-block" data-action="openMemberLogin">合言葉を入力する</button>' +
+    '<div class="card-title my-progress-section-title">確認できません</div>' +
+    '<p style="font-size:.88rem;line-height:1.65;margin:0 0 12px;color:var(--muted)">お名前が見つかりません。合言葉を入れ直すか、先生に聞いてください。</p>' +
+    '<button type="button" class="btn btn-primary btn-block" data-action="openMemberLogin">合言葉を入れる</button>' +
     "</div>";
 }
 
@@ -3873,10 +4017,10 @@ function renderMyProgressPage(rosterId) {
   if (!member) return renderMyProgressInvalidPage();
   if (isSeniorMember(member)) return renderSeniorMyProgressPage(rosterId);
   var stripes = member.stripes || 0;
-  var summary = getStripeLevelSummary(stripes);
+  var summary = getStripeLevelSummary(stripes, true);
   var fakeP = { stripes: stripes };
   var leagues = getMemberLeagueLabels(member.id);
-  var warnings = getLeagueStripeWarning(member.id, stripes);
+  var warnings = getLeagueStripeWarningKid(member.id, stripes);
   var attUpdatedLabel = formatAttendanceUpdatedLabel(member);
   var nextLevel = stripes < STRIPE_MAX ? stripes + 1 : null;
   var nextDef = nextLevel ? getStripeLevelDef(nextLevel) : null;
@@ -3884,51 +4028,57 @@ function renderMyProgressPage(rosterId) {
   var instructorMsg = getInstructorMessageForMember(member);
   if (instructorMsg) {
     commentSection = '<div class="card my-progress-comment-card">' +
-      '<div class="card-title">指導員からのメッセージ</div>' +
+      '<div class="card-title my-progress-section-title">先生からのメッセージ</div>' +
       '<div class="my-progress-comment-body">' + esc(instructorMsg.text) + "</div>" +
-      (instructorMsg.at ? '<div style="font-size:.62rem;color:var(--muted);margin-top:8px">' + esc(formatConfirmDate(instructorMsg.at)) + " 更新</div>" : "") +
+      (instructorMsg.at ? '<div style="font-size:.68rem;color:var(--muted);margin-top:8px">' + esc(formatConfirmDate(instructorMsg.at)) + " 更新</div>" : "") +
       "</div>";
   }
   var nextSection = "";
   if (nextDef) {
     var attProgress = getStripeAttendanceProgress(member, nextLevel);
     var attSpan = attProgress ? attProgress.span : nextDef.minAttendance;
-    var attLabel = (member.stripes || 0) > 0
-      ? "柔道クラス出席（前回合格から目安 " + attSpan + "回）"
-      : "柔道クラス出席（目安 " + attSpan + "回）";
+    var attIntro = (member.stripes || 0) > 0
+      ? "前のストライプから、あと何回くらい稽古に来たらいいか"
+      : "稽古に来た回数の目安";
     nextSection = '<div class="card">' +
-      '<div class="card-title">次の目標：' + nextLevel + "本目（" + esc(nextDef.label) + "）</div>" +
-      '<p style="font-size:.72rem;color:var(--muted);margin:-4px 0 8px">' + esc(nextDef.theme) + " ／ " + esc(nextDef.leagueHint) + "</p>" +
-      '<p style="font-size:.66rem;font-weight:700;color:var(--accent2);margin:10px 0 6px">' + attLabel + "</p>" +
+      '<div class="card-title my-progress-section-title">つぎのゴール：' + nextLevel + "本目 " + esc(nextDef.label) + "</div>" +
+      '<div class="my-progress-hero-theme" style="margin:0 0 4px;text-align:left">' + esc(nextDef.themeKid || nextDef.theme) + "</div>" +
+      (nextDef.taglineKid ? '<div class="my-progress-hero-tagline" style="text-align:left;margin:0 0 8px">' + esc(nextDef.taglineKid) + "</div>" : "") +
+      '<p style="font-size:.72rem;color:var(--muted);margin:0 0 8px;line-height:1.5">' + esc(nextDef.leagueHintKid || nextDef.leagueHint) + "</p>" +
+      '<p style="font-size:.78rem;font-weight:700;color:var(--accent2);margin:10px 0 6px">' + esc(attIntro) + "</p>" +
       renderMyProgressAttendanceBar(attProgress ? attProgress.progress : 0, attSpan,
-        (member.stripes || 0) > 0 ? { prefix: "前回合格から" } : null) +
-      '<p style="font-size:.66rem;color:var(--muted);margin:10px 0 4px">審査で確認する項目（参考）</p>' +
+        (member.stripes || 0) > 0 ? { prefix: "前のストライプから", memberFacing: true } : { memberFacing: true }) +
+      '<p style="font-size:.78rem;font-weight:700;color:var(--accent2);margin:14px 0 6px">こんなことができると、ストライプがもらえるよ</p>' +
       renderMyProgressChecklist(nextDef, member, nextLevel) +
-      '<p class="my-progress-note">' + STRIPE_ATTENDANCE_NOTE + "</p>" +
+      '<p class="my-progress-note">' + STRIPE_ATTENDANCE_NOTE_KID + "</p>" +
       "</div>";
   }
-  return '<div class="print-title">🎗 ' + esc(member.name) + "さんのマイ進捗 ｜ " + esc(getActiveContext().seasonLabel) + "</div>" +
+  var stripeStat = stripes > 0
+    ? stripes + "本"
+    : '<span style="font-size:.9em">まだ0本。1本目をめざそう！</span>';
+  return '<div class="print-title">🎗 ' + esc(member.name) + "さんの成長ノート ｜ " + esc(getActiveContext().seasonLabel) + "</div>" +
     '<div class="my-progress-hero">' +
     '<div class="my-progress-hero-name">' + esc(member.name) + "さん</div>" +
     '<div class="my-progress-hero-stripes">' + renderStripeVisual(fakeP, false) + "</div>" +
     '<div class="my-progress-hero-level">' + esc(summary.label) + "</div>" +
-    (summary.theme ? '<div style="font-size:.72rem;color:var(--muted);margin-top:4px">' + esc(summary.theme) + "</div>" : "") +
+    (summary.theme ? '<div class="my-progress-hero-theme">' + esc(summary.theme) + "</div>" : "") +
+    (summary.tagline ? '<div class="my-progress-hero-tagline">' + esc(summary.tagline) + "</div>" : "") +
     "</div>" +
     commentSection +
     '<div class="card">' +
-    '<div class="card-title">いまの状況</div>' +
+    '<div class="card-title my-progress-section-title">いまのここまで</div>' +
     '<div class="my-progress-stat-grid">' +
-    '<div class="my-progress-stat"><div class="my-progress-stat-label">ストライプ</div><div class="my-progress-stat-value">' + stripes + "本</div></div>" +
-    '<div class="my-progress-stat"><div class="my-progress-stat-label">柔道クラス出席<br><span style="font-weight:400;font-size:.58rem;color:var(--muted)">' +
-    (attUpdatedLabel ? "更新 " + esc(attUpdatedLabel) : "随時更新") + '</span></div><div class="my-progress-stat-value">' + (member.attendanceCount || 0) + "回</div></div>" +
-    '<div class="my-progress-stat"><div class="my-progress-stat-label">推奨リーグ</div><div class="my-progress-stat-value is-compact">' + esc(getRecommendedLeagueLabel(stripes)) + "</div></div>" +
-    '<div class="my-progress-stat"><div class="my-progress-stat-label">所属リーグ</div><div class="my-progress-stat-value is-compact">' + esc(leagues.length ? leagues.join("・") : "未所属") + "</div></div>" +
+    '<div class="my-progress-stat"><div class="my-progress-stat-label">ストライプ</div><div class="my-progress-stat-value">' + stripeStat + "</div></div>" +
+    '<div class="my-progress-stat"><div class="my-progress-stat-label">稽古に来た回数<br><span style="font-weight:400;font-size:.58rem;color:var(--muted)">' +
+    (attUpdatedLabel ? "更新 " + esc(attUpdatedLabel) : "だいたい毎週更新") + '</span></div><div class="my-progress-stat-value">' + (member.attendanceCount || 0) + "回</div></div>" +
+    '<div class="my-progress-stat"><div class="my-progress-stat-label">つぎに出られるリーグ</div><div class="my-progress-stat-value is-compact">' + esc(getRecommendedLeagueLabelKid(stripes)) + "</div></div>" +
+    '<div class="my-progress-stat"><div class="my-progress-stat-label">いまのリーグ</div><div class="my-progress-stat-value is-compact">' + esc(leagues.length ? leagues.join("・") : "これから入るよ") + "</div></div>" +
     "</div>" +
-    (warnings.length ? '<p style="font-size:.72rem;color:#7a5200;margin:10px 0 0;line-height:1.5">⚠ ' + esc(warnings.join(" ／ ")) + "</p>" : "") +
+    (warnings.length ? '<p style="font-size:.78rem;color:#7a5200;margin:10px 0 0;line-height:1.55">⚠ ' + esc(warnings.join(" ／ ")) + "</p>" : "") +
     "</div>" +
-    '<div class="card"><div class="card-title">リーグ戦の状況</div>' + renderMyProgressLeagueStats(member.id) + "</div>" +
+    '<div class="card"><div class="card-title my-progress-section-title">道場内リーグの結果</div>' + renderMyProgressLeagueStats(member.id) + "</div>" +
     nextSection +
-    '<div class="card"><div class="card-title">履歴（審査・メッセージ）</div>' + renderMyProgressReviewHistory(member) + "</div>" +
+    '<div class="card"><div class="card-title my-progress-section-title">これまでの記録</div>' + renderMyProgressReviewHistory(member) + "</div>" +
     '<div class="card"><button type="button" class="btn btn-ghost btn-block" data-action="logoutMember">別のお子さまの確認／終了</button></div>';
 }
 
@@ -3947,11 +4097,33 @@ function getLeagueStripeWarning(rosterId, stripes) {
   return warnings;
 }
 
+function getLeagueStripeWarningKid(rosterId, stripes) {
+  var warnings = [];
+  getActiveContext().leagues.forEach(function(league) {
+    var min = LEAGUE_STRIPE_MIN[league.id];
+    if (min == null) return;
+    league.players.forEach(function(p) {
+      if (p.rosterId !== rosterId || p.active === false) return;
+      if (stripes < min) {
+        warnings.push(league.name + "に出るには、ストライプ" + min + "本以上が必要です（いま" + stripes + "本）");
+      }
+    });
+  });
+  return warnings;
+}
+
 function getRecommendedLeagueLabel(stripes) {
   if (stripes >= 3) return "J1圏（＋順位条件）";
   if (stripes >= 2) return "J2";
   if (stripes >= 1) return "J3";
   return "プレリーグ";
+}
+
+function getRecommendedLeagueLabelKid(stripes) {
+  if (stripes >= 3) return "J1（トップリーグ）";
+  if (stripes >= 2) return "J2";
+  if (stripes >= 1) return "J3";
+  return "プレリーグ（まずはここから！）";
 }
 
 function checkStripeEligibility(member, targetLevel) {
