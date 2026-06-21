@@ -1449,7 +1449,18 @@ function showBootError(msg) {
   var el = document.getElementById("bootError");
   if (el) { el.style.display = "block"; el.textContent = "起動エラー: " + msg; }
 }
-window.onerror = function(msg) { showBootError(msg); return false; };
+function isBenignRuntimeError(msg) {
+  if (!msg) return false;
+  return String(msg).indexOf("ResizeObserver loop") !== -1;
+}
+window.addEventListener("error", function(e) {
+  if (isBenignRuntimeError(e.message)) e.stopImmediatePropagation();
+}, true);
+window.onerror = function(msg) {
+  if (isBenignRuntimeError(msg)) return true;
+  showBootError(msg);
+  return false;
+};
 
 const STORAGE_KEY = "yonekura-jleague-v1";
 const GH_CFG_KEY = "yonekura-jleague-gh-cfg";
@@ -1916,12 +1927,19 @@ function scheduleEmbedResize() {
   if (_embedResizeTimer) clearTimeout(_embedResizeTimer);
   _embedResizeTimer = setTimeout(notifyEmbedResize, 60);
 }
-function initEmbedResize() {
-  if (!detectEmbedded()) return;
-  var notify = function() {
+var _embedLayoutPending = false;
+function runEmbedLayoutNotify() {
+  if (_embedLayoutPending) return;
+  _embedLayoutPending = true;
+  requestAnimationFrame(function() {
+    _embedLayoutPending = false;
     fitGridColumns();
     scheduleEmbedResize();
-  };
+  });
+}
+function initEmbedResize() {
+  if (!detectEmbedded()) return;
+  var notify = runEmbedLayoutNotify;
   window.addEventListener("resize", notify, false);
   window.addEventListener("orientationchange", function() {
     setTimeout(notify, 120);
@@ -1931,7 +1949,6 @@ function initEmbedResize() {
     try {
       var ro = new ResizeObserver(notify);
       if (document.body) ro.observe(document.body);
-      if (document.documentElement) ro.observe(document.documentElement);
     } catch (e) { /* ignore */ }
   }
   setTimeout(notify, 0);
@@ -2635,7 +2652,7 @@ async function cloudPush() {
       if (!res.ok) { const t = await res.text(); throw new Error("PUT " + res.status + " " + t.slice(0, 140)); }
       const j = await res.json();
       ghSha = (j.content && j.content.sha) ? j.content.sha : ghSha;
-      setSyncState("synced", "保存 " + new Date().toLocaleTimeString("ja-JP"));
+      setSyncState("synced", "保存 " + formatConfirmDate(Date.now()));
       if (mergedOn409) showToast("端末間のデータを統合して保存しました", { type: "ok", duration: 3500 });
       return true;
     } catch (e) {
@@ -2697,7 +2714,7 @@ async function cloudPullIfNewer(silent) {
       var merged = mergeCloudStates(state, remote);
       var changed = applyMergedCloudState(merged);
       if (changed) {
-        setSyncState("synced", "統合 " + new Date().toLocaleTimeString("ja-JP"));
+        setSyncState("synced", "統合 " + formatConfirmDate(Date.now()));
         if (!silent) showToast("クラウドと端末のデータを統合しました", { type: "ok", duration: 2500 });
         schedulePush(true);
         return true;
@@ -2705,7 +2722,7 @@ async function cloudPullIfNewer(silent) {
       var remoteT = remote.updatedAt || 0;
       var localT = state.updatedAt || 0;
       if (remoteT > localT) {
-        setSyncState("synced", "読込 " + new Date().toLocaleTimeString("ja-JP"));
+        setSyncState("synced", "読込 " + formatConfirmDate(Date.now()));
         if (!silent) showToast("クラウドの最新データを反映しました", { type: "ok", duration: 2500 });
         return true;
       }
@@ -2853,11 +2870,8 @@ function resultSymbolClass(playerId, result) {
 }
 
 function formatMatchDate(playedAt) {
-  if (!playedAt) return "日時未記録";
-  var d = new Date(playedAt);
-  var date = d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
-  var time = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
-  return date + " " + time;
+  if (!playedAt) return "日付未記録";
+  return formatConfirmDate(playedAt);
 }
 
 function resultStatusLabel(playerId, result) {
@@ -3147,8 +3161,9 @@ function renderStripeReviewHistoryItem(r, opts) {
   opts = opts || {};
   if (isMessageEntry(r)) {
     var msgBody = (r.memo || "").trim();
+    var sourceLabel = opts.hideSourceLabel ? "" : formatMessageSourceLabel(r.source);
     var item = '<div class="stripe-history-item kind-message">' +
-      '<div class="stripe-history-kind">💬 指導員メッセージ' + esc(formatMessageSourceLabel(r.source)) + "</div>" +
+      '<div class="stripe-history-kind">💬 指導員メッセージ' + esc(sourceLabel) + "</div>" +
       '<div class="stripe-history-meta">' + esc(formatConfirmDate(r.at)) + "</div>" +
       (msgBody ? '<div class="stripe-history-body">' + esc(msgBody) + "</div>" : "") +
       "</div>";
@@ -3173,11 +3188,17 @@ function renderStripeReviewHistoryItem(r, opts) {
     "</div>";
 }
 
-function renderStripeReviewHistoryHtml(reviews, limit, rosterId) {
+function renderStripeReviewHistoryHtml(reviews, limit, rosterId, extraOpts) {
   limit = limit || 8;
+  extraOpts = extraOpts || {};
+  var itemOpts = Object.assign({}, extraOpts);
+  if (rosterId) {
+    itemOpts.deletable = false;
+    itemOpts.rosterId = rosterId;
+  }
   var sorted = (reviews || []).slice().sort(function(a, b) { return (b.at || 0) - (a.at || 0); });
   var rows = sorted.slice(0, limit).map(function(r) {
-    return renderStripeReviewHistoryItem(r, rosterId ? { deletable: false, rosterId: rosterId } : null);
+    return renderStripeReviewHistoryItem(r, Object.keys(itemOpts).length ? itemOpts : null);
   }).join("");
   return rows || '<div class="stripe-history-item" style="color:var(--muted)">履歴はまだありません</div>';
 }
@@ -3356,7 +3377,7 @@ function renderInstructorMessagePreview(member) {
 }
 
 function renderMyProgressReviewHistory(member) {
-  return renderStripeReviewHistoryHtml(member.reviews, 12);
+  return renderStripeReviewHistoryHtml(member.reviews, 12, null, { hideSourceLabel: true });
 }
 
 function renderMyProgressLeagueStats(rosterId) {
@@ -5462,8 +5483,7 @@ function deleteAwardConfirmation(id) {
 function formatConfirmDate(ts) {
   if (!ts) return "";
   var d = new Date(ts);
-  return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0") +
-    " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
 }
 
 function renderMonthlyMvpWinnerText(league, locked, livePick) {
@@ -6464,7 +6484,7 @@ async function manualPull() {
     if (!getLeague(currentLeagueId)) currentLeagueId = state.leagues[0] ? state.leagues[0].id : null;
     saveLocal();
     render();
-    setSyncState("synced", "読込 " + new Date().toLocaleTimeString("ja-JP"));
+    setSyncState("synced", "読込 " + formatConfirmDate(Date.now()));
     showToast("クラウドから読み込みました ✓");
   } catch (e) {
     setSyncState("error", String(e.message || e));
@@ -6873,7 +6893,7 @@ function esc(s) {
 
 function buildObsidianMD() {
   const now = new Date();
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
   let md = `---\ntags: [Jリーグ, 星取表, 柔道]\nseason: "${getActiveContext().seasonSlug}"\nupdated: "${dateStr}"\n---\n\n`;
   md += `# 🥋 米倉道場 Jリーグ 星取表（${getActiveContext().seasonLabel}）\n\n`;
   md += `> 勝ち点: 一本勝${getActiveContext().pointRule.ippon}点 / 優勢勝${getActiveContext().pointRule.yusei}点 / 引分${getActiveContext().pointRule.draw}点 / 負け${getActiveContext().pointRule.lose}点\n\n`;
@@ -7773,7 +7793,7 @@ async function initCloud() {
       if (changed) {
         await cloudPush();
       } else {
-        setSyncState("synced", "読込 " + new Date().toLocaleTimeString("ja-JP"));
+        setSyncState("synced", "読込 " + formatConfirmDate(Date.now()));
       }
     } else {
       await cloudPush();
