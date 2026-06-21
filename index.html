@@ -65,6 +65,7 @@
   --fluid-radius-md: calc(10px + 0.25vw);
   --fluid-radius-lg: calc(14px + 0.35vw);
   --fluid-content-max: min(calc(280px + 52vw), 920px);
+  --fluid-content-max-instructor: min(calc(280px + 88vw), 1440px);
   --fluid-main-bottom: calc(56px + 2.5vw + var(--safe-b));
   --fluid-rank-col: calc(28px + 1.2vw);
   --fluid-stat-min: calc(36px + 1.5vw);
@@ -221,6 +222,9 @@ main {
   max-width: var(--fluid-content-max);
   margin-left: auto;
   margin-right: auto;
+}
+body:not(.member-mode):not(.embedded) main {
+  max-width: var(--fluid-content-max-instructor);
 }
 .card {
   background: var(--surface); border-radius: var(--fluid-radius-lg);
@@ -811,9 +815,22 @@ body.member-mode.senior-member .my-progress-goal-body {
 }
 .stripe-roster-card { margin-bottom: 14px; }
 .stripe-roster-row {
-  display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start;
+  display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center;
   padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
   background: var(--bg); margin-bottom: 8px;
+}
+.stripe-roster-row-list .stripe-roster-main {
+  display: flex; align-items: center; gap: 10px 14px;
+  flex-wrap: nowrap; min-width: 0;
+}
+.stripe-roster-row-list .stripe-roster-name {
+  flex-wrap: nowrap; white-space: nowrap; word-break: keep-all; flex-shrink: 0;
+}
+.stripe-roster-row-list .stripe-roster-meta {
+  margin-top: 0; white-space: nowrap; word-break: keep-all; min-width: 0;
+}
+.stripe-roster-row-list .stripe-roster-actions {
+  flex-direction: row; flex-wrap: nowrap; gap: 6px; align-items: center;
 }
 .stripe-roster-main { min-width: 0; }
 .stripe-roster-name { font-weight: 800; font-size: .92rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -952,11 +969,12 @@ body.member-mode.senior-member .my-progress-goal-body {
     justify-content: center;
   }
   main { max-width: none; }
+  body:not(.member-mode):not(.embedded) main {
+    max-width: var(--fluid-content-max-instructor);
+  }
   .player-item { flex-wrap: wrap; row-gap: var(--fluid-space-sm); }
   .player-item input[data-rename-player] { flex: 1 1 calc(120px + 5vw); min-width: 0; }
   .player-item .player-status { flex: 0 0 auto; }
-  .stripe-roster-row { grid-template-columns: 1fr; }
-  .stripe-roster-actions { flex-direction: row; flex-wrap: wrap; }
   .stripe-roster-name-input { max-width: none; flex: 1 1 calc(90px + 3vw); }
   .stripe-roster-sposuru-input { max-width: none; flex: 1 1 calc(100px + 4vw); }
   .awards-filter-row { flex-direction: column; align-items: stretch; }
@@ -992,8 +1010,19 @@ body.member-mode.senior-member .my-progress-goal-body {
     overflow-wrap: anywhere;
   }
   .my-progress-league-record { white-space: normal; width: 100%; margin-top: var(--fluid-space-xs); }
-  .stripe-roster-row { grid-template-columns: 1fr; }
-  .stripe-roster-actions { flex-direction: row; flex-wrap: wrap; }
+  .stripe-roster-row-list {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .stripe-roster-row-list .stripe-roster-main {
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .stripe-roster-row-list .stripe-roster-meta { white-space: normal; }
+  .stripe-roster-row-list .stripe-roster-actions { flex-wrap: wrap; }
+  .stripe-roster-row:not(.stripe-roster-row-list) { grid-template-columns: 1fr; }
+  .stripe-roster-row:not(.stripe-roster-row-list) .stripe-roster-actions { flex-direction: row; flex-wrap: wrap; }
   .awards-filter-row { flex-direction: column; align-items: stretch; }
   .marubatsu-btn { min-width: var(--fluid-touch); min-height: var(--fluid-touch); }
 }
@@ -4891,7 +4920,7 @@ function renderStripesPage() {
     var badgeHtml = warnings.length
       ? ' <span class="stripe-badge-warn">要確認</span>'
       : (leagues.length ? ' <span class="stripe-badge-ok">' + esc(leagues.join("・")) + "</span>" : "");
-    return '<div class="stripe-roster-row">' +
+    return '<div class="stripe-roster-row stripe-roster-row-list">' +
       '<div class="stripe-roster-main">' +
       '<div class="stripe-roster-name">' +
       esc(m.name) + " " + renderStripeVisual(fakeP, true) + badgeHtml +
@@ -4899,7 +4928,7 @@ function renderStripesPage() {
       '<div class="stripe-roster-meta">' +
       "出席: " + (m.attendanceCount || 0) + "回" +
       (leagues.length ? " ／ 所属: " + esc(leagues.join("・")) : "") +
-      (warnings.length ? "<br>⚠ " + esc(warnings.join(" ／ ")) : "") +
+      (warnings.length ? " ／ ⚠ " + esc(warnings.join(" ／ ")) : "") +
       "</div></div>" +
       '<div class="stripe-roster-actions">' +
       renderReviewHistoryButton(m) +
