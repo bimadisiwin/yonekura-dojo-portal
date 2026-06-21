@@ -1167,10 +1167,7 @@ body.member-login-open {
   overflow: hidden;
 }
 body.embedded.member-login-open {
-  position: fixed;
-  width: 100%;
-  left: 0;
-  top: 0;
+  overflow: hidden;
 }
 #playerModal {
   z-index: 500;
@@ -1214,10 +1211,7 @@ body.player-modal-open {
   overflow: hidden;
 }
 body.embedded.player-modal-open {
-  position: fixed;
-  width: 100%;
-  left: 0;
-  top: 0;
+  overflow: hidden;
 }
 /* WordPress iframe 埋め込み — 画面幅100%・星取表をコンテナにフィット */
 html.embedded,
@@ -1225,6 +1219,9 @@ body.embedded {
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto;
 }
 body.embedded {
   --fluid-content-max: 100%;
