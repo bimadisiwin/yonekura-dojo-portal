@@ -1354,7 +1354,6 @@ body.embedded .cell-btn:not(.empty) {
     </div>
     <div class="header-actions no-print">
       <button type="button" class="btn btn-secondary btn-sm member-me-only" id="btnMyProgress">🎗 マイ進捗</button>
-      <button type="button" class="btn btn-secondary btn-sm btn-master admin-only" id="btnFeedback" title="練習フィードバック">💬 FB</button>
       <button type="button" class="btn btn-secondary btn-sm btn-master admin-only" id="btnMasterSettings">📋 マスター</button>
       <button type="button" class="btn btn-primary btn-sm admin-only" id="btnExportImage">🖼 画像保存</button>
       <button type="button" class="btn btn-primary btn-sm admin-only" id="btnExportPDF">📄 PDF保存</button>
@@ -6085,8 +6084,6 @@ function setView(v) {
   });
   var masterBtn = document.getElementById("btnMasterSettings");
   if (masterBtn) masterBtn.classList.toggle("active", v === "master");
-  var feedbackBtn = document.getElementById("btnFeedback");
-  if (feedbackBtn) feedbackBtn.classList.toggle("active", v === "feedback");
   var myBtn = document.getElementById("btnMyProgress");
   if (myBtn) myBtn.classList.toggle("active", v === "myprogress");
   render();
@@ -7473,7 +7470,6 @@ function findTapTarget(start) {
       n.hasAttribute("data-modal-r") ||
       n.id === "btnExportImage" ||
       n.id === "btnExportPDF" ||
-      n.id === "btnFeedback" ||
       n.id === "btnMasterSettings" ||
       n.id === "btnMyProgress" ||
       n.id === "syncStatus" ||
