@@ -3346,7 +3346,7 @@ function getInstructorMessageForMember(member) {
 function renderInstructorMessagePreview(member) {
   var msg = getInstructorMessageForMember(member);
   if (!msg) {
-    return '<div class="stripe-elig-box" style="margin-top:8px"><span style="font-size:.68rem;color:var(--muted)">指導員メッセージはまだありません（審査メモまたはマスターのコメント欄から設定）</span></div>';
+    return '<div class="stripe-elig-box" style="margin-top:8px"><span style="font-size:.68rem;color:var(--muted)">指導員メッセージはまだありません（審査メモまたは💬フィードバックから設定）</span></div>';
   }
   var when = msg.at ? '<div style="font-size:.62rem;color:var(--muted);margin-top:4px">会員に表示中 ／ ' + esc(formatConfirmDate(msg.at)) + "</div>" : "";
   return '<div class="stripe-elig-box" style="margin-top:8px;background:#f8fafc">' +
@@ -4708,24 +4708,6 @@ function sortRosterByName(list) {
 function renderRosterLedgerMemberRow(m) {
   var leagues = getMemberLeagueLabels(m.id);
   var senior = isSeniorMember(m);
-  var seniorFields = senior
-    ? '<label class="roster-member-comment-label">今シーズンの目標（' + esc(formatSeasonLabelFromPeriodKey(getCurrentPeriodKey())) + "）</label>" +
-      '<textarea class="roster-member-comment" rows="3" placeholder="例：得意技の連技を試合で1回決める" data-roster-field="personalGoal" data-roster-id="' + esc(m.id) + '">' + esc(m.personalGoal || "") + "</textarea>" +
-      '<label class="roster-member-comment-label">目標に対する指導員メッセージ（本人に表示）</label>' +
-      '<textarea class="roster-member-comment" rows="3" placeholder="例：打ち込みの再現性が上がってきました。次は試合で使いましょう。" data-roster-field="memberComment" data-roster-id="' + esc(m.id) + '">' + esc(m.memberComment || "") + "</textarea>" +
-      '<div class="roster-comment-actions">' +
-      '<button type="button" class="btn btn-primary btn-sm" data-action="saveRosterMemberDisplay" data-roster-id="' + esc(m.id) + '">💾 保存</button>' +
-      "</div>" +
-      renderMemberCommentMetaHint(m)
-    : '<label class="roster-member-comment-label">マイ進捗コメント（保護者・本人に表示）</label>' +
-      '<div class="roster-comment-actions">' +
-      '<button type="button" class="btn btn-ghost btn-sm" data-action="draftMemberComment" data-roster-id="' + esc(m.id) + '">📝 メモから下書き生成</button>' +
-      "</div>" +
-      '<textarea class="roster-member-comment" rows="3" placeholder="例：礼法がとても良くなりました。次は〇〇を意識しましょう。" data-roster-field="memberComment" data-roster-id="' + esc(m.id) + '">' + esc(m.memberComment || "") + "</textarea>" +
-      '<div class="roster-comment-actions">' +
-      '<button type="button" class="btn btn-primary btn-sm" data-action="saveRosterMemberDisplay" data-roster-id="' + esc(m.id) + '">💾 保存</button>' +
-      "</div>" +
-      renderMemberCommentMetaHint(m);
   return '<div class="stripe-roster-row">' +
     '<div class="stripe-roster-main">' +
     '<div class="stripe-roster-name">' +
@@ -4741,7 +4723,6 @@ function renderRosterLedgerMemberRow(m) {
     (senior ? "" : '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">' +
     '<input type="number" min="0" value="' + (m.attendanceCount || 0) + '" data-roster-field="attendanceCount" data-roster-id="' + esc(m.id) + '" style="width:64px;font-size:.72rem;padding:4px 6px;border:1px solid var(--line);border-radius:8px" title="累計出席">' +
     '<button type="button" class="btn btn-ghost btn-sm" data-action="adjustAttendance" data-roster-id="' + esc(m.id) + '" data-delta="1">＋出席</button></div>') +
-    seniorFields +
     "</div>" +
     '<div class="stripe-roster-actions">' +
     (senior ? "" : renderReviewHistoryButton(m)) +
@@ -4755,11 +4736,10 @@ function renderRosterLedgerJuniorCard() {
   return '<div class="card stripe-roster-card">' +
     '<div class="card-title">🎗 小学生・未就学（' + roster.length + "名）</div>" +
     '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' +
-    "ストライプ・出席・マイ進捗コメントを管理します。ログインは <b>名前＋誕生日</b>（例：ゆうすけ0610）。スポスルCSVで出席を取込できます。</p>" +
+    "ストライプ・出席を管理します。マイ進捗コメントは <b>💬 フィードバック</b> タブから。ログインは <b>名前＋誕生日</b>（例：ゆうすけ0610）。スポスルCSVで出席を取込できます。</p>" +
     '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">' +
     '<input id="newRosterName" placeholder="新規館員名" style="flex:1;min-width:140px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:.82rem">' +
-    '<button type="button" class="btn btn-primary btn-sm" data-action="addRosterMember">＋ 追加</button>' +
-    '<button type="button" class="btn btn-ghost btn-sm" data-action="batchDraftMemberComments">📝 今シーズン一括下書き</button></div>' +
+    '<button type="button" class="btn btn-primary btn-sm" data-action="addRosterMember">＋ 追加</button></div>' +
     (rows || '<p style="font-size:.82rem;color:var(--muted);padding:8px">館員がいません</p>') +
     "</div>";
 }
@@ -4770,7 +4750,7 @@ function renderRosterLedgerSeniorCard() {
   return '<div class="card stripe-roster-card">' +
     '<div class="card-title">🎯 中学生・高校生以上（' + roster.length + "名）</div>" +
     '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' +
-    "今シーズンの目標と指導員メッセージを管理します。ログインは <b>名前＋誕生日（月日4桁）</b>。会員一覧CSVから一括追加できます。</p>" +
+    "目標・指導員メッセージは <b>💬 フィードバック</b> タブから。ログインは <b>名前＋誕生日（月日4桁）</b>。会員一覧CSVから一括追加できます。</p>" +
     '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">' +
     '<button type="button" class="btn btn-ghost btn-sm" data-action="importMemberListCsv">📋 会員一覧CSV（シニア追加）</button></div>' +
     (rows || '<p style="font-size:.82rem;color:var(--muted);padding:8px">館員がいません</p>') +
