@@ -503,6 +503,16 @@ body:not(.member-mode):not(.embedded) main {
 }
 .player-history-item .hist-date { font-size: var(--fluid-text-2xs); color: var(--muted); white-space: nowrap; text-align: right; }
 .player-history-empty { text-align: center; color: var(--muted); padding: var(--fluid-space-lg); font-size: var(--fluid-text-md); }
+@media (max-width: 480px) {
+  .player-history-item {
+    grid-template-columns: 1fr;
+    gap: var(--fluid-space-xs);
+  }
+  .player-history-item .hist-status,
+  .player-history-item .hist-date {
+    text-align: left;
+  }
+}
 body.member-mode .admin-only { display: none !important; }
 body.member-mode .cell-readonly { pointer-events: none; }
 .member-me-only { display: none !important; }
@@ -1164,32 +1174,41 @@ body.embedded.member-login-open {
 }
 #playerModal {
   z-index: 500;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: calc(10px + var(--safe-t)) 16px 16px;
+  padding: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 #playerModal .modal {
-  position: relative;
-  top: auto; left: auto; right: auto; bottom: auto;
-  width: calc(100% - 8px);
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: calc(100% - 32px);
   max-width: 440px;
-  max-height: calc(100vh - var(--safe-t) - 24px);
+  max-height: calc(100% - 32px);
   margin: 0;
   border-radius: 16px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 20px 18px 18px;
   box-shadow: 0 12px 40px rgba(26,39,68,.22);
-  transform: translateY(-16px);
+  transform: translate(-50%, -50%) scale(0.96);
   opacity: 0;
-  transition: transform .22s ease, opacity .22s ease;
+  transition: transform .2s ease, opacity .2s ease;
 }
 #playerModal.open .modal,
 #playerModal.modal-overlay.open .modal {
-  transform: translateY(0);
+  transform: translate(-50%, -50%) scale(1);
   opacity: 1;
 }
-#playerModal .player-history-list { max-height: none; }
+#playerModal .player-history-list {
+  max-height: min(55vh, 420px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
 html.player-modal-open,
 body.player-modal-open {
   overflow: hidden;
