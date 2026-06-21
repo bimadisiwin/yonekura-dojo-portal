@@ -689,7 +689,16 @@ body.member-mode.senior-member .my-progress-goal-body {
   padding: var(--fluid-space-xs) var(--fluid-space-sm);
   position: -webkit-sticky; position: sticky; left: 0; z-index: 3;
   font-size: var(--fluid-text-sm); white-space: nowrap; min-width: calc(64px + 1vw);
+  overflow: visible;
 }
+.grid-table tbody th .player-name-line { min-width: 0; }
+.grid-table thead th .grid-col-head {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  gap: 2px; line-height: var(--fluid-line-tight); word-break: keep-all;
+}
+.grid-table thead th .grid-col-name { display: block; }
+.grid-table thead th .grid-col-inactive { font-size: calc(8px + 0.08vw); opacity: .85; font-weight: 500; }
+.grid-table thead th .stripe-visual-sm { margin: 0; flex-shrink: 0; }
 .grid-table .diag {
   background: var(--empty); color: var(--empty-text);
   font-size: calc(8px + 0.1vw); font-weight: 400; pointer-events: none;
@@ -1105,10 +1114,14 @@ body.embedded .grid-table td {
   min-height: calc(26px + 0.35vw);
 }
 body.embedded .grid-table tbody th {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
   font-size: var(--fluid-text-xs);
   padding: var(--fluid-space-2xs) var(--fluid-space-xs);
+}
+body.embedded .grid-table tbody th .player-name-line {
+  flex-wrap: nowrap;
+  max-width: none;
 }
 body.embedded .grid-table thead th {
   font-size: calc(8px + 0.06vw);
@@ -4901,7 +4914,12 @@ function getStripes(p) {
   if (!p) return 0;
   if (p.rosterId) {
     var m = findRosterMember(p.rosterId);
-    if (m) return m.stripes;
+    if (m) return m.stripes || 0;
+  }
+  if (p.name && state && Array.isArray(state.roster)) {
+    for (var i = 0; i < state.roster.length; i++) {
+      if (state.roster[i].name === p.name) return state.roster[i].stripes || 0;
+    }
   }
   var n = parseInt(p.stripes, 10);
   return isNaN(n) || n < 0 ? 0 : Math.min(n, STRIPE_MAX);
@@ -6140,6 +6158,20 @@ function renderStandings(league, sorted) {
   </div>`;
 }
 
+function renderGridPlayerNameCell(p) {
+  var inactive = p.active === false ? "（未参加）" : "";
+  return '<span class="player-name-line">' +
+    '<button type="button" class="player-tap" data-player-id="' + esc(p.id) + '">' + esc(p.name) + inactive + '</button>' +
+    renderStripeVisual(p, true) +
+    '</span>';
+}
+
+function renderGridColumnHead(p) {
+  var suffix = p.active === false ? '<span class="grid-col-inactive">未参加</span>' : "";
+  return '<span class="grid-col-head"><span class="grid-col-name">' + esc(p.name) + '</span>' +
+    renderStripeVisual(p, true) + suffix + '</span>';
+}
+
 function renderGrid(league, sorted, opts) {
   opts = opts || {};
   var playoffKey = opts.playoffKey || null;
@@ -6168,8 +6200,7 @@ function renderGrid(league, sorted, opts) {
   }
   let hdr = `<tr><th></th>`;
   players.forEach(function(p) {
-    const suffix = p.active === false ? `<div style="font-size:.56rem;opacity:.9">未参加</div>` : "";
-    hdr += `<th>${esc(p.name)}${suffix}</th>`;
+    hdr += `<th>${renderGridColumnHead(p)}</th>`;
   });
   hdr += `<th class="remain-col">残</th><th class="total-col">勝点</th><th class="rank-col">順</th></tr>`;
   let body = "";
@@ -6177,7 +6208,7 @@ function renderGrid(league, sorted, opts) {
     var rowCls = "";
     if (isPre && statMap[row.id] && statMap[row.id].rank <= J1_CUTOFF && statMap[row.id].played > 0) rowCls = " j1-row";
     if (isPre && preTied7Ids[row.id]) rowCls += " j1-row-tie";
-    body += `<tr class="${rowCls.trim()}"><th><span class="player-name-line"><button type="button" class="player-tap" data-player-id="${esc(row.id)}">${esc(row.name)}${row.active === false ? "（未参加）" : ""}</button>${renderStripeVisual(row, true)}</span></th>`;
+    body += `<tr class="${rowCls.trim()}"><th>${renderGridPlayerNameCell(row)}</th>`;
     for (const col of players) {
       if (row.id === col.id) {
         body += `<td class="diag diag-self"></td>`;
@@ -7270,7 +7301,7 @@ function fitEmbeddedGridColumns() {
       var statCols = 3;
       var dataCols = n - 1 - statCols;
       if (dataCols < 1) continue;
-      var nameW = Math.min(Math.max(48, Math.floor(avail * 0.11)), 76);
+      var nameW = Math.min(Math.max(56, Math.floor(avail * 0.14)), 92);
       var statW = Math.min(36, Math.max(28, Math.floor(avail * 0.055)));
       var dataW = Math.max(20, Math.floor((avail - nameW - statW * statCols) / dataCols));
       var widths = [nameW];
