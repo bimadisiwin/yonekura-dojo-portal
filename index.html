@@ -537,10 +537,46 @@ body.member-mode.senior-member .my-progress-goal-body {
 .my-progress-stat-label { font-size: var(--fluid-text-2xs); color: var(--muted); margin-bottom: var(--fluid-space-2xs); line-height: var(--fluid-line-tight); }
 .my-progress-stat-value { font-size: var(--fluid-text-md); font-weight: 800; line-height: var(--fluid-line-tight); word-break: break-word; overflow-wrap: anywhere; }
 .my-progress-stat-value.is-compact { font-size: var(--fluid-text-sm); font-weight: 700; }
-.my-progress-check-group { margin-top: var(--fluid-space-md); }
-.my-progress-check-title { font-size: var(--fluid-text-sm); font-weight: 700; color: var(--accent2); margin-bottom: var(--fluid-space-xs); }
+.my-progress-check-group {
+  margin-top: var(--fluid-space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--fluid-radius-md);
+  background: var(--bg);
+  overflow: hidden;
+}
+.my-progress-check-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fluid-space-sm);
+  min-height: var(--fluid-touch);
+  padding: var(--fluid-space-sm) var(--fluid-space-md);
+  font-size: var(--fluid-text-sm);
+  font-weight: 700;
+  color: var(--accent2);
+  cursor: pointer;
+  list-style: none;
+  line-height: var(--fluid-line-tight);
+  word-break: keep-all;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.my-progress-check-toggle::-webkit-details-marker { display: none; }
+.my-progress-check-toggle::marker { content: ""; }
+.my-progress-check-chevron {
+  flex-shrink: 0;
+  font-size: var(--fluid-text-2xs);
+  color: var(--muted);
+  transition: transform .18s ease;
+}
+.my-progress-check-group[open] .my-progress-check-chevron { transform: rotate(180deg); }
 .my-progress-check-list {
-  margin: 0; padding-left: 1.2em; font-size: var(--fluid-text-2xs); color: var(--muted); line-height: var(--fluid-line-loose);
+  margin: 0;
+  padding: 0 var(--fluid-space-md) var(--fluid-space-md) 1.6em;
+  font-size: var(--fluid-text-2xs);
+  color: var(--muted);
+  line-height: var(--fluid-line-loose);
+  border-top: 1px solid var(--line);
 }
 .my-progress-league-row {
   display: flex; justify-content: space-between; gap: var(--fluid-space-sm); align-items: flex-start;
@@ -3116,8 +3152,10 @@ function renderMyProgressChecklist(def, member, targetLevel) {
     var items = group.items.map(function(item) {
       return "<li>" + esc(item.label) + "</li>";
     }).join("");
-    return '<div class="my-progress-check-group"><div class="my-progress-check-title">' + esc(group.label) +
-      (group.required ? "（審査時に確認）" : "") + '</div><ul class="my-progress-check-list">' + items + "</ul></div>";
+    var title = esc(group.label) + (group.required ? "（審査時に確認）" : "");
+    return '<details class="my-progress-check-group">' +
+      '<summary class="my-progress-check-toggle"><span>' + title + '</span><span class="my-progress-check-chevron" aria-hidden="true">▼</span></summary>' +
+      '<ul class="my-progress-check-list">' + items + "</ul></details>";
   }).join("");
 }
 
@@ -3206,10 +3244,9 @@ function renderStripeReviewHistoryItem(r, opts) {
       "</div>";
   }
   var resultLabel = formatStripeReviewResultLabel(r.result);
-  var scorePart = r.checkSummary ? " ／ ○" + r.checkSummary.ok + " ×" + r.checkSummary.ng : "";
   var levelLabel = (getStripeLevelDef(r.targetLevel) || {}).label || "";
   var style = r.result === "pass" ? "color:var(--win)" : "color:var(--draw)";
-  var reviewMeta = esc(formatConfirmDate(r.at)) + " ／ " + r.targetLevel + "本目（" + esc(levelLabel) + "） ／ " + resultLabel + scorePart;
+  var reviewMeta = esc(formatConfirmDate(r.at)) + " ／ " + r.targetLevel + "本目（" + esc(levelLabel) + "） ／ " + resultLabel;
   var item = '<div class="stripe-history-item kind-review">' +
     '<div class="stripe-history-kind" style="' + style + '">🎗 ストライプ審査</div>' +
     '<div class="stripe-history-meta">' + reviewMeta + "</div>" +
