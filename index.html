@@ -637,6 +637,15 @@ body.member-mode.senior-member .my-progress-goal-body {
 .feedback-empty {
   font-size: var(--fluid-text-md); color: var(--muted); padding: var(--fluid-space-lg) var(--fluid-space-sm); text-align: center;
 }
+.feedback-history-list {
+  display: flex; flex-direction: column; gap: var(--fluid-space-sm);
+  max-height: min(50vh, 420px); overflow-y: auto; -webkit-overflow-scrolling: touch;
+  margin-top: var(--fluid-space-xs);
+}
+.feedback-history-empty {
+  font-size: var(--fluid-text-sm); color: var(--muted); padding: var(--fluid-space-md);
+  background: var(--bg); border-radius: var(--fluid-radius-md); border: 1px dashed var(--line);
+}
 .points { font-size: var(--fluid-text-xl); font-weight: 800; color: var(--accent2); min-width: calc(32px + 0.5vw); text-align: right; }
 .points-label { font-size: var(--fluid-text-2xs); color: var(--muted); text-align: right; }
 .standings-print { display: none; }
@@ -3166,10 +3175,24 @@ function renderStripeReviewHistoryItem(r, opts) {
 
 function renderStripeReviewHistoryHtml(reviews, limit, rosterId) {
   limit = limit || 8;
-  var rows = (reviews || []).slice().reverse().slice(0, limit).map(function(r) {
+  var sorted = (reviews || []).slice().sort(function(a, b) { return (b.at || 0) - (a.at || 0); });
+  var rows = sorted.slice(0, limit).map(function(r) {
     return renderStripeReviewHistoryItem(r, rosterId ? { deletable: false, rosterId: rosterId } : null);
   }).join("");
   return rows || '<div class="stripe-history-item" style="color:var(--muted)">履歴はまだありません</div>';
+}
+
+function renderFeedbackHistorySection(m) {
+  var reviews = (m.reviews || []).slice().sort(function(a, b) { return (b.at || 0) - (a.at || 0); });
+  var body = reviews.length
+    ? '<div class="feedback-history-list">' + reviews.map(function(r) {
+        return renderStripeReviewHistoryItem(r, { deletable: false });
+      }).join("") + "</div>"
+    : '<div class="feedback-history-empty">履歴はまだありません</div>';
+  return '<div class="feedback-history-section">' +
+    '<div class="feedback-field-label" style="margin-top:0">履歴（審査・メッセージ）</div>' +
+    body +
+    "</div>";
 }
 
 function buildStripeCheckLabelsSnapshot(def, checks) {
@@ -4862,6 +4885,7 @@ function renderFeedbackEditor(m) {
     (m.sposuruName && m.sposuruName !== m.name ? '<div class="feedback-editor-meta">' + esc(m.sposuruName) + "</div>" : "") +
     "</div>" +
     (metaBits.length ? '<div class="feedback-editor-meta">' + metaBits.join(" ／ ") + "</div>" : "") +
+    renderFeedbackHistorySection(m) +
     goalField +
     '<label class="feedback-field-label">' + esc(commentLabel) + "</label>" +
     '<textarea id="feedbackCommentInput" class="feedback-textarea" rows="5" placeholder="' + esc(commentPlaceholder) + '">' + esc(m.memberComment || "") + "</textarea>" +
@@ -7507,7 +7531,6 @@ function handleAppTap(e) {
   }
   if (target.id === "btnExportImage") { exportImage(); return; }
   if (target.id === "btnExportPDF") { exportPDF(); return; }
-  if (target.id === "btnFeedback") { setView("feedback"); return; }
   if (target.id === "btnMasterSettings") { setView("master"); return; }
   if (target.id === "btnMyProgress") { openMyProgress(); return; }
   var leagueId = target.getAttribute("data-league-id");
