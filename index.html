@@ -2450,7 +2450,12 @@ function mergeRosterMember(local, remote) {
   var out = deepClone(localTime >= remoteTime ? local : remote);
   var other = localTime >= remoteTime ? remote : local;
   out.stripes = Math.max(parseInt(local.stripes, 10) || 0, parseInt(remote.stripes, 10) || 0);
-  out.attendanceCount = Math.max(local.attendanceCount || 0, remote.attendanceCount || 0);
+  var localAtt = local.attendanceCount || 0;
+  var remoteAtt = remote.attendanceCount || 0;
+  out.attendanceCount = Math.max(localAtt, remoteAtt);
+  if (localAtt > remoteAtt) out.attendanceUpdatedAt = local.attendanceUpdatedAt || 0;
+  else if (remoteAtt > localAtt) out.attendanceUpdatedAt = remote.attendanceUpdatedAt || 0;
+  else out.attendanceUpdatedAt = Math.max(local.attendanceUpdatedAt || 0, remote.attendanceUpdatedAt || 0);
   out.reviews = mergeReviewLists(local.reviews, remote.reviews);
   if (memberMetaTime(other) > memberMetaTime(out)) {
     out.memberComment = other.memberComment;
@@ -3062,7 +3067,7 @@ function getStripeCheckGroupsForMember(def, member, targetLevel) {
   });
 }
 
-var STRIPE_ATTENDANCE_NOTE = "※ 柔道クラス出席はスポスル取込の通算です（月末に更新）。前回合格から、次のストライプまでの固定目安回数で表示します（早く合格しても次の目標回数は同じです）。審査の合否は指導員が心技体を総合して判定します。";
+var STRIPE_ATTENDANCE_NOTE = "※ 柔道クラス出席はスポスル取込の通算です（随時更新）。前回合格から、次のストライプまでの固定目安回数で表示します（早く合格しても次の目標回数は同じです）。審査の合否は指導員が心技体を総合して判定します。";
 
 function getStripeLevelDef(level) {
   var i;
@@ -3109,6 +3114,7 @@ function normalizeRosterMember(raw) {
     birthMd: normalizeBirthMd(m.birthMd),
     enrolledAt: m.enrolledAt || "",
     attendanceCount: Math.max(0, parseInt(m.attendanceCount, 10) || 0),
+    attendanceUpdatedAt: Math.max(0, parseInt(m.attendanceUpdatedAt, 10) || 0),
     memo: m.memo || "",
     personalGoal: m.personalGoal || "",
     personalGoalPeriodKey: m.personalGoalPeriodKey || "",
@@ -3651,6 +3657,7 @@ function renderMyProgressPage(rosterId) {
   var fakeP = { stripes: stripes };
   var leagues = getMemberLeagueLabels(member.id);
   var warnings = getLeagueStripeWarning(member.id, stripes);
+  var attUpdatedLabel = formatAttendanceUpdatedLabel(member);
   var nextLevel = stripes < STRIPE_MAX ? stripes + 1 : null;
   var nextDef = nextLevel ? getStripeLevelDef(nextLevel) : null;
   var commentSection = "";
@@ -3692,7 +3699,8 @@ function renderMyProgressPage(rosterId) {
     '<div class="card-title">いまの状況</div>' +
     '<div class="my-progress-stat-grid">' +
     '<div class="my-progress-stat"><div class="my-progress-stat-label">ストライプ</div><div class="my-progress-stat-value">' + stripes + "本</div></div>" +
-    '<div class="my-progress-stat"><div class="my-progress-stat-label">柔道クラス出席<br><span style="font-weight:400;font-size:.58rem;color:var(--muted)">（月末に更新）</span></div><div class="my-progress-stat-value">' + (member.attendanceCount || 0) + "回</div></div>" +
+    '<div class="my-progress-stat"><div class="my-progress-stat-label">柔道クラス出席<br><span style="font-weight:400;font-size:.58rem;color:var(--muted)">' +
+    (attUpdatedLabel ? "更新 " + esc(attUpdatedLabel) : "随時更新") + '</span></div><div class="my-progress-stat-value">' + (member.attendanceCount || 0) + "回</div></div>" +
     '<div class="my-progress-stat"><div class="my-progress-stat-label">推奨リーグ</div><div class="my-progress-stat-value is-compact">' + esc(getRecommendedLeagueLabel(stripes)) + "</div></div>" +
     '<div class="my-progress-stat"><div class="my-progress-stat-label">所属リーグ</div><div class="my-progress-stat-value is-compact">' + esc(leagues.length ? leagues.join("・") : "未所属") + "</div></div>" +
     "</div>" +
@@ -3757,6 +3765,30 @@ function addRosterMember(name) {
   showToast("館員を追加しました");
 }
 
+function formatAttendanceUpdatedLabel(member) {
+  if (!member || !member.attendanceUpdatedAt) return "";
+  return formatConfirmDate(member.attendanceUpdatedAt);
+}
+
+function setMemberAttendanceCount(m, newCount) {
+  if (!m) return;
+  var n = Math.max(0, parseInt(newCount, 10) || 0);
+  if ((m.attendanceCount || 0) !== n) {
+    m.attendanceCount = n;
+    m.attendanceUpdatedAt = Date.now();
+  }
+}
+
+function adjustMemberAttendance(m, delta) {
+  setMemberAttendanceCount(m, (m.attendanceCount || 0) + (parseInt(delta, 10) || 0));
+}
+
+function formatAttendanceCountLabel(m) {
+  var count = (m && m.attendanceCount) || 0;
+  var updated = formatAttendanceUpdatedLabel(m);
+  return "出席: " + count + "回" + (updated ? "（更新 " + updated + "）" : "");
+}
+
 function updateRosterMember(rosterId, field, value) {
   if (isMemberMode || isReadonly()) return;
   var m = findRosterMember(rosterId);
@@ -3773,7 +3805,7 @@ function updateRosterMember(rosterId, field, value) {
       });
     }
   } else if (field === "enrolledAt") m.enrolledAt = value || "";
-  else if (field === "attendanceCount") m.attendanceCount = Math.max(0, parseInt(value, 10) || 0);
+  else if (field === "attendanceCount") setMemberAttendanceCount(m, value);
   else if (field === "memo") m.memo = value || "";
   else if (field === "memberComment") {
     m.memberComment = value || "";
@@ -3804,7 +3836,7 @@ function adjustRosterAttendance(rosterId, delta) {
   if (isMemberMode || isReadonly()) return;
   var m = findRosterMember(rosterId);
   if (!m) return;
-  m.attendanceCount = Math.max(0, (m.attendanceCount || 0) + delta);
+  adjustMemberAttendance(m, delta);
   saveState();
   render();
 }
@@ -4303,10 +4335,8 @@ function flushRosterInputsFromDom() {
       if (nn) m.name = nn;
     } else if (field === "sposuruName") m.sposuruName = val || "";
     else if (field === "enrolledAt") m.enrolledAt = val || "";
-    else if (field === "attendanceCount") {
-      n = Math.max(0, parseInt(val, 10) || 0);
-      m.attendanceCount = n;
-    } else if (field === "stripes") {
+    else if (field === "attendanceCount") setMemberAttendanceCount(m, val);
+    else if (field === "stripes") {
       n = parseInt(val, 10);
       if (isNaN(n) || n < 0) n = 0;
       if (n > STRIPE_MAX) n = STRIPE_MAX;
@@ -4364,7 +4394,7 @@ async function applySposuruCsvText(text, silent, options) {
       var found = findOrCreateRosterForSposuruName(sess.name, sess.group);
       var m = touchMember(found, sess);
       if (isSposuruAttendanceGroup(sess.group)) {
-        m.attendanceCount = (m.attendanceCount || 0) + 1;
+        adjustMemberAttendance(m, 1);
         addedSessions++;
       }
       importedSessions[sess.sessionKey] = 1;
@@ -4383,7 +4413,7 @@ async function applySposuruCsvText(text, silent, options) {
         var csvCount = row.attendance;
         if (csvCount > prev) {
           var delta = csvCount - prev;
-          m.attendanceCount = (m.attendanceCount || 0) + delta;
+          adjustMemberAttendance(m, delta);
           baselines[key] = csvCount;
           addedSessions += delta;
           rowChanged = true;
@@ -4438,7 +4468,10 @@ function resetRosterAttendanceAll() {
   if (isMemberMode || isReadonly()) return;
   if (!confirm("全館員の出席数とスポスル取込履歴を0に初期化しますか？\n（翌月から差分取込をやり直せます）")) return;
   flushRosterInputsFromDom();
-  getRosterList().forEach(function(m) { m.attendanceCount = 0; });
+  getRosterList().forEach(function(m) {
+    m.attendanceCount = 0;
+    m.attendanceUpdatedAt = 0;
+  });
   var cfg = ensureSposuruSettings();
   cfg.importBaselines = {};
   cfg.importedSessions = {};
@@ -4555,7 +4588,7 @@ function renderSposuruSyncCard() {
   return '<div class="card">' +
     '<div class="card-title">スポスル連携（出席自動取込）</div>' +
     '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' +
-    "スポスルCSVをドロップで取込。<b>「小学生」「未就学」「中学生」「高校生以上」</b>を館員台帳に反映。<b>出席加算</b>は「小学生」「未就学」× タイトル「柔道クラス」のみ。<b>出欠予定日が取込日（今日）以前</b>の分だけ加算します。</p>" +
+    "スポスルCSVをドロップで取込（随時更新）。<b>「小学生」「未就学」「中学生」「高校生以上」</b>を館員台帳に反映。<b>出席加算</b>は「小学生」「未就学」× タイトル「柔道クラス」のみ。<b>出欠予定日が取込日（今日）以前</b>の分だけ加算します。</p>" +
     alertHtml +
     '<div id="sposuruDropzone" class="sposuru-dropzone" role="button" tabindex="0" aria-label="スポスルCSVをドロップ">' +
     '<input type="file" id="sposuruFileInput" accept=".csv,.txt,text/csv" hidden>' +
@@ -4695,6 +4728,12 @@ function renderStripeReviewModal(member, targetLevel) {
   var memoPrefill = latestReview && latestReview.memo ? String(latestReview.memo).trim() : "";
   var elig = checkStripeEligibility(member, targetLevel);
   var attInstructorNote = elig.attendance ? buildStripeAttendanceInstructorNote(elig.attendance) : "";
+  var attUpdatedLabel = formatAttendanceUpdatedLabel(member);
+  if (attUpdatedLabel) {
+    attInstructorNote = attInstructorNote
+      ? attInstructorNote + " ／ 出席更新 " + attUpdatedLabel
+      : "出席更新 " + attUpdatedLabel;
+  }
   var eligHtml = elig.ok
     ? '<div class="stripe-elig-box"><strong>✓ 受験資格（参考）：</strong>目安を満たしています' +
       (attInstructorNote ? '<br><span style="font-size:.62rem;color:var(--muted)">' + esc(attInstructorNote) + "</span>" : "") + "</div>"
@@ -4719,7 +4758,7 @@ function renderStripeReviewModal(member, targetLevel) {
     '<p style="font-size:.66rem;color:var(--muted);margin:6px 0;line-height:1.45">' + esc(def.theme) + " ／ " + esc(def.leagueHint) + "</p>" +
     renderInstructorMessagePreview(member) +
     eligHtml +
-    '<p style="font-size:.62rem;color:var(--muted);margin:0 0 8px;line-height:1.45">柔道クラス出席はスポスル取込の通算です（月末に更新）。受験資格の出席目安は、前回合格からの固定回数です（早く合格しても次の目標回数は同じ）。累計目安（8／24／48…回）は指導員向けの参考です。' + JLEAGUE_GEAR_NOTE + '</p>' +
+    '<p style="font-size:.62rem;color:var(--muted);margin:0 0 8px;line-height:1.45">柔道クラス出席はスポスル取込の通算です（随時更新）。受験資格の出席目安は、前回合格からの固定回数です（早く合格しても次の目標回数は同じ）。累計目安（8／24／48…回）は指導員向けの参考です。' + JLEAGUE_GEAR_NOTE + '</p>' +
     (latestReview ? '<p style="font-size:.66rem;color:var(--accent2);margin:8px 0 6px">前回の○×を読み込みました（' + esc(formatConfirmDate(latestReview.at)) + "）</p>" : "") +
     '<p style="font-size:.66rem;color:var(--muted);margin:0 0 8px">各項目を ○ / × で判定してください。授与式以外でも随時記録できます（保留は履歴に残ります）</p>' +
     groupsHtml +
@@ -4938,7 +4977,7 @@ function renderRosterLedgerMemberRow(m) {
     '<input type="text" class="stripe-roster-sposuru-input" value="' + esc(m.sposuruName || "") + '" placeholder="スポスル名" data-roster-field="sposuruName" data-roster-id="' + esc(m.id) + '" title="スポスルCSVの氏名（漢字）">' +
     "</div>" +
     '<div class="stripe-roster-meta">' +
-    (senior ? "" : "出席: " + (m.attendanceCount || 0) + "回 ／ ") +
+    (senior ? "" : esc(formatAttendanceCountLabel(m)) + " ／ ") +
     (m.group ? esc(m.group) : "") +
     (leagues.length ? " ／ 所属: " + esc(leagues.join("・")) : "") +
     (m.birthMd ? " ／ 誕生日: " + esc(formatBirthMdDisplay(m.birthMd)) : " ／ <span style=\"color:#b83232\">誕生日未登録</span>") +
@@ -5067,7 +5106,7 @@ function renderFeedbackEditor(m) {
   var metaBits = [];
   if (m.group) metaBits.push(esc(m.group));
   if (!senior) metaBits.push("🎗 " + (m.stripes || 0) + "本");
-  if (!senior) metaBits.push("出席 " + (m.attendanceCount || 0) + "回");
+  if (!senior) metaBits.push(formatAttendanceCountLabel(m));
   if (leagues.length) metaBits.push(esc(leagues.join("・")));
   var preview = getInstructorMessageForMember(m);
   var previewHtml = preview
@@ -5152,7 +5191,7 @@ function renderStripesPage() {
       esc(m.name) + " " + renderStripeVisual(fakeP, true) + badgeHtml +
       "</div>" +
       '<div class="stripe-roster-meta">' +
-      "出席: " + (m.attendanceCount || 0) + "回" +
+      esc(formatAttendanceCountLabel(m)) +
       (warnings.length ? " ／ ⚠ " + esc(warnings.join(" ／ ")) : "") +
       "</div></div>" +
       '<div class="stripe-roster-actions">' +
