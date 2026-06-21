@@ -487,6 +487,9 @@ body:not(.member-mode):not(.embedded) main {
   line-height: var(--fluid-line-tight);
   max-width: 100%;
 }
+.grid-table thead th .grid-col-name {
+  max-width: none;
+}
 .player-history-list { display: flex; flex-direction: column; gap: var(--fluid-space-sm); max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .player-history-item {
   display: grid; grid-template-columns: 1fr auto auto; gap: var(--fluid-space-sm); align-items: center;
@@ -1228,38 +1231,59 @@ body.embedded .card {
   box-sizing: border-box;
   padding: var(--fluid-space-md);
 }
-body.embedded .grid-wrap,
-body.embedded .grid-wrap-split {
+/* 会員 iframe：星取表は指導者画面（.grid-wrap 既定）と同じスクロール・列幅 */
+body.embedded.member-mode .grid-wrap,
+body.embedded.member-mode .grid-wrap-split {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  max-height: none;
-  overflow-x: auto;
-  overflow-y: visible;
 }
-body.embedded {
+body.embedded:not(.member-mode) .grid-wrap,
+body.embedded:not(.member-mode) .grid-wrap-split {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+body.embedded:not(.member-mode) .grid-wrap {
+  max-height: none;
+  overflow: auto;
+}
+body.embedded:not(.member-mode) .grid-wrap-split {
+  max-height: none;
+  overflow: hidden;
+}
+body.embedded:not(.member-mode) .grid-split-body {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+body.embedded:not(.member-mode) {
   --grid-name-font: calc(14px + 0.34vw);
   --grid-head-font: calc(12px + 0.22vw);
 }
-body.embedded .grid-table {
+body.embedded:not(.member-mode) .grid-table {
   table-layout: fixed;
-  width: 100% !important;
-  min-width: 0 !important;
 }
-body.embedded .grid-table th,
-body.embedded .grid-table td {
+body.embedded:not(.member-mode) .grid-table td,
+body.embedded:not(.member-mode) .grid-table tbody th {
   min-width: 0 !important;
   height: auto;
   min-height: calc(26px + 0.35vw);
 }
-body.embedded .grid-table tbody th {
+body.embedded:not(.member-mode) .grid-table thead th {
+  height: auto;
+  min-height: calc(26px + 0.35vw);
+}
+body.embedded:not(.member-mode) .grid-table tbody th {
   padding: var(--fluid-space-xs) var(--fluid-space-sm);
 }
-body.embedded .grid-table tbody th .player-name-line {
+body.embedded:not(.member-mode) .grid-table tbody th .player-name-line {
   flex-wrap: nowrap;
 }
-body.embedded .grid-table thead th,
-body.embedded .grid-table thead th.grid-col-head {
+body.embedded:not(.member-mode) .grid-table thead th,
+body.embedded:not(.member-mode) .grid-table thead th.grid-col-head {
   padding: var(--fluid-space-2xs) 3px;
   line-height: 1.2;
   white-space: nowrap;
@@ -1267,12 +1291,12 @@ body.embedded .grid-table thead th.grid-col-head {
   overflow-wrap: normal;
   overflow: visible;
 }
-body.embedded .grid-table .total-col,
-body.embedded .grid-table .rank-col,
-body.embedded .grid-table .remain-col {
+body.embedded:not(.member-mode) .grid-table .total-col,
+body.embedded:not(.member-mode) .grid-table .rank-col,
+body.embedded:not(.member-mode) .grid-table .remain-col {
   font-size: var(--fluid-text-xs);
 }
-body.embedded .cell-btn:not(.empty) {
+body.embedded:not(.member-mode) .cell-btn:not(.empty) {
   font-size: calc(11px + 0.2vw);
   padding: 1px;
 }
@@ -2082,6 +2106,7 @@ function runEmbedLayoutNotify() {
   requestAnimationFrame(function() {
     _embedLayoutPending = false;
     fitGridColumns();
+    initLegacyGridScroll();
     scheduleEmbedResize();
   });
 }
@@ -6934,12 +6959,13 @@ var _renderBase = render;
 render = function() {
   _renderBase();
   setTimeout(function() {
-    initLegacyGridScroll();
     fitGridColumns();
+    initLegacyGridScroll();
     scheduleEmbedResize();
   }, 0);
   setTimeout(function() {
     fitGridColumns();
+    initLegacyGridScroll();
     scheduleEmbedResize();
   }, 280);
 };
@@ -7679,6 +7705,8 @@ function applyGridColWidths(table, widths) {
   table.insertBefore(cg, table.firstChild);
   table.style.tableLayout = "fixed";
   table.style.width = total + "px";
+  table.style.minWidth = total + "px";
+  table.style.maxWidth = "none";
   return total;
 }
 
@@ -7690,16 +7718,39 @@ function applyGridNameScale(table, scale) {
   wrap.style.setProperty("--grid-head-scale", s);
 }
 
+var _gridMeasureEl = null;
+function getGridMeasureEl() {
+  if (!_gridMeasureEl) {
+    _gridMeasureEl = document.createElement("span");
+    _gridMeasureEl.setAttribute("aria-hidden", "true");
+    _gridMeasureEl.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;pointer-events:none;";
+    document.body.appendChild(_gridMeasureEl);
+  }
+  return _gridMeasureEl;
+}
+
+function measureInlineTextWidth(text, fontSize, fontWeight, fontFamily) {
+  var el = getGridMeasureEl();
+  el.style.fontSize = fontSize || "";
+  el.style.fontWeight = fontWeight || "";
+  el.style.fontFamily = fontFamily || "";
+  el.textContent = text || "";
+  return el.offsetWidth;
+}
+
 function measureGridNameColNeed(table) {
   var maxW = 44;
+  var sampleTh = table.querySelector("tbody th");
+  var cs = sampleTh ? window.getComputedStyle(sampleTh) : null;
   var lines = table.querySelectorAll("tbody th .player-name-line");
-  var i, line, tap, stripe, w;
+  var i, line, tap, stripe, w, padX;
+  padX = cs ? parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) : 12;
   for (i = 0; i < lines.length; i++) {
     line = lines[i];
     tap = line.querySelector(".player-tap");
     stripe = line.querySelector(".stripe-visual-sm, .stripe-visual");
-    w = 10;
-    if (tap) w += tap.scrollWidth;
+    w = padX + 4;
+    if (tap) w += measureInlineTextWidth(tap.textContent, cs && cs.fontSize, cs && cs.fontWeight, cs && cs.fontFamily);
     if (stripe) w += stripe.offsetWidth + 4;
     maxW = Math.max(maxW, w);
   }
@@ -7708,73 +7759,85 @@ function measureGridNameColNeed(table) {
 
 function measureGridHeadColNeed(th) {
   if (!th) return 28;
+  var cs = window.getComputedStyle(th);
   var nameEl = th.querySelector(".grid-col-name");
-  if (nameEl) return Math.max(28, nameEl.scrollWidth + 10);
-  return Math.max(28, th.scrollWidth + 8);
+  var inactive = th.querySelector(".grid-col-inactive");
+  var w = 0;
+  if (nameEl) {
+    w += measureInlineTextWidth(nameEl.textContent, cs.fontSize, cs.fontWeight, cs.fontFamily);
+  } else {
+    w += measureInlineTextWidth(th.textContent, cs.fontSize, cs.fontWeight, cs.fontFamily);
+  }
+  if (inactive) {
+    w += measureInlineTextWidth(inactive.textContent, cs.fontSize, cs.fontWeight, cs.fontFamily) + 2;
+  }
+  w += parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + 2;
+  return Math.ceil(Math.max(28, w));
 }
 
 function fitGridColumns() {
   var wraps = document.querySelectorAll(".grid-wrap, .grid-wrap-split");
-  var embedded = detectEmbedded();
+  var compactEmbedGrid = detectEmbedded() && !isMemberMode;
   for (var wi = 0; wi < wraps.length; wi++) {
     var wrap = wraps[wi];
     var avail = wrap.clientWidth || 0;
-    var tables = wrap.querySelectorAll(".grid-table, .grid-table-head, .grid-table-body");
-    for (var ti = 0; ti < tables.length; ti++) {
-      var table = tables[ti];
-      var headers = table.querySelectorAll("thead th");
-      if (!headers.length) continue;
-      var n = headers.length;
-      var statCols = 3;
-      var dataCols = n - 1 - statCols;
-      if (dataCols < 1) continue;
-      var statW = 34;
-      var minData = 22;
-      var scale = 1;
-      var nameW, dataWidths, total, d, slack;
+    var headTable = wrap.querySelector(".grid-table-head");
+    var bodyTable = wrap.querySelector(".grid-table-body");
+    var fullTable = wrap.querySelector(".grid-table:not(.grid-table-head):not(.grid-table-body)");
+    var headerTable = headTable || fullTable;
+    var nameTable = bodyTable || fullTable;
+    if (!headerTable || !nameTable) continue;
 
-      while (scale >= 0.92) {
-        applyGridNameScale(table, scale);
-        void table.offsetWidth;
-        nameW = measureGridNameColNeed(table);
-        dataWidths = [];
-        for (d = 0; d < dataCols; d++) {
-          dataWidths.push(Math.max(minData, measureGridHeadColNeed(headers[d + 1])));
-        }
-        total = nameW + statW * statCols;
-        for (d = 0; d < dataCols; d++) total += dataWidths[d];
-        if (!embedded || !avail || total <= avail) break;
-        scale = Math.round((scale - 0.02) * 100) / 100;
-      }
+    var headers = headerTable.querySelectorAll("thead th");
+    if (!headers.length) continue;
+    var n = headers.length;
+    var statCols = 3;
+    var dataCols = n - 1 - statCols;
+    if (dataCols < 1) continue;
 
-      if (!embedded) {
-        applyGridNameScale(table, 1);
-        void table.offsetWidth;
-        nameW = measureGridNameColNeed(table);
-        for (d = 0; d < dataCols; d++) {
-          dataWidths[d] = Math.max(36, measureGridHeadColNeed(headers[d + 1]));
-        }
-      } else if (avail && total > avail) {
-        slack = avail - nameW - statW * statCols - minData * dataCols;
-        if (slack < 0) slack = 0;
-        total = 0;
-        for (d = 0; d < dataCols; d++) {
-          dataWidths[d] = minData + Math.floor(slack / dataCols);
-          total += dataWidths[d];
-        }
-      }
+    var minData = compactEmbedGrid ? 32 : 36;
+    var scale = 1;
+    var statW, nameW, dataWidths, total, d, si;
 
-      var widths = [nameW];
-      for (d = 0; d < dataCols; d++) widths.push(dataWidths[d]);
-      widths.push(statW, statW, statW);
-      total = 0;
-      for (d = 0; d < widths.length; d++) total += widths[d];
-      if (embedded && avail && total < avail) widths[0] += avail - total;
-      applyGridColWidths(table, widths);
-      if (embedded && avail) {
-        table.style.width = Math.min(total, avail) + "px";
-        table.style.maxWidth = "100%";
+    while (scale >= 0.92) {
+      applyGridNameScale(nameTable, scale);
+      void wrap.offsetWidth;
+      nameW = measureGridNameColNeed(nameTable);
+      dataWidths = [];
+      for (d = 0; d < dataCols; d++) {
+        dataWidths.push(Math.max(minData, measureGridHeadColNeed(headers[d + 1])));
       }
+      statW = 34;
+      for (si = n - statCols; si < n; si++) {
+        statW = Math.max(statW, measureGridHeadColNeed(headers[si]));
+      }
+      total = nameW + statW * statCols;
+      for (d = 0; d < dataCols; d++) total += dataWidths[d];
+      if (!compactEmbedGrid || !avail || total <= avail) break;
+      scale = Math.round((scale - 0.02) * 100) / 100;
+    }
+
+    if (!compactEmbedGrid) {
+      applyGridNameScale(nameTable, 1);
+      void wrap.offsetWidth;
+    }
+    nameW = measureGridNameColNeed(nameTable);
+    dataWidths = [];
+    for (d = 0; d < dataCols; d++) {
+      dataWidths.push(Math.max(minData, measureGridHeadColNeed(headers[d + 1])));
+    }
+    statW = 34;
+    for (si = n - statCols; si < n; si++) {
+      statW = Math.max(statW, measureGridHeadColNeed(headers[si]));
+    }
+
+    var widths = [nameW];
+    for (d = 0; d < dataCols; d++) widths.push(dataWidths[d]);
+    widths.push(statW, statW, statW);
+
+    var applyTables = wrap.querySelectorAll(".grid-table, .grid-table-head, .grid-table-body");
+    for (var ti = 0; ti < applyTables.length; ti++) {
+      applyGridColWidths(applyTables[ti], widths);
     }
   }
 }
@@ -7794,13 +7857,6 @@ function initLegacyGridScroll() {
       var headScroll = wrap.querySelector(".grid-split-head-scroll");
       if (!headTable || !bodyTable || !bodyScroll || !headScroll) return;
 
-      function syncWidths() {
-        var widths = getGridColumnWidthsSplit(headTable, bodyTable);
-        if (!widths.length) return;
-        applyGridColWidths(headTable, widths);
-        applyGridColWidths(bodyTable, widths);
-      }
-
       function onBodyScroll() {
         headScroll.scrollLeft = bodyScroll.scrollLeft;
       }
@@ -7809,9 +7865,7 @@ function initLegacyGridScroll() {
         wrap.setAttribute("data-split-ready", "1");
         bodyScroll.addEventListener("scroll", onBodyScroll, false);
       }
-      syncWidths();
-      setTimeout(syncWidths, 30);
-      setTimeout(syncWidths, 250);
+      onBodyScroll();
     })(wraps[wi]);
   }
 }
@@ -8105,7 +8159,7 @@ try {
   var urlView = parseUrlViewParam();
   if (urlView === "feedback" && !isMemberMode) currentView = "feedback";
   render();
-  window.addEventListener("resize", function() { initLegacyGridScroll(); fitGridColumns(); }, false);
+  window.addEventListener("resize", function() { fitGridColumns(); initLegacyGridScroll(); }, false);
   if (isMemberMode) {
     setTimeout(function() { initMemberCloud(); }, 50);
   } else {
