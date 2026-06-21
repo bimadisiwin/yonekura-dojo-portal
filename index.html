@@ -74,6 +74,9 @@
   --fluid-line: 1.55;
   --fluid-line-tight: 1.35;
   --fluid-line-loose: 1.7;
+  /* 星取表：名前・列見出し（--grid-*-scale は fitGridColumns が調整） */
+  --grid-name-font: calc(13px + 0.24vw);
+  --grid-head-font: calc(11px + 0.18vw);
 }
 body.member-mode {
   --bg: #f0ede8;
@@ -471,7 +474,19 @@ body:not(.member-mode):not(.embedded) main {
   -webkit-appearance: none; appearance: none;
 }
 .player-tap:active { opacity: .7; }
-.grid-table tbody th .player-tap { display: block; width: 100%; white-space: nowrap; word-break: keep-all; }
+.grid-table tbody th .player-tap {
+  display: inline-block; max-width: 100%;
+  white-space: nowrap; word-break: keep-all; overflow-wrap: normal;
+  padding: 0; vertical-align: middle;
+}
+.grid-col-name {
+  display: inline-block;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  line-height: var(--fluid-line-tight);
+  max-width: 100%;
+}
 .player-history-list { display: flex; flex-direction: column; gap: var(--fluid-space-sm); max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .player-history-item {
   display: grid; grid-template-columns: 1fr auto auto; gap: var(--fluid-space-sm); align-items: center;
@@ -702,7 +717,8 @@ body.member-mode.senior-member .my-progress-goal-body {
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   padding: 0; text-align: center;
-  min-width: calc(32px + 0.5vw); height: calc(32px + 0.5vw); vertical-align: middle;
+  min-width: calc(32px + 0.5vw); min-height: calc(32px + 0.5vw); height: auto;
+  vertical-align: middle;
 }
 .grid-table thead tr:first-child th { border-top: 1px solid var(--line); }
 .grid-table tr > th:first-child,
@@ -728,12 +744,13 @@ body.member-mode.senior-member .my-progress-goal-body {
 .grid-table thead th {
   background: var(--ink); color: #fff; font-weight: 600;
   position: -webkit-sticky; position: sticky; top: 0; z-index: 2;
-  font-size: calc((9px + 0.12vw) * var(--grid-head-scale, 1));
+  font-size: calc(var(--grid-head-font) * var(--grid-head-scale, 1));
   padding: var(--fluid-space-xs) var(--fluid-space-2xs); writing-mode: horizontal-tb; height: auto;
-  overflow: visible; white-space: nowrap; word-break: keep-all; line-height: var(--fluid-line-tight);
+  overflow: visible; white-space: nowrap; word-break: keep-all; overflow-wrap: normal;
+  line-height: var(--fluid-line-tight);
   vertical-align: bottom; pointer-events: none;
 }
-.grid-table thead th.grid-col-head { font-size: calc((9px + 0.12vw) * var(--grid-head-scale, 1)); }
+.grid-table thead th.grid-col-head { font-size: calc(var(--grid-head-font) * var(--grid-head-scale, 1)); }
 .grid-table thead th:first-child {
   left: 0; z-index: 4;
   position: -webkit-sticky; position: sticky;
@@ -742,8 +759,10 @@ body.member-mode.senior-member .my-progress-goal-body {
   background: var(--empty); font-weight: 700; text-align: left;
   padding: var(--fluid-space-xs) var(--fluid-space-sm);
   position: -webkit-sticky; position: sticky; left: 0; z-index: 3;
-  font-size: calc((11px + 0.18vw) * var(--grid-name-scale, 1));
-  min-width: calc(64px + 1vw); overflow: visible;
+  font-size: calc(var(--grid-name-font) * var(--grid-name-scale, 1));
+  line-height: var(--fluid-line-tight);
+  white-space: nowrap; word-break: keep-all; overflow-wrap: normal;
+  min-width: calc(72px + 1.2vw); overflow: visible;
 }
 .grid-table tbody th .player-name-line {
   display: flex; align-items: center; flex-wrap: nowrap;
@@ -1218,6 +1237,10 @@ body.embedded .grid-wrap-split {
   overflow-x: auto;
   overflow-y: visible;
 }
+body.embedded {
+  --grid-name-font: calc(14px + 0.34vw);
+  --grid-head-font: calc(12px + 0.22vw);
+}
 body.embedded .grid-table {
   table-layout: fixed;
   width: 100% !important;
@@ -1230,19 +1253,18 @@ body.embedded .grid-table td {
   min-height: calc(26px + 0.35vw);
 }
 body.embedded .grid-table tbody th {
-  font-size: calc((10px + 0.14vw) * var(--grid-name-scale, 1));
-  padding: var(--fluid-space-2xs) var(--fluid-space-xs);
+  padding: var(--fluid-space-xs) var(--fluid-space-sm);
 }
 body.embedded .grid-table tbody th .player-name-line {
   flex-wrap: nowrap;
 }
 body.embedded .grid-table thead th,
 body.embedded .grid-table thead th.grid-col-head {
-  font-size: calc((8px + 0.06vw) * var(--grid-head-scale, 1));
-  padding: var(--fluid-space-2xs) 2px;
-  line-height: 1.15;
+  padding: var(--fluid-space-2xs) 3px;
+  line-height: 1.2;
   white-space: nowrap;
   word-break: keep-all;
+  overflow-wrap: normal;
   overflow: visible;
 }
 body.embedded .grid-table .total-col,
@@ -1310,6 +1332,20 @@ body.embedded .cell-btn:not(.empty) {
   padding: 10px 12px; background: var(--bg); border-radius: 10px; font-size: .78rem;
 }
 .archive-item-meta { font-size: .66rem; color: var(--muted); margin-top: 2px; }
+@media (max-width: 768px) {
+  :root {
+    --grid-name-font: calc(14px + 0.38vw);
+    --grid-head-font: calc(12px + 0.26vw);
+  }
+}
+
+@media (min-width: 1024px) and (hover: hover) {
+  :root {
+    --grid-name-font: calc(12px + 0.14vw);
+    --grid-head-font: calc(10px + 0.12vw);
+  }
+}
+
 @media (pointer: coarse) {
   .btn { min-height: 44px; }
   .view-tab { min-height: 44px; padding: 12px 8px; }
@@ -1374,8 +1410,8 @@ body.embedded .cell-btn:not(.empty) {
   .grid-table thead th:not(:first-child):not(.total-col):not(.rank-col):not(.remain-col) {
     position: static; background: var(--ink) !important; color: #fff !important;
     writing-mode: horizontal-tb; height: auto; max-width: none; vertical-align: bottom;
-    font-size: 7pt; padding: 3px 1px; white-space: normal; word-break: keep-all;
-    line-height: 1.1; overflow: visible;
+    font-size: 8pt; padding: 3px 2px; white-space: nowrap; word-break: keep-all;
+    overflow-wrap: normal; line-height: 1.15; overflow: visible;
   }
   .grid-table thead th:first-child {
     writing-mode: horizontal-tb; height: auto; max-width: none;
@@ -1387,8 +1423,9 @@ body.embedded .cell-btn:not(.empty) {
   }
   .grid-table tbody th {
     position: static; background: var(--empty) !important; color: #000 !important;
-    writing-mode: horizontal-tb; font-size: 8pt; text-align: left;
-    padding: 2px 4px; white-space: normal; word-break: break-all; line-height: 1.15;
+    writing-mode: horizontal-tb; font-size: 9pt; text-align: left;
+    padding: 2px 4px; white-space: nowrap; word-break: keep-all;
+    overflow-wrap: normal; line-height: 1.2;
   }
   .grid-table .remain-col, .grid-table .total-col, .grid-table .rank-col { position: static; }
   .grid-table .diag { background: var(--empty) !important; color: #ccc !important; }
@@ -6560,7 +6597,7 @@ function renderGrid(league, sorted, opts) {
   let hdr = `<tr><th></th>`;
   players.forEach(function(p) {
     const suffix = p.active === false ? `<span class="grid-col-inactive">未</span>` : "";
-    hdr += `<th class="grid-col-head">${esc(p.name)}${suffix}</th>`;
+    hdr += `<th class="grid-col-head"><span class="grid-col-name">${esc(p.name)}</span>${suffix}</th>`;
   });
   hdr += `<th class="remain-col">残</th><th class="total-col">勝点</th><th class="rank-col">順</th></tr>`;
   let body = "";
@@ -7648,7 +7685,7 @@ function applyGridColWidths(table, widths) {
 function applyGridNameScale(table, scale) {
   var wrap = table.closest(".grid-wrap, .grid-wrap-split");
   if (!wrap) return;
-  var s = String(Math.max(0.68, Math.min(1, scale)));
+  var s = String(Math.max(0.92, Math.min(1, scale)));
   wrap.style.setProperty("--grid-name-scale", s);
   wrap.style.setProperty("--grid-head-scale", s);
 }
@@ -7670,8 +7707,10 @@ function measureGridNameColNeed(table) {
 }
 
 function measureGridHeadColNeed(th) {
-  if (!th) return 24;
-  return Math.max(24, th.scrollWidth + 6);
+  if (!th) return 28;
+  var nameEl = th.querySelector(".grid-col-name");
+  if (nameEl) return Math.max(28, nameEl.scrollWidth + 10);
+  return Math.max(28, th.scrollWidth + 8);
 }
 
 function fitGridColumns() {
@@ -7694,7 +7733,7 @@ function fitGridColumns() {
       var scale = 1;
       var nameW, dataWidths, total, d, slack;
 
-      while (scale >= 0.68) {
+      while (scale >= 0.92) {
         applyGridNameScale(table, scale);
         void table.offsetWidth;
         nameW = measureGridNameColNeed(table);
@@ -7705,7 +7744,7 @@ function fitGridColumns() {
         total = nameW + statW * statCols;
         for (d = 0; d < dataCols; d++) total += dataWidths[d];
         if (!embedded || !avail || total <= avail) break;
-        scale = Math.round((scale - 0.04) * 100) / 100;
+        scale = Math.round((scale - 0.02) * 100) / 100;
       }
 
       if (!embedded) {
