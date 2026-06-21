@@ -4900,10 +4900,6 @@ function renderStripesPage() {
       "出席: " + (m.attendanceCount || 0) + "回" +
       (leagues.length ? " ／ 所属: " + esc(leagues.join("・")) : "") +
       (warnings.length ? "<br>⚠ " + esc(warnings.join(" ／ ")) : "") +
-      "</div>" +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">' +
-      '<select data-roster-field="stripes" data-roster-id="' + esc(m.id) + '" style="font-size:.72rem;padding:4px;border-radius:8px;border:1px solid var(--line)" title="本数（直接変更）">' +
-      renderStripeSelectOptions(m.stripes) + "</select>" +
       "</div></div>" +
       '<div class="stripe-roster-actions">' +
       '<button type="button" class="btn btn-ghost btn-sm" data-action="draftMemberComment" data-roster-id="' + esc(m.id) + '">📝 コメント下書き</button>' +
@@ -4937,15 +4933,6 @@ function getStripes(p) {
   }
   var n = parseInt(p.stripes, 10);
   return isNaN(n) || n < 0 ? 0 : Math.min(n, STRIPE_MAX);
-}
-
-function renderStripeSelectOptions(selected) {
-  var html = "";
-  var n;
-  for (n = 0; n <= STRIPE_MAX; n++) {
-    html += '<option value="' + n + '"' + (n === selected ? " selected" : "") + ">" + n + "本</option>";
-  }
-  return html;
 }
 
 function renderStripeVisual(p, compact) {
