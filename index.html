@@ -2928,46 +2928,113 @@ function stripeCheckItems(labels) {
   return labels.map(function(label) { return { label: label }; });
 }
 
+var JLEAGUE_GEAR_NOTE = "※ Jリーグ戦に出るときは、道着・帯・爪・髪の整えが必須です。";
+
 var STRIPE_LEVEL_DEFS = [
   { level: 1, label: "ベーシック", theme: "あいさつと安全のきほん", minMonths: 0, minAttendance: 8, prevStripes: 0, leagueHint: "J3参戦可",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["道着・帯・つめ・髪の安全確認"]) },
-      { key: "shin", label: "心", required: false, items: stripeCheckItems(["道場に入る時と出る時にあいさつができる", "「お願いします」「ありがとうございました」が言える", "先生の話を見て聞ける", "友だちに危ないことをしない"]) },
-      { key: "gi", label: "技", required: false, items: stripeCheckItems(["立礼・座礼ができる", "後ろ受け身で頭を打たない", "横受け身の手のつき方ができる", "前受け身・前回り受け身にチャレンジできる", "寝技のルールがわかる"]) },
-      { key: "tai", label: "体", required: false, items: stripeCheckItems(["準備運動を最後までやりきる", "正座や基本姿勢を保てる", "回転運動を安全にできる"]) },
-      { key: "safety", label: "安全必須", required: true, items: stripeCheckItems(["後頭部を打たない受け身ができる", "危ない時に止まれる/「参った」が言える", "ふざけて押す・引くをしない"]) }
+      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems([]) },
+      { key: "shin", label: "心", required: false, items: stripeCheckItems([
+        "道場に入る・出るとき、稽古相手・先生にあいさつできる",
+        "「お願いします」「ありがとうございました」をはっきり言える",
+        "先生の説明中、おしゃべりせず目を見て聞ける",
+        "相手の目線に合わせた礼ができる"
+      ]) },
+      { key: "gi", label: "技", required: false, items: stripeCheckItems([
+        "立礼・座礼が正しくできる",
+        "後ろ受け身で後頭部を畳に打たない",
+        "横受け身の手のつき方ができる",
+        "寝技の基本ルール（押さえ・参った）がわかる"
+      ]) },
+      { key: "tai", label: "体", required: false, items: stripeCheckItems([
+        "準備運動を最後までやりきる",
+        "正座で姿勢を保てる",
+        "回転運動を安全にできる"
+      ]) }
     ] },
-  { level: 2, label: "アドバンス", theme: "受け身の完成と安全行動", minMonths: 0, minAttendance: 24, prevStripes: 1, leagueHint: "J2参戦可",
+  { level: 2, label: "アドバンス", theme: "受け身の完成", minMonths: 0, minAttendance: 24, prevStripes: 1, leagueHint: "J2参戦可",
     groups: [
       { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["1本目を取得済み"]) },
-      { key: "shin", label: "心", required: false, items: stripeCheckItems(["自分の道着・帯を整えようとする", "練習に集中できる", "指示を聞いて落ち着いて行動できる"]) },
-      { key: "gi", label: "技", required: false, items: stripeCheckItems(["後ろ受け身が正確にできる", "前受け身が正確にできる", "横受け身が正確にできる", "前回り受け身が左右でできる", "打ち込みで姿勢が大きく崩れない"]) },
-      { key: "tai", label: "体", required: false, items: stripeCheckItems(["反復練習を最後まで継続できる", "体幹が弱く、すぐ崩れることが少ない", "息が切れても安全に動きを続けられる"]) },
-      { key: "safety", label: "安全必須", required: true, items: stripeCheckItems(["4つの受け身で頭・首を守れる", "相手が「参った」したらすぐ止まれる", "体格差がある相手に無理をしない"]) }
+      { key: "shin", label: "心", required: false, items: stripeCheckItems([
+        "自分の道着・帯を、手伝ってもらいながら整えようとする",
+        "ふざけて突き飛ばす・危ない遊びをしない",
+        "指示を聞いて落ち着いて行動できる",
+        "相手が「参った」と言ったらすぐ止まれる"
+      ]) },
+      { key: "gi", label: "技", required: false, items: stripeCheckItems([
+        "後ろ・前・横・前回り受身が、左右とも正確にできる",
+        "受身のとき頭・首を守れる",
+        "打ち込みで大きくつっこまない・姿勢が崩れにくい",
+        "相手の技を受けて、安全に立ち上がれる"
+      ]) },
+      { key: "tai", label: "体", required: false, items: stripeCheckItems([
+        "反復練習を最後まで続けられる",
+        "打ち込みでフラつかず動ける",
+        "息切れしても無理な動きをせず続けられる"
+      ]) }
     ] },
-  { level: 3, label: "選手コース", theme: "得意技と実戦のきほん", minMonths: 0, minAttendance: 48, prevStripes: 2, leagueHint: "J1参戦可（別条件あり）",
+  { level: 3, label: "コンペティション", theme: "得意技と実戦のきほん", minMonths: 0, minAttendance: 48, prevStripes: 2, leagueHint: "J1参戦可（別条件あり）",
     groups: [
       { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["2本目を取得済み"]) },
-      { key: "shin", label: "心", required: false, items: stripeCheckItems(["自分から準備・片付けができる", "勝っても負けても礼ができる", "練習相手を思いやった言動ができる", "苦しくても投げやりにならない"]) },
-      { key: "gi", label: "技", required: false, items: stripeCheckItems(["得意技を1つ以上言える", "試合のルールがわかる", "初歩の投げ込みを安全にできる", "寝技（抑え込み・逃れ）の基本ができる", "乱取りで引き手を離して相手を落とさない"]) },
-      { key: "tai", label: "体", required: false, items: stripeCheckItems(["3分に近い運動を継続できる", "投げる時に姿勢が崩れにくい", "寝技で首を守る動きができる"]) },
-      { key: "safety", label: "安全必須", required: true, items: stripeCheckItems(["無理な体勢で耐えず「参った」が言える", "相手の技能差に合わせて強さを調整できる", "危険な投げ方（乱暴・急激）をしない"]) }
+      { key: "shin", label: "心", required: false, items: stripeCheckItems([
+        "準備・片付けを自分からできる",
+        "勝っても負けても、相手と先生に礼ができる",
+        "練習相手を思いやる言動ができる",
+        "苦しいときも投げやりにならず取り組める"
+      ]) },
+      { key: "gi", label: "技", required: false, items: stripeCheckItems([
+        "得意技を1つ以上言え、形が再現できる",
+        "試合・乱取りの基本ルール（開始・停止・判定）がわかる",
+        "初歩の投げ込み・寝技（抑え・逃れ）が安全にできる",
+        "乱取りで相手を無理に倒そうとしない"
+      ]) },
+      { key: "tai", label: "体", required: false, items: stripeCheckItems([
+        "3分に近い運動を続けられる",
+        "投げるとき姿勢が崩れにくい",
+        "寝技で首を守りながら逃れようとできる"
+      ]) }
     ] },
-  { level: 4, label: "対外試合主力", theme: "試合マナーと実戦力", minMonths: 0, minAttendance: 72, prevStripes: 3, leagueHint: "J1主力候補",
+  { level: 4, label: "エース", theme: "試合マナーと実戦力", minMonths: 0, minAttendance: 72, prevStripes: 3, leagueHint: "J1主力候補",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["3本目を取得済み"]) },
-      { key: "shin", label: "心", required: false, items: stripeCheckItems(["試合前後の礼が正しくできる", "勝敗に関係なく相手を尊重できる", "指導者・審判の指示を守れる", "道場代表として落ち着いた態度ができる"]) },
-      { key: "gi", label: "技", required: false, items: stripeCheckItems(["動く相手に自分から技を掛けにいける", "連絡技・変化技を1つ以上使える", "相手に崩されても立て直せる", "立技から寝技へ安全に移行できる", "乱取りで相手保護を優先できる"]) },
-      { key: "tai", label: "体", required: false, items: stripeCheckItems(["3分間動き続ける体力がある", "組み手で姿勢を維持できる", "疲れても雑な動きになりにくい"]) },
-      { key: "safety", label: "安全必須", required: true, items: stripeCheckItems(["無理な反り・ひねりの動きをしない", "体調不良を自分で申告できる", "相手の「参った」で即停止できる"]) }
+      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["3本目（コンペティション）を取得済み"]) },
+      { key: "shin", label: "心", required: false, items: stripeCheckItems([
+        "試合前後の礼が正しくできる",
+        "勝敗に関わらず相手を尊重できる",
+        "指導者・審判の指示を守れる",
+        "道場代表として落ち着いた態度ができる"
+      ]) },
+      { key: "gi", label: "技", required: false, items: stripeCheckItems([
+        "動く相手に自分から技を掛けにいける",
+        "連絡技・変化技を1つ以上使える",
+        "崩されても立て直し、立技から寝技へ安全に移行できる",
+        "乱取り・試合で相手保護を優先できる"
+      ]) },
+      { key: "tai", label: "体", required: false, items: stripeCheckItems([
+        "3分間動き続けられる",
+        "組み手で姿勢を維持できる",
+        "疲れても雑な動きになりにくい"
+      ]) }
     ] },
   { level: 5, label: "リーダー", theme: "リーダーとしてのふるまい", minMonths: 0, minAttendance: 96, prevStripes: 4, leagueHint: "道場代表",
     groups: [
-      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["4本目を取得済み"]) },
-      { key: "shin", label: "心", required: false, items: stripeCheckItems(["下級生に優しく声かけ・手助けができる", "保護者・指導者・仲間への感謝を言葉にできる", "道場の約束を自分から守り、周りにも伝えられる", "困っている仲間を放っておかない"]) },
-      { key: "gi", label: "技", required: false, items: stripeCheckItems(["得意技で試合を組み立てる意識がある", "立技と寝技の切り替えができる", "乱取りで相手を傷つけない技の使い方ができる", "実戦で一本・技ありにつながる内容がある", "技の見本を下級生に見せられる"]) },
-      { key: "tai", label: "体", required: false, items: stripeCheckItems(["組み手で姿勢を保てる", "試合や連戦に必要な持久力がある", "疲労時も安全動作を維持できる"]) },
-      { key: "safety", label: "安全必須", required: true, items: stripeCheckItems(["勝つためでも危険な技を選ばない", "危険を感じたら自分で止められる", "周囲の安全を見て行動できる"]) }
+      { key: "prereq", label: "受験資格", required: true, items: stripeCheckItems(["4本目（エース）を取得済み"]) },
+      { key: "shin", label: "心", required: false, items: stripeCheckItems([
+        "下級生に声かけ・手助けができる",
+        "保護者・指導者・仲間に感謝を言葉にできる",
+        "道場の約束を自分から守り、周りにも伝えられる",
+        "困っている仲間を放っておかない"
+      ]) },
+      { key: "gi", label: "技", required: false, items: stripeCheckItems([
+        "得意技で試合を組み立てる意識がある",
+        "立技と寝技を状況に応じて切り替えられる",
+        "実戦で一本・技ありにつながる技がある",
+        "下級生に技の見本を安全に示せる"
+      ]) },
+      { key: "tai", label: "体", required: false, items: stripeCheckItems([
+        "組み手で有利な形を作れる",
+        "試合・連戦に必要な持久力がある",
+        "疲労時も安全な動きを保てる"
+      ]) }
     ] }
 ];
 
@@ -2995,7 +3062,7 @@ function getStripeCheckGroupsForMember(def, member, targetLevel) {
   });
 }
 
-var STRIPE_ATTENDANCE_NOTE = "※ 柔道クラス出席はスポスル取込の通算です（月末に更新）。前回合格時の出席を起点に、次のストライプまでの目安を表示します。審査の合否は指導員が心技体を総合して判定します。";
+var STRIPE_ATTENDANCE_NOTE = "※ 柔道クラス出席はスポスル取込の通算です（月末に更新）。前回合格から、次のストライプまでの固定目安回数で表示します（早く合格しても次の目標回数は同じです）。審査の合否は指導員が心技体を総合して判定します。";
 
 function getStripeLevelDef(level) {
   var i;
@@ -3306,6 +3373,13 @@ function getLatestPassReviewForLevel(member, level) {
   return reviews[0] || null;
 }
 
+function getStripeStandardSpan(targetLevel) {
+  var def = getStripeLevelDef(targetLevel);
+  if (!def) return 0;
+  var prevDef = getStripeLevelDef(targetLevel - 1);
+  return def.minAttendance - (prevDef ? prevDef.minAttendance : 0);
+}
+
 function getStripeAttendanceBaseline(member) {
   var stripes = member.stripes || 0;
   if (stripes <= 0) return 0;
@@ -3324,7 +3398,7 @@ function getStripeAttendanceProgress(member, targetLevel) {
   var current = member.attendanceCount || 0;
   var cumulativeRequired = def.minAttendance;
   var baseline = getStripeAttendanceBaseline(member);
-  var span = Math.max(1, cumulativeRequired - baseline);
+  var span = Math.max(1, getStripeStandardSpan(targetLevel));
   var progress = Math.max(0, current - baseline);
   return {
     baseline: baseline,
@@ -3332,8 +3406,13 @@ function getStripeAttendanceProgress(member, targetLevel) {
     progress: progress,
     span: span,
     cumulativeRequired: cumulativeRequired,
-    ok: current >= cumulativeRequired
+    ok: progress >= span
   };
+}
+
+function buildStripeAttendanceInstructorNote(attProgress) {
+  if (!attProgress) return "";
+  return "累計目安 " + attProgress.cumulativeRequired + "回（参考・現在 " + attProgress.current + "回）";
 }
 
 function getLatestStripeReviewForLevel(member, targetLevel) {
@@ -3491,21 +3570,24 @@ function renderMyProgressReviewHistory(member) {
 
 function renderMyProgressLeagueStats(rosterId) {
   var entries = findPlayersByRosterId(rosterId);
+  var body;
   if (!entries.length) {
-    return '<p style="font-size:.78rem;color:var(--muted);padding:4px 0">現在リーグに未所属です（指導員が追加します）</p>';
+    body = '<p style="font-size:.78rem;color:var(--muted);padding:4px 0">現在リーグに未所属です（指導員が追加します）</p>';
+  } else {
+    body = entries.map(function(entry) {
+      var sorted = computeStats(entry.league).sorted;
+      var stat = null;
+      for (var i = 0; i < sorted.length; i++) {
+        if (sorted[i].id === entry.player.id) { stat = sorted[i]; break; }
+      }
+      if (!stat) return "";
+      var unplayed = getUnplayedCount(stat, Math.max(0, sorted.length - 1));
+      return '<div class="my-progress-league-row"><div class="my-progress-league-main"><strong>' + esc(entry.league.name) + "</strong>" +
+        '<span class="my-progress-league-sub">' + stat.rank + "位 ／ " + stat.points + "勝点 ／ 残" + unplayed + "試合</span></div>" +
+        '<div class="my-progress-league-record">' + stat.wins + "勝 " + stat.draws + "分 " + stat.losses + "敗</div></div>";
+    }).join("");
   }
-  return entries.map(function(entry) {
-    var sorted = computeStats(entry.league).sorted;
-    var stat = null;
-    for (var i = 0; i < sorted.length; i++) {
-      if (sorted[i].id === entry.player.id) { stat = sorted[i]; break; }
-    }
-    if (!stat) return "";
-    var unplayed = getUnplayedCount(stat, Math.max(0, sorted.length - 1));
-    return '<div class="my-progress-league-row"><div class="my-progress-league-main"><strong>' + esc(entry.league.name) + "</strong>" +
-      '<span class="my-progress-league-sub">' + stat.rank + "位 ／ " + stat.points + "勝点 ／ 残" + unplayed + "試合</span></div>" +
-      '<div class="my-progress-league-record">' + stat.wins + "勝 " + stat.draws + "分 " + stat.losses + "敗</div></div>";
-  }).join("");
+  return body + '<p class="my-progress-note" style="margin-top:10px">' + JLEAGUE_GEAR_NOTE + "</p>";
 }
 
 function renderMemberLinkRequiredPage() {
@@ -4612,9 +4694,12 @@ function renderStripeReviewModal(member, targetLevel) {
   var latestReview = loadStripeReviewChecksFromLatest(member, targetLevel);
   var memoPrefill = latestReview && latestReview.memo ? String(latestReview.memo).trim() : "";
   var elig = checkStripeEligibility(member, targetLevel);
+  var attInstructorNote = elig.attendance ? buildStripeAttendanceInstructorNote(elig.attendance) : "";
   var eligHtml = elig.ok
-    ? '<div class="stripe-elig-box"><strong>✓ 受験資格（参考）：</strong>目安を満たしています</div>'
-    : '<div class="stripe-elig-box warn"><strong>受験資格（参考）：</strong>' + esc(elig.reasons.join(" ／ ")) + "</div>";
+    ? '<div class="stripe-elig-box"><strong>✓ 受験資格（参考）：</strong>目安を満たしています' +
+      (attInstructorNote ? '<br><span style="font-size:.62rem;color:var(--muted)">' + esc(attInstructorNote) + "</span>" : "") + "</div>"
+    : '<div class="stripe-elig-box warn"><strong>受験資格（参考）：</strong>' + esc(elig.reasons.join(" ／ ")) +
+      (attInstructorNote ? '<br><span style="font-size:.62rem;color:var(--muted)">' + esc(attInstructorNote) + "</span>" : "") + "</div>";
   var groupsHtml = getStripeCheckGroupsForMember(def, member, targetLevel).map(function(group) {
     return '<div class="stripe-review-section"><h4>' + esc(group.label) +
       (group.required ? "（必須・すべて○）" : "") + '</h4><div class="marubatsu-list">' +
@@ -4634,7 +4719,7 @@ function renderStripeReviewModal(member, targetLevel) {
     '<p style="font-size:.66rem;color:var(--muted);margin:6px 0;line-height:1.45">' + esc(def.theme) + " ／ " + esc(def.leagueHint) + "</p>" +
     renderInstructorMessagePreview(member) +
     eligHtml +
-    '<p style="font-size:.62rem;color:var(--muted);margin:0 0 8px;line-height:1.45">柔道クラス出席はスポスル取込の通算です（月末に更新）。受験資格の出席目安は、前回合格時の出席を起点に算出しています。</p>' +
+    '<p style="font-size:.62rem;color:var(--muted);margin:0 0 8px;line-height:1.45">柔道クラス出席はスポスル取込の通算です（月末に更新）。受験資格の出席目安は、前回合格からの固定回数です（早く合格しても次の目標回数は同じ）。累計目安（8／24／48…回）は指導員向けの参考です。' + JLEAGUE_GEAR_NOTE + '</p>' +
     (latestReview ? '<p style="font-size:.66rem;color:var(--accent2);margin:8px 0 6px">前回の○×を読み込みました（' + esc(formatConfirmDate(latestReview.at)) + "）</p>" : "") +
     '<p style="font-size:.66rem;color:var(--muted);margin:0 0 8px">各項目を ○ / × で判定してください。授与式以外でも随時記録できます（保留は履歴に残ります）</p>' +
     groupsHtml +
