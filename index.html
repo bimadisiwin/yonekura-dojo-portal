@@ -1111,7 +1111,35 @@ body.member-mode.senior-member .my-progress-goal-body {
   box-shadow: 0 12px 40px rgba(26,39,68,.18);
 }
 .modal-overlay.open .modal { transform: translateY(0); opacity: 1; }
-#memberLoginModal { z-index: 400; }
+#memberLoginModal { z-index: 400; align-items: flex-start; justify-content: center; padding-top: calc(12px + var(--safe-t)); }
+#memberLoginModal .modal {
+  border-radius: 16px;
+  max-width: 400px;
+  max-height: none;
+  transform: none;
+  opacity: 1;
+}
+#memberLoginModal.open .modal { transform: none; opacity: 1; }
+#memberLoginInput {
+  font-size: 16px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+html.member-login-open,
+body.member-login-open {
+  overflow: hidden;
+}
+body.embedded.member-login-open {
+  position: fixed;
+  width: 100%;
+  left: 0;
+  top: 0;
+}
 #playerModal {
   z-index: 500;
   align-items: flex-start;
@@ -1455,16 +1483,18 @@ body.embedded .cell-btn:not(.empty) {
     <p style="font-size:.78rem;color:var(--muted);line-height:1.55;margin:0 0 12px">
       道場での<strong>名前</strong>と<strong>誕生日（月日4桁）</strong>を続けて入力してください。
     </p>
+    <form id="memberLoginForm" autocomplete="off" novalidate>
     <div class="form-row">
       <label for="memberLoginInput">合言葉</label>
-      <input id="memberLoginInput" type="text" inputmode="text" autocomplete="off" placeholder="例：ゆうすけ0610" style="font-size:16px">
+      <input id="memberLoginInput" name="login" type="text" inputmode="text" enterkeyhint="go" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="例：ゆうすけ0610">
     </div>
     <p id="memberLoginError" style="display:none;font-size:.72rem;color:#b83232;margin:8px 0 0"></p>
     <p id="memberLoginModalNote" style="font-size:.64rem;color:var(--muted);line-height:1.45;margin:10px 0 0">※ 小学生は🎗マイ進捗（ストライプ・出席）、中学生以上は🎯マイ目標（今シーズンの目標・指導員メッセージ）の確認に使います。順位表・星取表は入力なしで閲覧できます。</p>
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">
-      <button type="button" class="btn btn-primary btn-block" data-action="submitMemberLogin">確認する</button>
+      <button type="submit" class="btn btn-primary btn-block" data-action="submitMemberLogin">確認する</button>
       <button type="button" class="btn btn-ghost btn-block" data-action="closeMemberLogin">あとで（順位表を見る）</button>
     </div>
+    </form>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -1773,13 +1803,19 @@ function formatBirthMdDisplay(birthMd) {
 }
 
 function parseMemberLoginInput(raw) {
-  var s = String(raw || "").trim().replace(/\s+/g, "");
+  var s = normalizeMemberLoginRaw(raw);
   if (!s) return null;
   var m = s.match(/^(.+?)(\d{4})$/);
   if (!m) return null;
   var birthMd = normalizeBirthMd(m[2]);
   if (!birthMd) return null;
   return { name: m[1], birthMd: birthMd };
+}
+
+function normalizeMemberLoginRaw(raw) {
+  return String(raw || "").trim().replace(/\s+/g, "").replace(/[０-９]/g, function(c) {
+    return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
+  });
 }
 
 function findRosterByMemberLogin(name, birthMd) {
@@ -1860,6 +1896,37 @@ function updateMemberHint() {
   }
 }
 
+function setMemberLoginModalOpen(isOpen) {
+  var root = document.documentElement;
+  var body = document.body;
+  if (!root || !body) return;
+  _embedResizePaused = !!isOpen;
+  if (isOpen) {
+    root.className += " member-login-open";
+    body.className += " member-login-open";
+  } else {
+    root.className = root.className.replace(/\s*member-login-open/g, "");
+    body.className = body.className.replace(/\s*member-login-open/g, "");
+    scheduleEmbedResize();
+  }
+}
+
+function focusMemberLoginInput() {
+  var input = document.getElementById("memberLoginInput");
+  if (!input) return;
+  setTimeout(function() {
+    try {
+      input.focus({ preventScroll: true });
+    } catch (e) {
+      input.focus();
+    }
+    try {
+      var len = input.value.length;
+      input.setSelectionRange(len, len);
+    } catch (selErr) {}
+  }, 280);
+}
+
 function openMemberLoginModal(message) {
   var modal = document.getElementById("memberLoginModal");
   var err = document.getElementById("memberLoginError");
@@ -1869,9 +1936,10 @@ function openMemberLoginModal(message) {
     err.style.display = message ? "block" : "none";
     err.textContent = message || "";
   }
-  if (input && message) input.focus();
   modal.classList.add("open");
   modal.style.display = "flex";
+  setMemberLoginModalOpen(true);
+  focusMemberLoginInput();
 }
 
 function closeMemberLoginModal() {
@@ -1879,8 +1947,13 @@ function closeMemberLoginModal() {
   if (!modal) return;
   modal.classList.remove("open");
   modal.style.display = "none";
+  setMemberLoginModalOpen(false);
   var err = document.getElementById("memberLoginError");
   if (err) err.style.display = "none";
+  var input = document.getElementById("memberLoginInput");
+  if (input) {
+    try { input.blur(); } catch (blurErr) {}
+  }
 }
 
 function submitMemberLogin() {
@@ -1944,8 +2017,10 @@ function detectEmbedded() {
 }
 
 var _embedResizeTimer = null;
+var _embedResizePaused = false;
+
 function notifyEmbedResize() {
-  if (!detectEmbedded()) return;
+  if (!detectEmbedded() || _embedResizePaused) return;
   try {
     var doc = document.documentElement;
     var body = document.body;
@@ -7748,7 +7823,20 @@ function findTapTarget(start) {
   return null;
 }
 
+function isNativeTextInput(el) {
+  if (!el || !el.tagName) return false;
+  var tag = el.tagName.toUpperCase();
+  if (tag === "TEXTAREA") return true;
+  if (tag === "LABEL") return true;
+  if (tag === "INPUT") {
+    var type = (el.type || "text").toLowerCase();
+    return type !== "button" && type !== "submit" && type !== "reset" && type !== "checkbox" && type !== "radio";
+  }
+  return false;
+}
+
 function handleAppTap(e) {
+  if (isNativeTextInput(e.target)) return;
   var target = findTapTarget(e.target);
   if (!target) return;
   if (e && e.type === "touchend" && e.cancelable) e.preventDefault();
@@ -7908,12 +7996,23 @@ function bindAppEvents() {
     }
   }, false);
   var memberLoginInput = document.getElementById("memberLoginInput");
+  var memberLoginForm = document.getElementById("memberLoginForm");
+  var memberLoginComposing = false;
   if (memberLoginInput) {
+    memberLoginInput.addEventListener("compositionstart", function() { memberLoginComposing = true; }, false);
+    memberLoginInput.addEventListener("compositionend", function() { memberLoginComposing = false; }, false);
     memberLoginInput.addEventListener("keydown", function(e) {
+      if (memberLoginComposing || e.isComposing || e.keyCode === 229) return;
       if (e.key === "Enter" || e.keyCode === 13) {
         e.preventDefault();
         submitMemberLogin();
       }
+    }, false);
+  }
+  if (memberLoginForm) {
+    memberLoginForm.addEventListener("submit", function(e) {
+      e.preventDefault();
+      submitMemberLogin();
     }, false);
   }
   document.addEventListener("input", function(e) {
