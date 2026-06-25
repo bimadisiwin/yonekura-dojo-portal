@@ -8543,19 +8543,23 @@ try {
   showBootError(bootErr.message || bootErr);
 }
 
-async function initMemberCloud() {
+async function initMemberCloud(opts) {
+  opts = opts || {};
+  var background = !!opts.background;
   if (!memberApiReady()) {
     render();
     showToast("WordPress 会員ページから開いてください", { type: "warn", duration: 5000 });
     return;
   }
+  var prevState = state;
   try {
     var cfg = getMemberApiConfig();
     var payload = await memberApiFetch("/data?token=" + encodeURIComponent(cfg.accessToken) + "&_t=" + Date.now());
     state = normalizeState(payload.data || {});
     viewingArchiveId = null;
     if (!getLeague(currentLeagueId)) currentLeagueId = state.leagues[0] ? state.leagues[0].id : null;
-    var resolved = resolveMyRosterId();
+    // 会員データ(/data)は roster が空のため、ログイン中の本人は保存済みセッションIDで判定する
+    var resolved = loadMemberSessionRosterId();
     if (resolved) {
       try {
         var sess = await memberApiFetch("/member-session?token=" + encodeURIComponent(cfg.accessToken) +
@@ -8563,11 +8567,17 @@ async function initMemberCloud() {
         mergeMemberIntoState(sess.member);
         activateMyRoster(sess.rosterId);
       } catch (sessErr) {
+        // 自動更新中の一時的なエラーではログアウトさせず、直前の表示を維持する
+        if (background) {
+          state = prevState;
+          render();
+          return;
+        }
         myRosterId = "";
         clearMemberSessionRosterId();
         document.body.className = document.body.className.replace(/\s*has-my-roster/g, "");
       }
-    } else {
+    } else if (!background) {
       myRosterId = "";
       document.body.className = document.body.className.replace(/\s*has-my-roster/g, "");
     }
@@ -8575,6 +8585,10 @@ async function initMemberCloud() {
     render();
     initMemberCloudRefresh();
   } catch (e) {
+    if (background) {
+      state = prevState;
+      return;
+    }
     showToast((e && e.message) ? e.message : "データ読込に失敗しました", { type: "error", duration: 5000 });
   }
 }
@@ -8595,7 +8609,7 @@ function initMemberCloudRefresh() {
 function memberCloudRefreshNow() {
   if (memberCloudRefreshInFlight) return;
   memberCloudRefreshInFlight = true;
-  initMemberCloud()
+  initMemberCloud({ background: true })
     .catch(function() {})
     .then(function() { memberCloudRefreshInFlight = false; });
 }
