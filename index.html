@@ -2341,6 +2341,16 @@ function formatSeasonLabelFromPeriodKey(periodKey) {
   return formatSeasonLabel(periodKey.slice(0, dash), periodKey.slice(dash + 1));
 }
 
+function prependSeasonHeader(memo, periodKey) {
+  var text = (memo || "").trim();
+  if (!text) return text;
+  var label = formatSeasonLabelFromPeriodKey(periodKey || getCurrentPeriodKey());
+  if (!label) return text;
+  var header = "【" + label + "】";
+  if (text.indexOf(header) === 0) return text;
+  return header + "\n" + text;
+}
+
 var STRIPE_CAT_LABELS = { shin: "心", gi: "技", tai: "体", safety: "安全", prereq: "受験資格" };
 
 function resolveCheckItemLabel(targetLevel, checkKey) {
@@ -5293,7 +5303,7 @@ function submitStripeReview(result) {
     checkLabels: buildStripeCheckLabelsSnapshot(def, checks, m, targetLevel),
     checkSummary: summary,
     safetyOk: validation.ok,
-    memo: memo
+    memo: prependSeasonHeader(memo, getCurrentPeriodKey())
   };
   if (result === "pass") {
     reviewEntry.attendanceAtPass = Math.max(0, m.attendanceCount || 0);
