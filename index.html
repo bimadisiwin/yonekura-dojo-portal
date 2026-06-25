@@ -7197,6 +7197,19 @@ async function manualPull() {
   }
 }
 
+function renderArchiveStandingsBanner() {
+  if (viewingArchiveId) return "";
+  var archives = (state.archives || []).slice().sort(function(a, b) { return (b.archivedAt || 0) - (a.archivedAt || 0); });
+  if (!archives.length) return "";
+  var a = archives[0];
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;' +
+    'background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);' +
+    'border-radius:10px;padding:8px 12px;margin-bottom:10px">' +
+    '<span style="font-size:.78rem;color:var(--muted)">📊 ' + esc(a.label) + ' 最終順位表（閲覧）</span>' +
+    '<button type="button" class="btn btn-ghost btn-sm" data-action="viewArchive" data-archive-id="' + esc(a.id) + '">見る</button>' +
+    '</div>';
+}
+
 function render() {
   if (!currentLeagueId && currentView !== "playoff" && currentView !== "awards" && currentView !== "stripes" && currentView !== "master" && currentView !== "myprogress" && currentView !== "feedback") {
     var ctxLeagues = getActiveContext().leagues;
@@ -7271,7 +7284,7 @@ function render() {
   const { sorted } = computeStats(league);
   if (currentView === "main") {
     const printTitle = `<div class="print-title">🥋 米倉道場 Jリーグ 星取表 ｜ ${esc(league.name)}（${esc(ctx.seasonLabel)}）</div>`;
-    main.innerHTML = printTitle + renderStandings(league, sorted) + renderGrid(league, sorted);
+    main.innerHTML = printTitle + renderArchiveStandingsBanner() + renderStandings(league, sorted) + renderGrid(league, sorted);
     initLegacyGridScroll();
   } else if (currentView === "settings") {
     if (ctx.readonly) {
