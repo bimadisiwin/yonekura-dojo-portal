@@ -1755,6 +1755,7 @@ function resolveAwardsPageContext(fy, sk) {
       seasonLabel: formatSeasonLabel(fy, sk),
       leagues: state.leagues || [],
       specialAwards: state.specialAwards || {},
+      seasonSpecialAwards: state.seasonSpecialAwards || [],
       annualBestAward: state.annualBestAward || { playerId: "" },
       annualSpecialAwards: state.annualSpecialAwards || [],
       monthlyMvpLocked: state.monthlyMvpLocked || {},
@@ -1775,6 +1776,7 @@ function resolveAwardsPageContext(fy, sk) {
     seasonLabel: formatSeasonLabel(fy, sk),
     leagues: best.leagues || [],
     specialAwards: best.specialAwards || {},
+    seasonSpecialAwards: best.seasonSpecialAwards || [],
     annualBestAward: best.annualBestAward || { playerId: "" },
     annualSpecialAwards: best.annualSpecialAwards || [],
     monthlyMvpLocked: best.monthlyMvpLocked || {},
@@ -2573,6 +2575,7 @@ function getActiveContext() {
         readonly: true,
         archivedAt: arch.archivedAt,
         specialAwards: arch.specialAwards || {},
+        seasonSpecialAwards: arch.seasonSpecialAwards || [],
         annualBestAward: arch.annualBestAward || { playerId: "" },
         annualSpecialAwards: arch.annualSpecialAwards || [],
         monthlyMvpLocked: arch.monthlyMvpLocked || {},
@@ -2590,6 +2593,7 @@ function getActiveContext() {
     readonly: false,
     archivedAt: null,
     specialAwards: state.specialAwards || {},
+    seasonSpecialAwards: state.seasonSpecialAwards || [],
     annualBestAward: state.annualBestAward || { playerId: "" },
     annualSpecialAwards: state.annualSpecialAwards || [],
     monthlyMvpLocked: state.monthlyMvpLocked || {},
@@ -3150,6 +3154,7 @@ function normalizeState(raw) {
     s.annualBestAward.playerId = "";
   }
   s.annualSpecialAwards = normalizeAnnualSpecialSlots(s.annualSpecialAwards);
+  s.seasonSpecialAwards = normalizeSeasonSpecialSlots(s.seasonSpecialAwards);
   delete s.annualBestAwards;
   if (!s.monthlyMvpLocked || typeof s.monthlyMvpLocked !== "object") s.monthlyMvpLocked = {};
   if (!Array.isArray(s.awardConfirmations)) s.awardConfirmations = [];
@@ -6002,6 +6007,55 @@ function setAnnualSpecialAwardSlot(slotIndex, field, value) {
   render();
 }
 
+function getDefaultSeasonSpecialSlots() {
+  return [
+    { type: "kaikin", playerId: "" },
+    { type: "energy", playerId: "" },
+    { type: "follower", playerId: "" }
+  ];
+}
+
+function normalizeSeasonSpecialSlots(raw) {
+  if (Array.isArray(raw)) {
+    var slots = [];
+    var defaults = getDefaultSeasonSpecialSlots();
+    var i;
+    for (i = 0; i < SPECIAL_AWARD_SLOT_COUNT; i++) {
+      var s = raw[i] || {};
+      slots.push({
+        type: isValidSpecialAwardType(s.type) ? s.type : defaults[i].type,
+        playerId: s.playerId || s.player || ""
+      });
+    }
+    return slots;
+  }
+  return getDefaultSeasonSpecialSlots();
+}
+
+function getSeasonSpecialSlots() {
+  var ctx = getAwardsCtx();
+  return normalizeSeasonSpecialSlots(ctx.seasonSpecialAwards);
+}
+
+function ensureSeasonSpecialSlots() {
+  state.seasonSpecialAwards = normalizeSeasonSpecialSlots(state.seasonSpecialAwards);
+  return state.seasonSpecialAwards;
+}
+
+function setSeasonSpecialAwardSlot(slotIndex, field, value) {
+  if (isMemberMode || isReadonly()) return;
+  var slots = ensureSeasonSpecialSlots();
+  var idx = parseInt(slotIndex, 10);
+  if (isNaN(idx) || idx < 0 || idx >= SPECIAL_AWARD_SLOT_COUNT) return;
+  if (field === "type") {
+    slots[idx].type = value || getDefaultSeasonSpecialSlots()[idx].type;
+  } else if (field === "player") {
+    slots[idx].playerId = value || "";
+  }
+  saveState();
+  render();
+}
+
 function renderAllPlayersOptions(selectedId) {
   var leagues = getActiveContext().leagues || [];
   var html = '<option value="">未設定</option>';
@@ -6190,7 +6244,7 @@ function buildLeagueAwardsSnapshot(league) {
 function confirmAwardsSnapshot() {
   if (isMemberMode || isReadonly()) return;
   var label = formatSeasonLabel(state.fiscalYear, state.seasonKey) + " " + getCurrentMonthLabel() + " 表彰";
-  if (!confirm("現在の道場表彰・全リーグの部門賞・リーグ特別賞を「" + label + "」として記録しますか？\n（記録後、館員ポータルに部門賞・リーグ特別賞が表示されます）")) return;
+  if (!confirm("現在の道場表彰・シーズン特別賞・全リーグの部門賞を「" + label + "」として記録しますか？\n（記録後、館員ポータルに部門賞・シーズン特別賞が表示されます）")) return;
   if (!state.awardConfirmations) state.awardConfirmations = [];
   var leaguesSnap = {};
   state.leagues.forEach(function(league) {
@@ -6202,7 +6256,8 @@ function confirmAwardsSnapshot() {
     label: label,
     dojo: {
       annualBest: deepClone(state.annualBestAward || { playerId: "" }),
-      annualSpecial: deepClone(normalizeAnnualSpecialSlots(state.annualSpecialAwards))
+      annualSpecial: deepClone(normalizeAnnualSpecialSlots(state.annualSpecialAwards)),
+      seasonSpecial: deepClone(normalizeSeasonSpecialSlots(state.seasonSpecialAwards))
     },
     leagues: leaguesSnap
   });
@@ -6291,6 +6346,12 @@ function renderAwardConfirmationCard(entry, allowDelete, scope) {
       dojoLines.push('<div class="award-confirm-line">' + ANNUAL_BEST_AWARD.icon + " " + esc(ANNUAL_BEST_AWARD.label) + "：" +
         renderAwardConfirmPlayerLine(entry.dojo.annualBest.playerId) + "</div>");
     }
+    (entry.dojo && entry.dojo.seasonSpecial || []).forEach(function(slot) {
+      if (!slot.playerId) return;
+      var def = getSpecialAwardType(slot.type);
+      dojoLines.push('<div class="award-confirm-line">' + def.icon + " " + esc(def.label) + "：" +
+        renderAwardConfirmPlayerLine(slot.playerId) + "</div>");
+    });
     (entry.dojo && entry.dojo.annualSpecial || []).forEach(function(slot) {
       if (!slot.playerId) return;
       var def = getSpecialAwardType(slot.type);
@@ -6348,9 +6409,9 @@ function renderAwardConfirmationsSection(scope) {
     return renderAwardConfirmationCard(entry, true, scope);
   }).filter(function(s) { return !!s; }).join("");
   if (!html) return "";
-  var title = scope === "dojo" ? "📜 表彰記録（道場）" : "📜 表彰記録（部門賞・リーグ特別賞）";
+  var title = scope === "dojo" ? "📜 表彰記録（道場）" : "📜 表彰記録（部門賞）";
   var note = isMemberMode
-    ? "確定済みの部門賞・リーグ特別賞です。未確定の表彰は表示されません。"
+    ? "確定済みの表彰です。未確定の表彰は表示されません。"
     : "📋マスターで「表彰を確定して記録」したスナップショットです。館員ポータルには確定後のみ表示されます。";
   return '<div class="card awards-history-card">' +
     '<div class="card-title">' + title + "</div>" +
@@ -6364,7 +6425,7 @@ function renderAwardConfirmSettings() {
   return '<div class="card">' +
     '<div class="card-title">📜 表彰の確定・記録</div>' +
     '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' +
-    "道場表彰・全リーグの部門賞・リーグ特別賞をスナップショットとして残します。確定後、館員ポータルに部門賞・リーグ特別賞が表示されます。</p>" +
+    "道場表彰・シーズン特別賞・全リーグの部門賞をスナップショットとして残します。確定後、館員ポータルに部門賞・シーズン特別賞が表示されます。</p>" +
     '<button type="button" class="btn btn-primary btn-block" data-action="confirmAwards">表彰を確定して記録</button>' +
     (count ? '<p style="font-size:.66rem;color:var(--muted);margin:8px 0 0">確定記録: ' + count + "件（🏆 MVP・表彰タブで閲覧）</p>" : "") +
     "</div>";
@@ -6519,6 +6580,11 @@ function renderDojoAwardsCardMember() {
     var def = getSpecialAwardType(slot.type);
     return renderAwardPlaceholderItem(def.icon, def.label, def.desc, "award-annual-special");
   }).join("");
+  var seasonSlots = getSeasonSpecialSlots();
+  var seasonSpecialHtml = seasonSlots.map(function(slot) {
+    var def = getSpecialAwardType(slot.type);
+    return renderAwardPlaceholderItem(def.icon, def.label, def.desc, "award-special");
+  }).join("");
   return '<div class="card awards-dojo-card">' +
     '<div class="card-title">🏛 道場表彰（年間）</div>' +
     '<div class="awards-section-block">' +
@@ -6526,6 +6592,10 @@ function renderDojoAwardsCardMember() {
     '<div class="awards-grid awards-grid-single">' +
     renderAwardPlaceholderItem(ANNUAL_BEST_AWARD.icon, ANNUAL_BEST_AWARD.label, "道場全体で1名・授与式で発表", "award-annual-best") +
     '</div></div>' +
+    '<div class="awards-section-block">' +
+    '<div class="awards-section-title">🎀 シーズン特別賞</div>' +
+    '<div class="awards-grid">' + seasonSpecialHtml + '</div>' +
+    '</div>' +
     '<div class="awards-section-block">' +
     '<div class="awards-section-title">🎀 年間特別賞</div>' +
     '<div class="awards-grid">' + annualSpecialHtml + '</div>' +
@@ -6542,6 +6612,11 @@ function renderDojoAwardsCard() {
     var def = getSpecialAwardType(slot.type);
     return renderGlobalAwardItem(def, slot.playerId, "award-annual-special");
   }).join("");
+  var seasonSlots = getSeasonSpecialSlots();
+  var seasonSpecialHtml = seasonSlots.map(function(slot) {
+    var def = getSpecialAwardType(slot.type);
+    return renderGlobalAwardItem(def, slot.playerId, "award-special");
+  }).join("");
   return '<div class="card awards-dojo-card">' +
     '<div class="card-title">🏛 道場表彰（年間）</div>' +
     '<div class="awards-section-block">' +
@@ -6550,10 +6625,14 @@ function renderDojoAwardsCard() {
     renderGlobalAwardItem(ANNUAL_BEST_AWARD, playerId, "award-annual-best") +
     '</div></div>' +
     '<div class="awards-section-block">' +
+    '<div class="awards-section-title">🎀 シーズン特別賞（指導者選定）</div>' +
+    '<div class="awards-grid">' + seasonSpecialHtml + '</div>' +
+    '</div>' +
+    '<div class="awards-section-block">' +
     '<div class="awards-section-title">🎀 年間特別賞（指導者選定）</div>' +
     '<div class="awards-grid">' + annualSpecialHtml + '</div>' +
     '</div>' +
-    '<div class="awards-note">道場全体の表彰です。年間最優秀賞は全リーグから1名、年間特別賞は📋マスターで3枠まで選定できます。</div>' +
+    '<div class="awards-note">道場全体の表彰です。シーズン特別賞・年間最優秀賞・年間特別賞は📋マスターで全リーグから選定できます。</div>' +
     '</div>';
 }
 
@@ -6584,6 +6663,27 @@ function renderDojoAwardsSettings() {
     '<div class="special-award-head"><span>賞の種類</span><span>選手</span></div>' +
     annualRows +
     "</div>";
+}
+
+function renderSeasonSpecialAwardsSettings() {
+  if (isReadonly()) return "";
+  var slots = ensureSeasonSpecialSlots();
+  var rows = slots.map(function(slot, idx) {
+    var typeOpts = SPECIAL_AWARD_TYPES.map(function(def) {
+      return '<option value="' + esc(def.key) + '"' + (slot.type === def.key ? " selected" : "") + '>' +
+        def.icon + " " + esc(def.label) + "</option>";
+    }).join("");
+    var playerOpts = renderAllPlayersOptions(slot.playerId);
+    return '<div class="special-award-row">' +
+      '<select class="player-status" data-season-special-slot="' + idx + '" data-season-special-field="type" title="賞の種類">' + typeOpts + "</select>" +
+      '<select class="player-status" data-season-special-slot="' + idx + '" data-season-special-field="player" title="選手">' + playerOpts + "</select>" +
+      "</div>";
+  }).join("");
+  return '<div class="card">' +
+    '<div class="card-title">🎀 シーズン特別賞（道場全体）</div>' +
+    '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">シーズンごとの特別賞です。全リーグの選手から' + SPECIAL_AWARD_SLOT_COUNT + '枠まで選べます。</p>' +
+    '<div class="special-award-head"><span>賞の種類</span><span>選手</span></div>' +
+    rows + "</div>";
 }
 
 function renderSpecialAwardsSection(league) {
@@ -6639,7 +6739,7 @@ function renderLeagueAwardsCardMember(league) {
     renderAwardPlaceholderItem("📅", "月間MVP（" + monthLabel + "）", "月末に発表", "award-monthly") +
     '</div></div>' +
     renderMonthlyMvpHistorySection(league) +
-    '<div class="awards-note">部門賞・リーグ特別賞は確定後に下の「表彰記録」に表示されます。当月の月間MVPは確定済みの履歴のみ閲覧できます。</div>' +
+    '<div class="awards-note">部門賞は確定後に下の「表彰記録」に表示されます。シーズン特別賞は🏛 道場スコープでご確認ください。当月の月間MVPは確定済みの履歴のみ閲覧できます。</div>' +
     '</div>';
 }
 
@@ -6670,13 +6770,12 @@ function renderLeagueAwardsCard(league) {
     '<div class="awards-section-title">🎖 部門賞（自動・シーズン）</div>' +
     '<div class="awards-grid">' + deptHtml + '</div>' +
     '</div>' +
-    renderSpecialAwardsSection(league) +
     renderMonthlyMvpHistorySection(league) +
     '<div class="awards-note">' +
     'シーズンMVP：消化率' + Math.round(MVP_SEASON_MIN_RATE * 100) + '%以上（最低' + awards.seasonMin + '試合）の選手から勝点1位<br>' +
     '月間MVP：' + awards.monthLabel + 'に記録された試合（日時付き）から2試合以上・勝点1位。過去月は自動確定、当月はリーグ設定で手動確定も可<br>' +
     '部門賞：💥一本王 ／ 🔥努力賞（消化数）<br>' +
-    'リーグ特別賞：リーグ設定で' + esc(league.name) + '内の選手を選択' +
+    '特別賞：🏛 道場スコープの「シーズン特別賞」で全リーグから選定' +
     '</div></div>';
 }
 
@@ -6686,7 +6785,7 @@ function renderAwardsPage() {
   var ctx = resolveAwardsPageContext(awardsViewYear, awardsViewSeason);
   var html = '<div class="print-title">🥋 米倉道場 MVP・表彰 ｜ ' + esc(ctx ? ctx.seasonLabel : formatSeasonLabel(awardsViewYear, awardsViewSeason)) + "</div>";
   if (isMemberMode) {
-    html += '<div class="awards-member-banner"><strong>📋 表彰項目一覧</strong><br>年度・シーズン・表示先を切り替えて確認できます。部門賞・リーグ特別賞は確定後のみ表示されます。</div>';
+    html += '<div class="awards-member-banner"><strong>📋 表彰項目一覧</strong><br>年度・シーズン・表示先を切り替えて確認できます。部門賞・シーズン特別賞は確定後のみ表示されます。</div>';
   }
   html += renderAwardsFilterTabs(periodIndex);
   if (!ctx) {
@@ -6699,6 +6798,7 @@ function renderAwardsPage() {
   awardsPageCtx = ctx;
   if (awardsViewScope === "dojo") {
     html += renderDojoAwardsCard();
+    if (!isMemberMode && ctx.live) html += renderSeasonSpecialAwardsSettings();
     html += renderAwardConfirmationsSection("dojo");
   } else {
     var league = getLeague(awardsViewScope);
@@ -7123,7 +7223,6 @@ function renderLeagueSettings(league) {
       <div class="form-row"><label>負け</label><input type="number" min="0" max="10" value="${pr.lose}" data-set-rule="lose"></div>
     </div>
   </div>
-  ${renderSpecialAwardsSettings(league)}
   ${renderMonthlyMvpLockSettings(league)}
   <div class="card">
     <div class="card-title">${esc(league.name)} の選手 (${activeCount}/${league.players.length} 参加)</div>
@@ -7377,6 +7476,7 @@ function archiveCurrentSeason() {
     leagues: deepClone(state.leagues),
     pointRule: deepClone(state.pointRule),
     specialAwards: deepClone(state.specialAwards || {}),
+    seasonSpecialAwards: deepClone(state.seasonSpecialAwards || []),
     annualBestAward: deepClone(state.annualBestAward || { playerId: "" }),
     annualSpecialAwards: deepClone(state.annualSpecialAwards || []),
     monthlyMvpLocked: deepClone(state.monthlyMvpLocked || {}),
@@ -7388,6 +7488,7 @@ function archiveCurrentSeason() {
   state.leagues.forEach(function(l) { l.results = {}; });
   state.playoffs = { j1_j2: { results: {} } };
   state.specialAwards = {};
+  state.seasonSpecialAwards = getDefaultSeasonSpecialSlots();
   state.annualBestAward = { playerId: "" };
   state.annualSpecialAwards = getDefaultAnnualSpecialSlots();
   state.monthlyMvpLocked = {};
@@ -8451,6 +8552,9 @@ function bindAppEvents() {
     }
     else if (t.getAttribute("data-annual-special-slot") != null && t.getAttribute("data-annual-special-field")) {
       setAnnualSpecialAwardSlot(t.getAttribute("data-annual-special-slot"), t.getAttribute("data-annual-special-field"), t.value);
+    }
+    else if (t.getAttribute("data-season-special-slot") != null && t.getAttribute("data-season-special-field")) {
+      setSeasonSpecialAwardSlot(t.getAttribute("data-season-special-slot"), t.getAttribute("data-season-special-field"), t.value);
     }
     else if (t.getAttribute("data-roster-id") && t.getAttribute("data-roster-field")) {
       var rosterField = t.getAttribute("data-roster-field");
