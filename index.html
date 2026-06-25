@@ -2607,8 +2607,8 @@ function updateArchiveBanner() {
 }
 
 /* ===== GitHub クラウド同期 ===== */
-const GH_DEFAULTS = { owner: "bimadisiwin", repo: "jl-hoshitori-e306758bbd", branch: "main", path: "data/jleague.json", token: "" };
-const GH_FIXED_CFG = { owner: "bimadisiwin", repo: "jl-hoshitori-e306758bbd", branch: "main", path: "data/jleague.json" };
+const GH_DEFAULTS = { owner: "bimadisiwin", repo: "yonekura-dojo-data", branch: "main", path: "data/jleague.json", token: "" };
+const GH_FIXED_CFG = { owner: "bimadisiwin", repo: "yonekura-dojo-data", branch: "main", path: "data/jleague.json" };
 let ghCfg = loadGhCfg();
 let ghSha = null;
 let ghPushTimer = null;
@@ -3907,47 +3907,38 @@ function isManualMemberComment(member) {
 
 function getInstructorMessageForMember(member) {
   var latestMsg = getLatestMessageEntry(member);
-  if (latestMsg && (latestMsg.memo || "").trim()) {
-    var msgText = String(latestMsg.memo).trim();
-    var senior = isSeniorMember(member);
-    var latestReview = senior ? null : getLatestStripeReview(member);
-    var ngItems = senior ? [] : getNgItemsFromReview(latestReview);
-    var text = appendNgItemsToMessage(msgText, ngItems);
-    if (!text) return null;
-    var at = latestMsg.at || 0;
-    if (latestReview && (latestReview.at || 0) > at) at = latestReview.at;
-    return { text: text, at: at || null, source: "message", ngItems: ngItems };
-  }
   var comment = (member.memberComment || "").trim();
   var meta = member.memberCommentMeta || {};
   var commentAt = meta.updatedAt || meta.generatedAt || 0;
   var senior = isSeniorMember(member);
   var latestReview = senior ? null : getLatestStripeReview(member);
   var ngItems = senior ? [] : getNgItemsFromReview(latestReview);
-  var manualComment = !!(comment && isManualMemberComment(member));
-  var base = null;
-  if (senior) {
-    if (comment) base = { text: comment, at: commentAt || null, source: "comment" };
-  } else {
-    var latestReviewMemo = null;
-    var i, r, memo;
+  var candidates = [];
+  var latestReviewMemo = null;
+  var i, r, memo;
+  if (latestMsg && (latestMsg.memo || "").trim()) {
+    candidates.push({ text: String(latestMsg.memo).trim(), at: latestMsg.at || 0, source: "message", priority: 3 });
+  }
+  if (comment) {
+    candidates.push({ text: comment, at: commentAt || 0, source: "comment", priority: 2 });
+  }
+  if (!senior) {
     for (i = 0; i < (member.reviews || []).length; i++) {
       r = member.reviews[i];
       if (!isStripeReviewEntry(r)) continue;
       memo = r.memo && String(r.memo).trim();
       if (!memo) continue;
       if (!latestReviewMemo || (r.at || 0) > (latestReviewMemo.at || 0)) {
-        latestReviewMemo = { text: memo, at: r.at || 0, source: "review" };
+        latestReviewMemo = { text: memo, at: r.at || 0, source: "review", priority: 1 };
       }
     }
-    if (manualComment) {
-      base = { text: comment, at: commentAt, source: "comment" };
-    } else if (latestReviewMemo && latestReviewMemo.at > commentAt) {
-      base = latestReviewMemo;
-    } else if (comment) {
-      base = { text: comment, at: commentAt || null, source: "comment" };
-    } else if (latestReviewMemo) {
-      base = latestReviewMemo;
+    if (latestReviewMemo) candidates.push(latestReviewMemo);
+  }
+  var base = null;
+  for (i = 0; i < candidates.length; i++) {
+    var c = candidates[i];
+    if (!base || (c.at || 0) > (base.at || 0) || ((c.at || 0) === (base.at || 0) && (c.priority || 0) > (base.priority || 0))) {
+      base = c;
     }
   }
   if (!base && !ngItems.length) return null;
