@@ -2874,6 +2874,36 @@ function mergeCloudStates(local, remote) {
   return normalizeState(merged);
 }
 
+function mergeResultsFromInto(base, source) {
+  if (!source) return;
+  (base.leagues || []).forEach(function(bl) {
+    var sl = (source.leagues || []).filter(function(l) { return l.id === bl.id; })[0];
+    if (sl) bl.results = mergeMatchResults(bl.results, sl.results);
+  });
+  if (source.playoffs && base.playoffs) {
+    Object.keys(base.playoffs).forEach(function(key) {
+      var sp = source.playoffs[key];
+      if (sp && base.playoffs[key]) {
+        base.playoffs[key].results = mergeMatchResults(base.playoffs[key].results || {}, sp.results || {});
+      }
+    });
+  }
+}
+
+// 起動時用: リーグ構成・シーズンはクラウド(remote)を正とし、対戦結果・名簿・アーカイブのみ統合する。
+// 端末に残った古いキャッシュでリーグ構成が復活・重複するのを防ぐ。
+function mergeCloudStatesRemoteFirst(local, remote) {
+  local = normalizeState(local || {});
+  remote = normalizeState(remote || {});
+  var merged = deepClone(remote);
+  mergeResultsFromInto(merged, local);
+  mergeRosterInto(merged, local);
+  mergeArchivesInto(merged, local);
+  mergeSposuruSettingsInto(merged, local);
+  merged.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0, Date.now());
+  return normalizeState(merged);
+}
+
 function applyMergedCloudState(merged, opts) {
   opts = opts || {};
   var prev = normalizeState(state);
@@ -8563,7 +8593,7 @@ async function initCloud() {
   try {
     const remote = await cloudPull();
     if (remote) {
-      var merged = mergeCloudStates(state, remote);
+      var merged = mergeCloudStatesRemoteFirst(state, remote);
       var changed = applyMergedCloudState(merged);
       if (changed) {
         await cloudPush();
