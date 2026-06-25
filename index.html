@@ -1718,6 +1718,8 @@ let feedbackRosterId = "";
 let feedbackSearchQuery = "";
 const FEEDBACK_ROSTER_KEY = "yonekura-feedback-roster";
 let memberCloudRefreshBound = false;
+let memberCloudRefreshInFlight = false;
+const MEMBER_CLOUD_REFRESH_MS = 60000;
 
 function resolveMyRosterId() {
   var fromSession = loadMemberSessionRosterId();
@@ -8582,8 +8584,20 @@ function initMemberCloudRefresh() {
   memberCloudRefreshBound = true;
   document.addEventListener("visibilitychange", function() {
     if (document.visibilityState !== "visible") return;
-    initMemberCloud().catch(function() {});
+    memberCloudRefreshNow();
   });
+  setInterval(function() {
+    if (document.visibilityState !== "visible") return;
+    memberCloudRefreshNow();
+  }, MEMBER_CLOUD_REFRESH_MS);
+}
+
+function memberCloudRefreshNow() {
+  if (memberCloudRefreshInFlight) return;
+  memberCloudRefreshInFlight = true;
+  initMemberCloud()
+    .catch(function() {})
+    .then(function() { memberCloudRefreshInFlight = false; });
 }
 
 async function initCloud() {
