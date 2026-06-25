@@ -3912,7 +3912,6 @@ function getInstructorMessageForMember(member) {
   var commentAt = meta.updatedAt || meta.generatedAt || 0;
   var senior = isSeniorMember(member);
   var latestReview = senior ? null : getLatestStripeReview(member);
-  var ngItems = senior ? [] : getNgItemsFromReview(latestReview);
   var candidates = [];
   var latestReviewMemo = null;
   var i, r, memo;
@@ -3941,12 +3940,12 @@ function getInstructorMessageForMember(member) {
       base = c;
     }
   }
-  if (!base && !ngItems.length) return null;
-  var text = appendNgItemsToMessage(base ? base.text : "", ngItems);
+  if (!base) return null;
+  var text = (base.text || "").trim();
   if (!text) return null;
-  var at = base ? (base.at || 0) : 0;
+  var at = base.at || 0;
   if (latestReview && (latestReview.at || 0) > at) at = latestReview.at;
-  return { text: text, at: at || null, source: base ? base.source : "review", ngItems: ngItems };
+  return { text: text, at: at || null, source: base.source };
 }
 
 function renderInstructorMessagePreview(member) {
