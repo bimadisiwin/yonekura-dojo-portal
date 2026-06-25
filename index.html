@@ -2796,7 +2796,7 @@ function mergeLeaguesInto(target, source) {
 function mergePlayoffsInto(target, source) {
   if (!source || !source.playoffs) return;
   if (!target.playoffs) target.playoffs = {};
-  ["pre_j1", "j1_j2"].forEach(function(key) {
+  ["j1_j2"].forEach(function(key) {
     var sp = source.playoffs[key];
     if (!sp) return;
     if (!target.playoffs[key]) target.playoffs[key] = { results: {} };
@@ -3100,10 +3100,9 @@ function normalizeState(raw) {
   if (!s.seasonId) s.seasonId = s.fiscalYear + "-" + s.seasonKey;
   s.season = s.fiscalYear;
   if (!s.playoffs || typeof s.playoffs !== "object") s.playoffs = {};
-  if (!s.playoffs.pre_j1 || typeof s.playoffs.pre_j1 !== "object") s.playoffs.pre_j1 = { results: {} };
   if (!s.playoffs.j1_j2 || typeof s.playoffs.j1_j2 !== "object") s.playoffs.j1_j2 = { results: {} };
-  if (!s.playoffs.pre_j1.results || typeof s.playoffs.pre_j1.results !== "object") s.playoffs.pre_j1.results = {};
   if (!s.playoffs.j1_j2.results || typeof s.playoffs.j1_j2.results !== "object") s.playoffs.j1_j2.results = {};
+  if (s.playoffs.pre_j1) delete s.playoffs.pre_j1;
   if (!s.specialAwards || typeof s.specialAwards !== "object") s.specialAwards = {};
   if (!s.annualBestAward || typeof s.annualBestAward !== "object") {
     var migratedBest = "";
@@ -4151,15 +4150,13 @@ function getLeagueStripeWarningKid(rosterId, stripes) {
 function getRecommendedLeagueLabel(stripes) {
   if (stripes >= 3) return "J1圏（＋順位条件）";
   if (stripes >= 2) return "J2";
-  if (stripes >= 1) return "J3";
-  return "プレリーグ";
+  return "J3";
 }
 
 function getRecommendedLeagueLabelKid(stripes) {
   if (stripes >= 3) return "J1（トップリーグ）";
   if (stripes >= 2) return "J2";
-  if (stripes >= 1) return "J3";
-  return "プレリーグ（まずはここから！）";
+  return "J3（まずはここから！）";
 }
 
 function checkStripeEligibility(member, targetLevel) {
@@ -6685,11 +6682,10 @@ function renderAwardsPage() {
 }
 
 function ensurePlayoffs() {
-  if (!state.playoffs) state.playoffs = { pre_j1: { results: {} }, j1_j2: { results: {} } };
-  if (!state.playoffs.pre_j1) state.playoffs.pre_j1 = { results: {} };
+  if (!state.playoffs) state.playoffs = { j1_j2: { results: {} } };
   if (!state.playoffs.j1_j2) state.playoffs.j1_j2 = { results: {} };
-  if (!state.playoffs.pre_j1.results) state.playoffs.pre_j1.results = {};
   if (!state.playoffs.j1_j2.results) state.playoffs.j1_j2.results = {};
+  if (state.playoffs.pre_j1) delete state.playoffs.pre_j1;
 }
 
 function findPlayerGlobal(id) {
@@ -6745,8 +6741,6 @@ function renderPlayoffPage() {
   ensurePlayoffs();
   var ctx = getActiveContext();
   var html = '<div class="print-title">🥋 米倉道場 Jリーグ 入れ替え戦 ｜ ' + esc(ctx.seasonLabel) + '</div>';
-  html += renderPlayoffBlock("pre_j1", "プレリーグ → J1", "7位同点の選手による総当たり戦", getPrePlayoffParticipants(),
-    "7位が1名のみ（同点なし）の場合、入れ替え戦は不要です。");
   html += renderPlayoffBlock("j1_j2", "J1 ⇄ J2", "J1下位2名 × J2上位2名の総当たり戦", getJ1J2PlayoffParticipants(),
     "J1・J2それぞれ2名以上の選手が必要です。各リーグの順位が確定すると自動で対象が表示されます。");
   return html;
@@ -7347,7 +7341,7 @@ function archiveCurrentSeason() {
   if (!state.archives) state.archives = [];
   state.archives.unshift(entry);
   state.leagues.forEach(function(l) { l.results = {}; });
-  state.playoffs = { pre_j1: { results: {} }, j1_j2: { results: {} } };
+  state.playoffs = { j1_j2: { results: {} } };
   state.specialAwards = {};
   state.annualBestAward = { playerId: "" };
   state.annualSpecialAwards = getDefaultAnnualSpecialSlots();
