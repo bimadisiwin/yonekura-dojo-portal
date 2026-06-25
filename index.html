@@ -6970,7 +6970,7 @@ function renderGrid(league, sorted, opts) {
     const bb = b.active === false ? 1 : 0;
     if (aa !== bb) return aa - bb;
     if (aa === 1) return a.name.localeCompare(b.name, "ja");
-    return (statMap[a.id].played === 0 ? 1 : 0) - (statMap[b.id].played === 0 ? 1 : 0);
+    return getStripes(b) - getStripes(a) || a.name.localeCompare(b.name, "ja");
   });
   if (!players.length) {
     return `<div class="card">
