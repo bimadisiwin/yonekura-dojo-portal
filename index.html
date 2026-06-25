@@ -1875,18 +1875,9 @@ function renderAwardsFilterTabs(periodIndex) {
     return '<button type="button" class="' + cls + '"' + (has ? "" : " disabled") +
       ' data-action="setAwardsSeason" data-awards-season="' + def.key + '">' + def.emoji + esc(def.label) + "</button>";
   }).join("");
-  var ctx = resolveAwardsPageContext(awardsViewYear, awardsViewSeason);
-  var leagues = ctx ? (ctx.leagues || []) : (state.leagues || []);
-  var scopeBtns = '<button type="button" class="awards-filter-btn' + (awardsViewScope === "dojo" ? " active" : "") +
-    '" data-action="setAwardsScope" data-awards-scope="dojo">🏛 道場</button>' +
-    leagues.map(function(l) {
-      return '<button type="button" class="awards-filter-btn' + (awardsViewScope === l.id ? " active" : "") +
-        '" data-action="setAwardsScope" data-awards-scope="' + esc(l.id) + '">' + esc(l.name) + "</button>";
-    }).join("");
   return '<div class="card awards-filter-card">' +
     '<div class="awards-filter-row"><span class="awards-filter-label">年度</span><div class="awards-filter-btns">' + yearBtns + "</div></div>" +
     '<div class="awards-filter-row"><span class="awards-filter-label">シーズン</span><div class="awards-filter-btns">' + seasonBtns + "</div></div>" +
-    '<div class="awards-filter-row"><span class="awards-filter-label">表示</span><div class="awards-filter-btns">' + scopeBtns + "</div></div>" +
     "</div>";
 }
 
@@ -6409,7 +6400,7 @@ function renderAwardConfirmationsSection(scope) {
     return renderAwardConfirmationCard(entry, true, scope);
   }).filter(function(s) { return !!s; }).join("");
   if (!html) return "";
-  var title = scope === "dojo" ? "📜 表彰記録（道場）" : "📜 表彰記録（部門賞）";
+  var title = scope === "dojo" ? "📜 表彰記録（道場）" : (scope ? "📜 表彰記録（部門賞）" : "📜 表彰記録");
   var note = isMemberMode
     ? "確定済みの表彰です。未確定の表彰は表示されません。"
     : "📋マスターで「表彰を確定して記録」したスナップショットです。館員ポータルには確定後のみ表示されます。";
@@ -6785,7 +6776,7 @@ function renderAwardsPage() {
   var ctx = resolveAwardsPageContext(awardsViewYear, awardsViewSeason);
   var html = '<div class="print-title">🥋 米倉道場 MVP・表彰 ｜ ' + esc(ctx ? ctx.seasonLabel : formatSeasonLabel(awardsViewYear, awardsViewSeason)) + "</div>";
   if (isMemberMode) {
-    html += '<div class="awards-member-banner"><strong>📋 表彰項目一覧</strong><br>年度・シーズン・表示先を切り替えて確認できます。部門賞・シーズン特別賞は確定後のみ表示されます。</div>';
+    html += '<div class="awards-member-banner"><strong>📋 表彰項目一覧</strong><br>年度・シーズンを切り替えて確認できます。部門賞・シーズン特別賞は確定後のみ表示されます。</div>';
   }
   html += renderAwardsFilterTabs(periodIndex);
   if (!ctx) {
@@ -6796,19 +6787,12 @@ function renderAwardsPage() {
     html += '<p class="awards-archive-note">📦 アーカイブデータを表示中（閲覧のみ）</p>';
   }
   awardsPageCtx = ctx;
-  if (awardsViewScope === "dojo") {
-    html += renderDojoAwardsCard();
-    if (!isMemberMode && ctx.live) html += renderSeasonSpecialAwardsSettings();
-    html += renderAwardConfirmationsSection("dojo");
-  } else {
-    var league = getLeague(awardsViewScope);
-    if (league) {
-      html += renderLeagueAwardsCard(league);
-      html += renderAwardConfirmationsSection(awardsViewScope);
-    } else {
-      html += '<div class="card"><p class="playoff-empty">リーグが見つかりません</p></div>';
-    }
-  }
+  html += renderDojoAwardsCard();
+  if (!isMemberMode && ctx.live) html += renderSeasonSpecialAwardsSettings();
+  (ctx.leagues || []).forEach(function(league) {
+    html += renderLeagueAwardsCard(league);
+  });
+  html += renderAwardConfirmationsSection();
   awardsPageCtx = null;
   return html;
 }
