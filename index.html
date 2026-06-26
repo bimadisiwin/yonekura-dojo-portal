@@ -2865,6 +2865,27 @@ function dropArchivesMatchingLiveSeason(s) {
   return s;
 }
 
+// 春＝プレリーグのみ、夏以降＝J1/J2/J3のみにリーグ構成を揃える。
+function leaguesForSeasonKey(seasonKey) {
+  return seasonKey === "spring" ? ["pre"] : ["j1", "j2", "j3"];
+}
+
+function enforceSeasonLeagueShape(s) {
+  if (!s) return s;
+  if (Array.isArray(s.leagues)) {
+    var allowed = leaguesForSeasonKey(s.seasonKey);
+    s.leagues = s.leagues.filter(function(l) { return allowed.indexOf(l.id) !== -1; });
+  }
+  if (Array.isArray(s.archives)) {
+    s.archives.forEach(function(a) {
+      if (!a || !Array.isArray(a.leagues)) return;
+      var archAllowed = leaguesForSeasonKey(a.seasonKey);
+      a.leagues = a.leagues.filter(function(l) { return archAllowed.indexOf(l.id) !== -1; });
+    });
+  }
+  return s;
+}
+
 function mergeSposuruSettingsInto(target, source) {
   if (!source || !source.sposuruSettings) return;
   ensureSposuruSettings(target);
@@ -3184,6 +3205,8 @@ function normalizeState(raw) {
   if (!Array.isArray(s.roster)) s.roster = [];
   ensureRosterLinks(s);
   ensureSposuruSettings(s);
+  dropArchivesMatchingLiveSeason(s);
+  enforceSeasonLeagueShape(s);
   s.version = 4;
   return s;
 }
