@@ -6357,7 +6357,7 @@ function renderAwardConfirmSettings() {
     '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' +
     "道場表彰・シーズン特別賞をスナップショットとして残します。確定後、館員ポータルにシーズン特別賞が表示されます。</p>" +
     '<button type="button" class="btn btn-primary btn-block" data-action="confirmAwards">表彰を確定して記録</button>' +
-    (count ? '<p style="font-size:.66rem;color:var(--muted);margin:8px 0 0">確定記録: ' + count + "件（🏆 MVP・表彰タブで閲覧）</p>" : "") +
+    (count ? '<p style="font-size:.66rem;color:var(--muted);margin:8px 0 0">確定記録: ' + count + "件（下の「表彰記録」に表示）</p>" : "") +
     "</div>";
 }
 
@@ -6792,6 +6792,7 @@ function renderAwardsPage() {
     });
     html += renderMergedDeptSpecialSection(ctx, ctx.live);
   }
+  if (!isMemberMode && ctx.live) html += renderAwardConfirmSettings();
   html += renderAwardConfirmationsSection();
   awardsPageCtx = null;
   return html;
@@ -7168,11 +7169,10 @@ function renderSeasonSettings() {
 
 function renderMasterSettingsPage() {
   return '<div class="print-title">📋 マスターデータ ｜ ' + esc(getActiveContext().seasonLabel) + "</div>" +
-    '<p style="font-size:.72rem;color:var(--muted);margin:0 0 10px;line-height:1.5">道場全体の館員台帳・出席取込・クラウド同期・シーズン管理はここで行います。年間表彰は <b>🏆 MVP・表彰</b> タブの「🏛 道場表彰（年間）」、リーグごとの選手は <b>⚙️リーグ設定</b> タブへ。</p>' +
+    '<p style="font-size:.72rem;color:var(--muted);margin:0 0 10px;line-height:1.5">道場全体の館員台帳・出席取込・クラウド同期・シーズン管理はここで行います。表彰の選定・確定記録は <b>🏆 MVP・表彰</b> タブ、リーグごとの選手は <b>⚙️リーグ設定</b> タブへ。</p>' +
     renderRosterLedgerSection() +
     renderGhSettings() +
     renderSeasonSettings() +
-    renderAwardConfirmSettings() +
     '<div class="card">' +
     '<div class="card-title">データ管理</div>' +
     '<button type="button" class="btn btn-danger btn-block" data-action="resetAll">全データを初期状態に戻す</button>' +
