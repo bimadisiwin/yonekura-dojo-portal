@@ -2627,7 +2627,7 @@ function updateArchiveBanner() {
   }
   var when = ctx.archivedAt ? new Date(ctx.archivedAt).toLocaleDateString("ja-JP") + " 保存" : "";
   el.style.display = "block";
-  el.innerHTML = "📦 アーカイブ閲覧中: " + esc(ctx.seasonLabel.replace("（アーカイブ）", "")) +
+  el.innerHTML = "📦 アーカイブ表示中（星取表のみ入力できます）: " + esc(ctx.seasonLabel.replace("（アーカイブ）", "")) +
     (when ? "（" + esc(when) + "）" : "") +
     ' <button type="button" class="btn btn-secondary btn-sm" style="margin-left:8px;padding:4px 8px" data-action="exitArchive">現在シーズンに戻る</button>';
 }
@@ -7482,7 +7482,7 @@ function deleteArchive(id) {
 
 function openCellModal(idA, idB, playoffKey) {
   if (isMemberMode) return;
-  if (isReadonly()) { showToast("アーカイブ閲覧中は編集できません"); return; }
+  if (isReadonly() && (playoffKey || !viewingArchiveId)) { showToast("アーカイブ閲覧中は編集できません"); return; }
   var pA, pB, existing;
   if (playoffKey) {
     ensurePlayoffs();
@@ -7517,7 +7517,7 @@ function openCellModal(idA, idB, playoffKey) {
 }
 
 function modalSet(r, winnerId) {
-  if (isReadonly()) { showToast("アーカイブ閲覧中は編集できません"); return; }
+  if (isReadonly() && (modalCtx.playoffKey || !viewingArchiveId)) { showToast("アーカイブ閲覧中は編集できません"); return; }
   if (modalCtx.playoffKey) {
     ensurePlayoffs();
     var bucket = state.playoffs[modalCtx.playoffKey];
