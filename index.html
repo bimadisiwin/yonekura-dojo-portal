@@ -1771,6 +1771,7 @@ function resolveAwardsPageContext(fy, sk) {
   return {
     live: false,
     readonly: true,
+    archiveId: best.id,
     fiscalYear: fy,
     seasonKey: sk,
     seasonLabel: formatSeasonLabel(fy, sk),
@@ -6051,9 +6052,26 @@ function ensureSeasonSpecialSlots() {
   return state.seasonSpecialAwards;
 }
 
-function setSeasonSpecialAwardSlot(slotIndex, field, value) {
-  if (isMemberMode || isReadonly()) return;
-  var slots = ensureSeasonSpecialSlots();
+function findArchiveById(archiveId) {
+  var arr = state.archives || [];
+  for (var i = 0; i < arr.length; i++) {
+    if (arr[i].id === archiveId) return arr[i];
+  }
+  return null;
+}
+
+function setSeasonSpecialAwardSlot(slotIndex, field, value, archiveId) {
+  if (isMemberMode) return;
+  var slots;
+  if (archiveId) {
+    var arch = findArchiveById(archiveId);
+    if (!arch) return;
+    arch.seasonSpecialAwards = normalizeSeasonSpecialSlots(arch.seasonSpecialAwards);
+    slots = arch.seasonSpecialAwards;
+  } else {
+    if (isReadonly()) return;
+    slots = ensureSeasonSpecialSlots();
+  }
   var idx = parseInt(slotIndex, 10);
   if (isNaN(idx) || idx < 0 || idx >= SPECIAL_AWARD_SLOT_COUNT) return;
   if (field === "type") {
@@ -6066,7 +6084,7 @@ function setSeasonSpecialAwardSlot(slotIndex, field, value) {
 }
 
 function renderAllPlayersOptions(selectedId) {
-  var leagues = getActiveContext().leagues || [];
+  var leagues = getAwardsCtx().leagues || [];
   var html = '<option value="">未設定</option>';
   leagues.forEach(function(league) {
     league.players.forEach(function(p) {
@@ -6553,8 +6571,20 @@ function renderSpecialAwardItem(league, def, playerId) {
     body + '</div>';
 }
 
+function findAwardsCtxPlayer(playerId) {
+  if (!playerId) return null;
+  var leagues = getAwardsCtx().leagues || [];
+  for (var i = 0; i < leagues.length; i++) {
+    var ps = leagues[i].players || [];
+    for (var j = 0; j < ps.length; j++) {
+      if (ps[j].id === playerId) return ps[j];
+    }
+  }
+  return findPlayerGlobal(playerId);
+}
+
 function renderGlobalAwardItem(def, playerId, cls) {
-  var player = playerId ? findPlayerGlobal(playerId) : null;
+  var player = playerId ? findAwardsCtxPlayer(playerId) : null;
   var body;
   if (player) {
     body = '<div class="award-winner">' + renderPlayerNameLine(player, true) + '</div>' +
@@ -6659,9 +6689,17 @@ function renderDojoAwardsSettings() {
     "</div>";
 }
 
-function renderSeasonSpecialAwardEditRows() {
-  if (isReadonly()) return "";
-  var slots = ensureSeasonSpecialSlots();
+function renderSeasonSpecialAwardEditRows(archiveId) {
+  var slots;
+  if (archiveId) {
+    var arch = findArchiveById(archiveId);
+    if (!arch) return "";
+    slots = normalizeSeasonSpecialSlots(arch.seasonSpecialAwards);
+  } else {
+    if (isReadonly()) return "";
+    slots = ensureSeasonSpecialSlots();
+  }
+  var archAttr = archiveId ? ' data-season-special-archive="' + esc(archiveId) + '"' : "";
   return slots.map(function(slot, idx) {
     var typeOpts = SPECIAL_AWARD_TYPES.map(function(def) {
       return '<option value="' + esc(def.key) + '"' + (slot.type === def.key ? " selected" : "") + '>' +
@@ -6669,8 +6707,8 @@ function renderSeasonSpecialAwardEditRows() {
     }).join("");
     var playerOpts = renderAllPlayersOptions(slot.playerId);
     return '<div class="special-award-row">' +
-      '<select class="player-status" data-season-special-slot="' + idx + '" data-season-special-field="type" title="賞の種類">' + typeOpts + "</select>" +
-      '<select class="player-status" data-season-special-slot="' + idx + '" data-season-special-field="player" title="選手">' + playerOpts + "</select>" +
+      '<select class="player-status" data-season-special-slot="' + idx + '" data-season-special-field="type"' + archAttr + ' title="賞の種類">' + typeOpts + "</select>" +
+      '<select class="player-status" data-season-special-slot="' + idx + '" data-season-special-field="player"' + archAttr + ' title="選手">' + playerOpts + "</select>" +
       "</div>";
   }).join("");
 }
@@ -6699,12 +6737,16 @@ function renderMergedDeptSpecialSection(ctx, live) {
     });
   }
   var editHtml = "";
-  if (!isMemberMode && live && !isReadonly()) {
+  var archiveId = (ctx && !ctx.live) ? ctx.archiveId : null;
+  if (!isMemberMode && (live || archiveId)) {
+    var editNote = archiveId
+      ? "過去シーズンの特別賞をあとから記載できます。全リーグの選手から" + SPECIAL_AWARD_SLOT_COUNT + "枠まで選べます。"
+      : "全リーグの選手から" + SPECIAL_AWARD_SLOT_COUNT + "枠まで選べます。";
     editHtml = '<div class="awards-section-block" style="margin-top:12px">' +
       '<div class="awards-section-title">🎀 特別賞の選定（指導者）</div>' +
-      '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">全リーグの選手から' + SPECIAL_AWARD_SLOT_COUNT + '枠まで選べます。</p>' +
+      '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' + editNote + '</p>' +
       '<div class="special-award-head"><span>賞の種類</span><span>選手</span></div>' +
-      renderSeasonSpecialAwardEditRows() +
+      renderSeasonSpecialAwardEditRows(archiveId) +
       "</div>";
   }
   return '<div class="card awards-merged-card">' +
@@ -6818,7 +6860,7 @@ function renderAwardsPage() {
     return html;
   }
   if (!ctx.live) {
-    html += '<p class="awards-archive-note">📦 アーカイブデータを表示中（閲覧のみ）</p>';
+    html += '<p class="awards-archive-note">📦 アーカイブデータを表示中（成績は閲覧のみ・特別賞はあとから記載できます）</p>';
   }
   awardsPageCtx = ctx;
   (ctx.leagues || []).forEach(function(league) {
@@ -8571,7 +8613,7 @@ function bindAppEvents() {
       setAnnualSpecialAwardSlot(t.getAttribute("data-annual-special-slot"), t.getAttribute("data-annual-special-field"), t.value);
     }
     else if (t.getAttribute("data-season-special-slot") != null && t.getAttribute("data-season-special-field")) {
-      setSeasonSpecialAwardSlot(t.getAttribute("data-season-special-slot"), t.getAttribute("data-season-special-field"), t.value);
+      setSeasonSpecialAwardSlot(t.getAttribute("data-season-special-slot"), t.getAttribute("data-season-special-field"), t.value, t.getAttribute("data-season-special-archive") || "");
     }
     else if (t.getAttribute("data-roster-id") && t.getAttribute("data-roster-field")) {
       var rosterField = t.getAttribute("data-roster-field");
