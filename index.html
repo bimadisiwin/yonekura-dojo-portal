@@ -6623,7 +6623,7 @@ function renderDojoAwardsCard() {
     '<div class="awards-section-title">🎀 年間特別賞（指導者選定）</div>' +
     '<div class="awards-grid">' + annualSpecialHtml + '</div>' +
     '</div>' +
-    '<div class="awards-note">道場全体の表彰です。シーズン特別賞・年間最優秀賞・年間特別賞は📋マスターで全リーグから選定できます。</div>' +
+    '<div class="awards-note">道場全体の年間表彰です。年間最優秀賞・年間特別賞は全リーグの選手から選びます。</div>' +
     '</div>';
 }
 
@@ -6656,10 +6656,10 @@ function renderDojoAwardsSettings() {
     "</div>";
 }
 
-function renderSeasonSpecialAwardsSettings() {
+function renderSeasonSpecialAwardEditRows() {
   if (isReadonly()) return "";
   var slots = ensureSeasonSpecialSlots();
-  var rows = slots.map(function(slot, idx) {
+  return slots.map(function(slot, idx) {
     var typeOpts = SPECIAL_AWARD_TYPES.map(function(def) {
       return '<option value="' + esc(def.key) + '"' + (slot.type === def.key ? " selected" : "") + '>' +
         def.icon + " " + esc(def.label) + "</option>";
@@ -6670,11 +6670,61 @@ function renderSeasonSpecialAwardsSettings() {
       '<select class="player-status" data-season-special-slot="' + idx + '" data-season-special-field="player" title="選手">' + playerOpts + "</select>" +
       "</div>";
   }).join("");
+}
+
+function renderSeasonSpecialAwardsSettings() {
+  if (isReadonly()) return "";
+  var rows = renderSeasonSpecialAwardEditRows();
   return '<div class="card">' +
     '<div class="card-title">🎀 シーズン特別賞（道場全体）</div>' +
     '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">シーズンごとの特別賞です。全リーグの選手から' + SPECIAL_AWARD_SLOT_COUNT + '枠まで選べます。</p>' +
     '<div class="special-award-head"><span>賞の種類</span><span>選手</span></div>' +
     rows + "</div>";
+}
+
+function renderMergedDeptSpecialSection(ctx, live) {
+  var gridHtml = "";
+  if (isMemberMode) {
+    (ctx.leagues || []).forEach(function(league) {
+      gridHtml += renderAwardPlaceholderItem("💥", league.name + " 一本王", "確定後に発表", "award-dept");
+      gridHtml += renderAwardPlaceholderItem("🔥", league.name + " 努力賞", "確定後に発表", "award-dept");
+    });
+    getSeasonSpecialSlots().forEach(function(slot) {
+      var def = getSpecialAwardType(slot.type);
+      gridHtml += renderAwardPlaceholderItem(def.icon, def.label, def.desc, "award-special");
+    });
+  } else {
+    (ctx.leagues || []).forEach(function(league) {
+      var awards = computeLeagueAwards(league);
+      awards.departments.forEach(function(d) {
+        gridHtml += renderAwardItem(d.icon, esc(league.name) + " " + d.label, "award-dept", d.pick, d.detail);
+      });
+    });
+    getSeasonSpecialSlots().forEach(function(slot) {
+      var def = getSpecialAwardType(slot.type);
+      gridHtml += renderGlobalAwardItem(def, slot.playerId, "award-special");
+    });
+  }
+  var editHtml = "";
+  if (!isMemberMode && live && !isReadonly()) {
+    editHtml = '<div class="awards-section-block" style="margin-top:12px">' +
+      '<div class="awards-section-title">🎀 特別賞の選定（指導者）</div>' +
+      '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">全リーグの選手から' + SPECIAL_AWARD_SLOT_COUNT + '枠まで選べます。</p>' +
+      '<div class="special-award-head"><span>賞の種類</span><span>選手</span></div>' +
+      renderSeasonSpecialAwardEditRows() +
+      "</div>";
+  }
+  return '<div class="card awards-merged-card">' +
+    '<div class="card-title">🎖 部門賞・特別賞</div>' +
+    '<div class="awards-section-block">' +
+    '<div class="awards-grid">' + gridHtml + '</div>' +
+    editHtml +
+    '</div>' +
+    '<div class="awards-note">' +
+    (isMemberMode
+      ? "部門賞・特別賞は確定後に下の「表彰記録」に表示されます。"
+      : "部門賞：各リーグの💥一本王 ／ 🔥努力賞（自動・シーズン）<br>特別賞：指導者選定（全リーグから" + SPECIAL_AWARD_SLOT_COUNT + "枠）") +
+    '</div></div>';
 }
 
 function renderSpecialAwardsSection(league) {
@@ -6730,7 +6780,7 @@ function renderLeagueAwardsCardMember(league) {
     renderAwardPlaceholderItem("📅", "月間MVP（" + monthLabel + "）", "月末に発表", "award-monthly") +
     '</div></div>' +
     renderMonthlyMvpHistorySection(league) +
-    '<div class="awards-note">部門賞は確定後に下の「表彰記録」に表示されます。シーズン特別賞は🏛 道場スコープでご確認ください。当月の月間MVPは確定済みの履歴のみ閲覧できます。</div>' +
+    '<div class="awards-note">部門賞・特別賞は下の「🎖 部門賞・特別賞」でご確認ください。当月の月間MVPは確定済みの履歴のみ閲覧できます。</div>' +
     '</div>';
 }
 
@@ -6746,9 +6796,6 @@ function renderLeagueAwardsCard(league) {
   var awards = computeLeagueAwards(league);
   var seasonDetail = function(p) { return p.points + "勝点 ・ " + p.wins + "勝" + p.draws + "分" + p.losses + "敗"; };
   var monthDetail = function(p) { return awards.monthLabel + " " + p.points + "勝点（" + p.played + "試合）"; };
-  var deptHtml = awards.departments.map(function(d) {
-    return renderAwardItem(d.icon, d.label, "award-dept", d.pick, d.detail);
-  }).join("");
   return '<div class="card awards-league-card">' +
     '<div class="card-title">📊 ' + esc(league.name) + '（リーグ表彰）</div>' +
     '<div class="awards-section-block">' +
@@ -6757,16 +6804,10 @@ function renderLeagueAwardsCard(league) {
     renderAwardItem("🏆", "シーズンMVP", "award-mvp", awards.seasonMvp, seasonDetail) +
     renderAwardItem("📅", "月間MVP（" + awards.monthLabel + "）", "award-monthly", awards.monthlyMvp, monthDetail) +
     '</div></div>' +
-    '<div class="awards-section-block">' +
-    '<div class="awards-section-title">🎖 部門賞（自動・シーズン）</div>' +
-    '<div class="awards-grid">' + deptHtml + '</div>' +
-    '</div>' +
     renderMonthlyMvpHistorySection(league) +
     '<div class="awards-note">' +
     'シーズンMVP：消化率' + Math.round(MVP_SEASON_MIN_RATE * 100) + '%以上（最低' + awards.seasonMin + '試合）の選手から勝点1位<br>' +
-    '月間MVP：' + awards.monthLabel + 'に記録された試合（日時付き）から2試合以上・勝点1位。過去月は自動確定、当月はリーグ設定で手動確定も可<br>' +
-    '部門賞：💥一本王 ／ 🔥努力賞（消化数）<br>' +
-    '特別賞：🏛 道場スコープの「シーズン特別賞」で全リーグから選定' +
+    '月間MVP：' + awards.monthLabel + 'に記録された試合（日時付き）から2試合以上・勝点1位。過去月は自動確定、当月はリーグ設定で手動確定も可' +
     '</div></div>';
 }
 
@@ -6787,11 +6828,10 @@ function renderAwardsPage() {
     html += '<p class="awards-archive-note">📦 アーカイブデータを表示中（閲覧のみ）</p>';
   }
   awardsPageCtx = ctx;
-  html += renderDojoAwardsCard();
-  if (!isMemberMode && ctx.live) html += renderSeasonSpecialAwardsSettings();
   (ctx.leagues || []).forEach(function(league) {
     html += renderLeagueAwardsCard(league);
   });
+  html += renderMergedDeptSpecialSection(ctx, ctx.live);
   html += renderAwardConfirmationsSection();
   awardsPageCtx = null;
   return html;
@@ -7160,6 +7200,7 @@ function renderSeasonSettings() {
     <button type="button" class="btn btn-ghost btn-block" data-action="archiveSeason">📦 現在シーズンをアーカイブ → 次シーズンへ</button>
     <p style="font-size:.66rem;color:var(--muted);margin-top:8px;line-height:1.45">アーカイブすると星取表・順位を保存し、全リーグの対戦結果をリセットして次シーズンに進みます（選手名・参加設定は保持）。</p>
   </div>
+  ${renderDojoAwardsSettings()}
   <div class="card">
     <div class="card-title">アーカイブ一覧（${archives.length}件）</div>
     <div class="archive-list">${archiveItems}</div>
@@ -7168,11 +7209,10 @@ function renderSeasonSettings() {
 
 function renderMasterSettingsPage() {
   return '<div class="print-title">📋 マスターデータ ｜ ' + esc(getActiveContext().seasonLabel) + "</div>" +
-    '<p style="font-size:.72rem;color:var(--muted);margin:0 0 10px;line-height:1.5">道場全体の館員台帳・出席取込・クラウド同期・シーズン管理はここで行います。リーグごとの選手や表彰は <b>⚙️リーグ設定</b> タブへ。</p>' +
+    '<p style="font-size:.72rem;color:var(--muted);margin:0 0 10px;line-height:1.5">道場全体の館員台帳・出席取込・クラウド同期・シーズン管理・年間表彰はここで行います。リーグごとの選手や月間MVPは <b>⚙️リーグ設定</b> タブへ。</p>' +
     renderRosterLedgerSection() +
     renderGhSettings() +
     renderSeasonSettings() +
-    renderDojoAwardsSettings() +
     renderAwardConfirmSettings() +
     '<div class="card">' +
     '<div class="card-title">データ管理</div>' +
