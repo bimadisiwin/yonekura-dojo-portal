@@ -2856,6 +2856,15 @@ function mergeArchivesInto(target, source) {
   });
 }
 
+// 現行シーズンと同一年度・シーズンのアーカイブを除去する（端末の古いキャッシュで重複復活するのを防ぐ）。
+function dropArchivesMatchingLiveSeason(s) {
+  if (!s || !Array.isArray(s.archives)) return s;
+  s.archives = s.archives.filter(function(a) {
+    return !(a && a.fiscalYear === s.fiscalYear && a.seasonKey === s.seasonKey);
+  });
+  return s;
+}
+
 function mergeSposuruSettingsInto(target, source) {
   if (!source || !source.sposuruSettings) return;
   ensureSposuruSettings(target);
@@ -2886,6 +2895,7 @@ function mergeCloudStates(local, remote) {
   mergeRosterInto(merged, secondary);
   mergeArchivesInto(merged, secondary);
   mergeSposuruSettingsInto(merged, secondary);
+  dropArchivesMatchingLiveSeason(merged);
   merged.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0, Date.now());
   return normalizeState(merged);
 }
@@ -2916,6 +2926,7 @@ function mergeCloudStatesRemoteFirst(local, remote) {
   mergeRosterInto(merged, local);
   mergeArchivesInto(merged, local);
   mergeSposuruSettingsInto(merged, local);
+  dropArchivesMatchingLiveSeason(merged);
   merged.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0, Date.now());
   return normalizeState(merged);
 }
