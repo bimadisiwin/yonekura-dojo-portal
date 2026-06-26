@@ -5887,7 +5887,6 @@ function computeStats(league) {
 }
 
 var J1_CUTOFF = 7;
-var MVP_MONTHLY_MIN_GAMES = 2;
 var MVP_SEASON_MIN_RATE = 0.5;
 var SPECIAL_AWARD_TYPES = [
   { key: "kaikin", icon: "📅", label: "皆勤賞", desc: "欠席なく道場に参加した" },
@@ -6173,169 +6172,13 @@ function findLeaguePlayer(league, playerId) {
   return findPlayerGlobal(playerId);
 }
 
-function isInCurrentMonth(playedAt) {
-  if (!playedAt) return false;
-  var d = new Date(playedAt);
-  var now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-}
-
 function getCurrentMonthLabel() {
   var now = new Date();
   return now.getFullYear() + "年" + (now.getMonth() + 1) + "月";
 }
 
-function getMonthKeyFromTimestamp(ts) {
-  var d = new Date(ts);
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
-}
-
-function getCurrentMonthKey() {
-  return getMonthKeyFromTimestamp(Date.now());
-}
-
-function formatMonthKeyLabel(monthKey) {
-  var parts = (monthKey || "").split("-");
-  if (parts.length < 2) return monthKey || "";
-  return parts[0] + "年" + parseInt(parts[1], 10) + "月";
-}
-
-function isInMonthKey(playedAt, monthKey) {
-  if (!playedAt || !monthKey) return false;
-  return getMonthKeyFromTimestamp(playedAt) === monthKey;
-}
-
-function getMonthlyMvpLockedMap(leagueId) {
-  var ctx = getAwardsCtx();
-  return (ctx.monthlyMvpLocked || {})[leagueId] || {};
-}
-
 function getAwardConfirmations() {
   return getAwardsCtx().awardConfirmations || [];
-}
-
-function collectLeagueMonthKeys(league) {
-  var set = {};
-  var keys = Object.keys(league.results || {});
-  var i;
-  for (i = 0; i < keys.length; i++) {
-    var result = league.results[keys[i]];
-    if (!result || !result.playedAt) continue;
-    set[getMonthKeyFromTimestamp(result.playedAt)] = true;
-  }
-  var locked = getMonthlyMvpLockedMap(league.id);
-  Object.keys(locked).forEach(function(mk) { set[mk] = true; });
-  return Object.keys(set).sort();
-}
-
-function getMonthlyMvpOverrideId(leagueId, monthKey) {
-  var map = (getAwardsCtx().monthlyMvpOverride || {})[leagueId] || {};
-  return map[monthKey] || "";
-}
-
-function computeMonthlyMvpForMonthKey(league, monthKey) {
-  var monthStats = computePlayerDetailedStats(league, function(result) {
-    return isInMonthKey(result.playedAt, monthKey);
-  });
-  var overrideId = getMonthlyMvpOverrideId(league.id, monthKey);
-  if (overrideId) {
-    var op = null, si;
-    for (si = 0; si < monthStats.length; si++) {
-      if (monthStats[si].id === overrideId) { op = monthStats[si]; break; }
-    }
-    if (!op) {
-      var lp = findLeaguePlayer(league, overrideId);
-      if (lp) op = { id: lp.id, name: lp.name, active: lp.active, points: 0, played: 0, wins: 0, draws: 0, losses: 0, ipponWins: 0, yuseiWins: 0 };
-    }
-    if (op) return { winners: [op], value: op.points, tie: false, manual: true };
-  }
-  return pickAwardWinners(monthStats, function(p) { return p.points; }, {
-    minValue: 0, minPlayed: MVP_MONTHLY_MIN_GAMES
-  });
-}
-
-function setMonthlyMvpOverride(leagueId, monthKey, playerId, archiveId) {
-  if (isMemberMode || !monthKey) return;
-  var ovRoot, lockedRoot;
-  if (archiveId) {
-    var arch = findArchiveById(archiveId);
-    if (!arch) return;
-    if (!arch.monthlyMvpOverride || typeof arch.monthlyMvpOverride !== "object") arch.monthlyMvpOverride = {};
-    ovRoot = arch.monthlyMvpOverride;
-    lockedRoot = arch.monthlyMvpLocked;
-  } else {
-    if (isReadonly()) return;
-    if (!state.monthlyMvpOverride || typeof state.monthlyMvpOverride !== "object") state.monthlyMvpOverride = {};
-    ovRoot = state.monthlyMvpOverride;
-    lockedRoot = state.monthlyMvpLocked;
-  }
-  if (!ovRoot[leagueId] || typeof ovRoot[leagueId] !== "object") ovRoot[leagueId] = {};
-  if (playerId) ovRoot[leagueId][monthKey] = playerId;
-  else delete ovRoot[leagueId][monthKey];
-  var league = null;
-  if (archiveId) {
-    var a2 = findArchiveById(archiveId);
-    (a2 && a2.leagues || []).forEach(function(l) { if (l.id === leagueId) league = l; });
-  } else {
-    league = getLeague(leagueId);
-  }
-  if (league && lockedRoot && lockedRoot[leagueId] && lockedRoot[leagueId][monthKey]) {
-    lockedRoot[leagueId][monthKey] = buildLockedMonthlyEntry(monthKey, computeMonthlyMvpForMonthKey(league, monthKey));
-  }
-  saveState();
-  render();
-}
-
-function buildLockedMonthlyEntry(monthKey, computed) {
-  return {
-    lockedAt: Date.now(),
-    monthKey: monthKey,
-    monthLabel: formatMonthKeyLabel(monthKey),
-    winners: computed.winners.map(function(p) {
-      return { playerId: p.id, points: p.points, played: p.played };
-    }),
-    tie: computed.tie,
-    empty: !computed.winners.length
-  };
-}
-
-function autoLockPastMonthlyMvp() {
-  if (isReadonly() || isMemberMode) return;
-  if (awardsPageCtx && awardsPageCtx.readonly) return;
-  var changed = false;
-  var nowKey = getCurrentMonthKey();
-  if (!state.monthlyMvpLocked) state.monthlyMvpLocked = {};
-  state.leagues.forEach(function(league) {
-    if (!state.monthlyMvpLocked[league.id]) state.monthlyMvpLocked[league.id] = {};
-    var months = collectLeagueMonthKeys(league);
-    var mi;
-    for (mi = 0; mi < months.length; mi++) {
-      var mk = months[mi];
-      if (mk >= nowKey) continue;
-      if (state.monthlyMvpLocked[league.id][mk]) continue;
-      state.monthlyMvpLocked[league.id][mk] = buildLockedMonthlyEntry(mk, computeMonthlyMvpForMonthKey(league, mk));
-      changed = true;
-    }
-  });
-  if (changed) saveState();
-}
-
-function lockMonthlyMvpForLeague(leagueId, monthKey) {
-  if (isMemberMode || isReadonly()) return;
-  var league = getLeague(leagueId);
-  if (!league) return;
-  monthKey = monthKey || getCurrentMonthKey();
-  if (!state.monthlyMvpLocked) state.monthlyMvpLocked = {};
-  if (!state.monthlyMvpLocked[leagueId]) state.monthlyMvpLocked[leagueId] = {};
-  if (state.monthlyMvpLocked[leagueId][monthKey]) {
-    showToast(formatMonthKeyLabel(monthKey) + " は確定済みです");
-    return;
-  }
-  if (!confirm(formatMonthKeyLabel(monthKey) + " の月間MVPを確定して記録しますか？")) return;
-  state.monthlyMvpLocked[leagueId][monthKey] = buildLockedMonthlyEntry(monthKey, computeMonthlyMvpForMonthKey(league, monthKey));
-  saveState();
-  render();
-  showToast(formatMonthKeyLabel(monthKey) + " 月間MVPを確定 ✓");
 }
 
 function buildLeagueAwardsSnapshot(league) {
@@ -6384,70 +6227,6 @@ function formatConfirmDate(ts) {
   if (!ts) return "";
   var d = new Date(ts);
   return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
-}
-
-function renderMonthlyMvpWinnerText(league, locked, livePick) {
-  if (locked) {
-    if (locked.empty || !locked.winners || !locked.winners.length) {
-      return '<span class="mvp-history-winners" style="color:var(--muted)">該当者なし</span>';
-    }
-    var txt = locked.winners.map(function(w) {
-      var p = findLeaguePlayer(league, w.playerId) || findPlayerGlobal(w.playerId);
-      return esc(p.name) + "（" + w.points + "勝点・" + w.played + "試合）";
-    }).join(" ・ ");
-    if (locked.tie) txt += ' <span style="color:var(--muted);font-size:.64rem">同点</span>';
-    return '<span class="mvp-history-winners">' + txt + "</span>";
-  }
-  if (isMemberMode) {
-    return '<span class="mvp-history-winners" style="color:var(--muted);font-weight:600">発表準備中</span>';
-  }
-  if (!livePick || !livePick.winners.length) {
-    return '<span class="mvp-history-winners" style="color:var(--muted)">該当者なし（未確定）</span>';
-  }
-  var liveTxt = livePick.winners.map(function(p) {
-    return esc(p.name) + "（" + p.points + "勝点・" + p.played + "試合）";
-  }).join(" ・ ");
-  if (livePick.tie) liveTxt += ' <span style="color:var(--muted);font-size:.64rem">同点</span>';
-  return '<span class="mvp-history-winners">' + liveTxt + "</span>";
-}
-
-function renderMonthlyMvpHistorySection(league) {
-  autoLockPastMonthlyMvp();
-  var monthKeys = collectLeagueMonthKeys(league).slice().sort().reverse();
-  if (!monthKeys.length) return "";
-  var nowKey = getCurrentMonthKey();
-  var lockedMap = getMonthlyMvpLockedMap(league.id);
-  var ctx = getAwardsCtx();
-  var archiveId = (ctx && !ctx.live) ? (ctx.archiveId || "") : "";
-  var canEdit = !isMemberMode && (ctx.live || archiveId);
-  var archAttr = archiveId ? ' data-monthly-mvp-archive="' + esc(archiveId) + '"' : "";
-  var rows = monthKeys.map(function(mk) {
-    var locked = lockedMap[mk];
-    var isCurrent = mk === nowKey;
-    var badge = locked
-      ? '<span class="hist-lock-badge">確定</span>'
-      : (isCurrent ? '<span class="hist-lock-badge pending">未確定</span>' : '<span class="hist-lock-badge pending">未確定</span>');
-    var livePick = !locked ? computeMonthlyMvpForMonthKey(league, mk) : null;
-    var editHtml = "";
-    if (canEdit) {
-      editHtml = '<div class="awards-mvp-edit" style="margin-top:6px">' +
-        '<select class="player-status" data-monthly-mvp-league="' + esc(league.id) + '" data-monthly-mvp-month="' + esc(mk) + '"' + archAttr + ' title="月間MVP">' +
-        renderLeaguePlayerOptions(league, getMonthlyMvpOverrideId(league.id, mk)) +
-        "</select></div>";
-    }
-    return '<div class="mvp-history-row">' +
-      '<div class="mvp-history-row-head">' +
-      '<span class="mvp-history-month">' + esc(formatMonthKeyLabel(mk)) + " 月間MVP</span>" + badge +
-      "</div>" +
-      renderMonthlyMvpWinnerText(league, locked, livePick) +
-      (locked && locked.lockedAt ? '<div class="award-confirm-meta">確定: ' + esc(formatConfirmDate(locked.lockedAt)) + "</div>" : "") +
-      editHtml +
-      "</div>";
-  }).join("");
-  return '<div class="awards-section-block">' +
-    '<div class="awards-section-title">📅 月間MVP 履歴</div>' +
-    '<div class="mvp-history-list">' + rows + "</div>" +
-    "</div>";
 }
 
 function renderAwardConfirmPlayerLine(playerId, league) {
@@ -6548,17 +6327,6 @@ function renderAwardConfirmSettings() {
     "</div>";
 }
 
-function renderMonthlyMvpLockSettings(league) {
-  if (isReadonly()) return "";
-  var mk = getCurrentMonthKey();
-  if (getMonthlyMvpLockedMap(league.id)[mk]) {
-    return '<p style="font-size:.66rem;color:var(--muted);margin:8px 0 0">📅 ' + esc(formatMonthKeyLabel(mk)) +
-      " の月間MVPは確定済みです。</p>";
-  }
-  return '<button type="button" class="btn btn-ghost btn-block" style="margin-top:8px" data-action="lockMonthlyMvp" data-league-id="' +
-    esc(league.id) + '">📅 今月の月間MVPを確定</button>';
-}
-
 function getSeasonMvpMinGames(activeCount) {
   var totalRequired = Math.max(0, activeCount - 1);
   return Math.max(2, Math.floor(totalRequired * MVP_SEASON_MIN_RATE));
@@ -6640,14 +6408,10 @@ function computeLeagueAwards(league) {
     }
     if (op) { seasonMvp = { winners: [op], value: op.points, tie: false }; seasonMvpManual = true; }
   }
-  var monthlyMvp = computeMonthlyMvpForMonthKey(league, getCurrentMonthKey());
   return {
     seasonMin: seasonMin,
     seasonMvp: seasonMvp,
-    seasonMvpManual: seasonMvpManual,
-    monthlyMvp: monthlyMvp,
-    monthlyMvpManual: !!monthlyMvp.manual,
-    monthLabel: getCurrentMonthLabel()
+    seasonMvpManual: seasonMvpManual
   };
 }
 
@@ -6919,17 +6683,14 @@ function renderAwardPlaceholderItem(icon, label, desc, cls) {
 }
 
 function renderLeagueAwardsCardMember(league) {
-  var monthLabel = getCurrentMonthLabel();
   return '<div class="card awards-league-card">' +
     '<div class="card-title">📊 ' + esc(league.name) + '（リーグ表彰）</div>' +
     '<div class="awards-section-block">' +
     '<div class="awards-section-title">👑 MVP</div>' +
     '<div class="awards-grid">' +
     renderAwardPlaceholderItem("🏆", "シーズンMVP", "シーズン終了時に発表", "award-mvp") +
-    renderAwardPlaceholderItem("📅", "月間MVP（" + monthLabel + "）", "月末に発表", "award-monthly") +
     '</div></div>' +
-    renderMonthlyMvpHistorySection(league) +
-    '<div class="awards-note">特別賞は下の「🎀 特別賞」でご確認ください。当月の月間MVPは確定済みの履歴のみ閲覧できます。</div>' +
+    '<div class="awards-note">特別賞は下の「🎀 特別賞」でご確認ください。</div>' +
     '</div>';
 }
 
@@ -6950,11 +6711,6 @@ function renderLeagueAwardsCard(league) {
     if (awards.seasonMvpManual) txt += " ・ 指導者選定";
     return txt;
   };
-  var monthDetail = function(p) {
-    var txt = awards.monthLabel + " " + p.points + "勝点（" + p.played + "試合）";
-    if (awards.monthlyMvpManual) txt += " ・ 指導者選定";
-    return txt;
-  };
   var mvpEditHtml = "";
   if (!isMemberMode && (ctx.live || archiveId)) {
     var archAttr = archiveId ? ' data-season-mvp-archive="' + esc(archiveId) + '"' : "";
@@ -6968,14 +6724,11 @@ function renderLeagueAwardsCard(league) {
     '<div class="card-title">📊 ' + esc(league.name) + '（リーグ表彰）</div>' +
     '<div class="awards-section-block">' +
     '<div class="awards-section-title">👑 MVP</div>' +
-    '<div class="awards-grid">' +
+    '<div class="awards-grid awards-grid-single">' +
     renderAwardItem("🏆", "シーズンMVP", "award-mvp", awards.seasonMvp, seasonDetail) +
-    renderAwardItem("📅", "月間MVP（" + awards.monthLabel + "）", "award-monthly", awards.monthlyMvp, monthDetail) +
     '</div>' + mvpEditHtml + '</div>' +
-    renderMonthlyMvpHistorySection(league) +
     '<div class="awards-note">' +
-    'シーズンMVP：消化率' + Math.round(MVP_SEASON_MIN_RATE * 100) + '%以上（最低' + awards.seasonMin + '試合）の選手から勝点1位（指導者が手動選定も可）<br>' +
-    '月間MVP：' + awards.monthLabel + 'に記録された試合（日時付き）から2試合以上・勝点1位。過去月は自動確定、当月はリーグ設定で手動確定も可' +
+    'シーズンMVP：消化率' + Math.round(MVP_SEASON_MIN_RATE * 100) + '%以上（最低' + awards.seasonMin + '試合）の選手から勝点1位（指導者が手動選定も可）' +
     '</div></div>';
 }
 
@@ -7381,7 +7134,7 @@ function renderSeasonSettings() {
 
 function renderMasterSettingsPage() {
   return '<div class="print-title">📋 マスターデータ ｜ ' + esc(getActiveContext().seasonLabel) + "</div>" +
-    '<p style="font-size:.72rem;color:var(--muted);margin:0 0 10px;line-height:1.5">道場全体の館員台帳・出席取込・クラウド同期・シーズン管理はここで行います。年間表彰は <b>🏆 MVP・表彰</b> タブの「🏛 道場表彰（年間）」、リーグごとの選手や月間MVPは <b>⚙️リーグ設定</b> タブへ。</p>' +
+    '<p style="font-size:.72rem;color:var(--muted);margin:0 0 10px;line-height:1.5">道場全体の館員台帳・出席取込・クラウド同期・シーズン管理はここで行います。年間表彰は <b>🏆 MVP・表彰</b> タブの「🏛 道場表彰（年間）」、リーグごとの選手は <b>⚙️リーグ設定</b> タブへ。</p>' +
     renderRosterLedgerSection() +
     renderGhSettings() +
     renderSeasonSettings() +
@@ -7419,7 +7172,6 @@ function renderLeagueSettings(league) {
       <div class="form-row"><label>負け</label><input type="number" min="0" max="10" value="${pr.lose}" data-set-rule="lose"></div>
     </div>
   </div>
-  ${renderMonthlyMvpLockSettings(league)}
   <div class="card">
     <div class="card-title">${esc(league.name)} の選手 (${activeCount}/${league.players.length} 参加)</div>
     <p style="font-size:.66rem;color:var(--muted);margin:-4px 0 8px;line-height:1.45">館員の新規登録は <b>📋マスター</b> の道場館員台帳から。ここではリーグへの参加・名前の調整を行います。🎗ストライプは <b>🎗ストライプ</b> タブで管理。</p>
@@ -8656,7 +8408,6 @@ function handleAppTap(e) {
   else if (action === "applySeason") applySeasonSettings();
   else if (action === "archiveSeason") archiveCurrentSeason();
   else if (action === "confirmAwards") confirmAwardsSnapshot();
-  else if (action === "lockMonthlyMvp") lockMonthlyMvpForLeague(target.getAttribute("data-league-id"));
   else if (action === "deleteAwardConfirmation") deleteAwardConfirmation(target.getAttribute("data-confirm-id"));
   else if (action === "addRosterMember") addRosterMember(document.getElementById("newRosterName") ? document.getElementById("newRosterName").value : "");
   else if (action === "addRosterToLeague") {
@@ -8756,9 +8507,6 @@ function bindAppEvents() {
     }
     else if (t.getAttribute("data-season-mvp-league")) {
       setSeasonMvpOverride(t.getAttribute("data-season-mvp-league"), t.value, t.getAttribute("data-season-mvp-archive") || "");
-    }
-    else if (t.getAttribute("data-monthly-mvp-league") && t.getAttribute("data-monthly-mvp-month")) {
-      setMonthlyMvpOverride(t.getAttribute("data-monthly-mvp-league"), t.getAttribute("data-monthly-mvp-month"), t.value, t.getAttribute("data-monthly-mvp-archive") || "");
     }
     else if (t.getAttribute("data-season-special-slot") != null && t.getAttribute("data-season-special-field")) {
       setSeasonSpecialAwardSlot(t.getAttribute("data-season-special-slot"), t.getAttribute("data-season-special-field"), t.value, t.getAttribute("data-season-special-archive") || "");
