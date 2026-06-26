@@ -446,6 +446,10 @@ body:not(.member-mode):not(.embedded) main {
   font-size: var(--fluid-text-2xs); padding: var(--fluid-space-2xs) var(--fluid-space-xs); border: 1px solid var(--line); border-radius: var(--fluid-radius-sm);
   background: var(--card); color: var(--muted); cursor: pointer;
 }
+.award-confirm-cert {
+  font-size: var(--fluid-text-2xs); padding: var(--fluid-space-2xs) var(--fluid-space-xs); border: 1px solid #c9a227; border-radius: var(--fluid-radius-sm);
+  background: #fff7e0; color: #8a6d12; font-weight: 700; cursor: pointer; margin-right: var(--fluid-space-2xs);
+}
 .awards-history-card { margin-top: var(--fluid-space-lg); }
 .player-name { font-weight: 700; font-size: var(--fluid-text-md); word-break: keep-all; line-height: var(--fluid-line-tight); }
 .player-stats {
@@ -530,6 +534,32 @@ body.member-mode.senior-member .my-progress-goal-body {
 .my-progress-comment-body {
   font-size: var(--fluid-text-md); line-height: var(--fluid-line-loose); white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
 }
+.my-award-list { display: flex; flex-direction: column; gap: var(--fluid-space-xs); }
+.my-award-item {
+  display: flex; align-items: center; gap: var(--fluid-space-sm);
+  padding: var(--fluid-space-xs) var(--fluid-space-sm);
+  background: #fff7e0; border: 1px solid #e6cf8a; border-radius: var(--fluid-radius-md);
+}
+.my-award-icon { font-size: 1.4em; line-height: 1; flex: 0 0 auto; }
+.my-award-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.my-award-label { font-weight: 700; font-size: var(--fluid-text-md); color: #6b520c; }
+.my-award-league {
+  margin-left: 8px; font-size: var(--fluid-text-2xs); font-weight: 700; color: #2d5a8e;
+  border: 1px solid #c9a227; border-radius: 999px; padding: 1px 8px; background: #fffdf6; white-space: nowrap;
+}
+.my-award-season { font-size: var(--fluid-text-2xs); color: var(--muted); }
+.feedback-awards { margin: 4px 0 10px; }
+.feedback-awards-warn {
+  margin-left: 8px; font-size: var(--fluid-text-2xs); font-weight: 700; color: #b83232;
+  border: 1px solid #f0b4b4; border-radius: 999px; padding: 1px 8px; background: #fdecec;
+}
+.feedback-award-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.feedback-award-chip {
+  font-size: var(--fluid-text-2xs); font-weight: 700; color: #6b520c;
+  background: #fff7e0; border: 1px solid #e6cf8a; border-radius: 999px; padding: 3px 10px;
+}
+.feedback-award-chip small { font-weight: 400; color: #8a7a4a; margin-left: 3px; }
+.feedback-award-none { font-size: var(--fluid-text-2xs); color: var(--muted); }
 .my-progress-goal-body {
   font-size: var(--fluid-text-md); line-height: var(--fluid-line-loose); white-space: pre-wrap;
   padding: var(--fluid-space-md) var(--fluid-space-lg); background: var(--bg); border-radius: var(--fluid-radius-md); border: 1px solid var(--line);
@@ -1155,10 +1185,38 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
   min-height: calc(var(--fluid-touch) - 4px);
 }
 .special-award-row {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(120px + 6vw), 1fr)); gap: var(--fluid-space-sm);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--fluid-space-sm);
   padding: var(--fluid-space-sm) var(--fluid-space-md); background: var(--bg); border-radius: var(--fluid-radius-sm); margin-bottom: var(--fluid-space-sm);
 }
-.special-award-row .player-status { min-width: 0; width: 100%; }
+.special-award-row .player-status { flex: 1 1 calc(45% - var(--fluid-space-sm)); min-width: 0; width: auto; }
+.special-award-del {
+  flex: 0 0 auto; width: 1.9em; height: 1.9em; line-height: 1; padding: 0;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--card); color: var(--muted);
+  font-size: var(--fluid-text-md); cursor: pointer;
+}
+.special-award-del:hover { border-color: #d88; color: #b83232; }
+.special-award-add {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;
+  padding: var(--fluid-space-xs) var(--fluid-space-md); border: 1px dashed var(--accent2, #2d5a8e); border-radius: var(--fluid-radius-sm);
+  background: var(--card); color: var(--accent2, #2d5a8e); font-weight: 700; font-size: var(--fluid-text-xs); cursor: pointer;
+}
+.custom-type-block { border-top: 1px dashed var(--line); padding-top: var(--fluid-space-md); }
+.custom-type-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fluid-space-sm); }
+.custom-type-form input {
+  padding: var(--fluid-space-xs) var(--fluid-space-sm); border: 1px solid var(--line); border-radius: var(--fluid-radius-sm);
+  font-size: var(--fluid-text-md); min-width: 0; background: var(--card); color: inherit;
+}
+.custom-type-form .custom-type-icon { flex: 0 0 3.4em; width: 3.4em; text-align: center; }
+.custom-type-form .custom-type-label { flex: 1 1 9em; }
+.custom-type-form .custom-type-desc { flex: 2 1 16em; }
+.custom-type-list { margin-top: var(--fluid-space-sm); display: flex; flex-direction: column; gap: 6px; }
+.custom-type-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--fluid-space-sm);
+  padding: var(--fluid-space-xs) var(--fluid-space-sm); background: var(--bg); border-radius: var(--fluid-radius-sm);
+}
+.custom-type-info { font-size: var(--fluid-text-sm); font-weight: 700; min-width: 0; }
+.custom-type-info small { font-weight: 400; color: var(--muted); margin-left: 4px; }
+.custom-type-empty { font-size: var(--fluid-text-2xs); color: var(--muted); margin: 4px 0 0; }
 .special-award-head {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(120px + 6vw), 1fr)); gap: var(--fluid-space-sm);
   margin-bottom: var(--fluid-space-sm); font-size: var(--fluid-text-2xs); font-weight: 700; color: var(--muted);
@@ -3195,6 +3253,7 @@ function normalizeState(raw) {
     s.annualBestAward.playerId = "";
   }
   s.annualSpecialAwards = normalizeAnnualSpecialSlots(s.annualSpecialAwards);
+  s.customAwardTypes = Array.isArray(s.customAwardTypes) ? s.customAwardTypes.map(normalizeCustomAwardType) : [];
   s.seasonSpecialAwards = normalizeSeasonSpecialSlots(s.seasonSpecialAwards);
   if (!s.seasonMvpOverride || typeof s.seasonMvpOverride !== "object") s.seasonMvpOverride = {};
   if (!s.monthlyMvpOverride || typeof s.monthlyMvpOverride !== "object") s.monthlyMvpOverride = {};
@@ -3569,6 +3628,21 @@ function findRosterMember(rosterId) {
   return null;
 }
 
+function normalizeAwardEntry(a) {
+  a = a || {};
+  return {
+    fiscalYear: a.fiscalYear || "",
+    seasonKey: a.seasonKey || "",
+    seasonLabel: a.seasonLabel || "",
+    kind: a.kind || "special",
+    type: a.type || "",
+    icon: a.icon || "🏅",
+    label: a.label || "賞",
+    league: a.league || "",
+    at: parseInt(a.at, 10) || 0
+  };
+}
+
 function normalizeRosterMember(raw) {
   var m = raw || {};
   var sn = parseInt(m.stripes, 10);
@@ -3591,7 +3665,8 @@ function normalizeRosterMember(raw) {
     memberCommentMeta: m.memberCommentMeta && typeof m.memberCommentMeta === "object" ? m.memberCommentMeta : null,
     memberCommentDraft: m.memberCommentDraft || "",
     memberCommentDraftMeta: m.memberCommentDraftMeta && typeof m.memberCommentDraftMeta === "object" ? m.memberCommentDraftMeta : null,
-    reviews: Array.isArray(m.reviews) ? m.reviews.map(normalizeReviewEntry) : []
+    reviews: Array.isArray(m.reviews) ? m.reviews.map(normalizeReviewEntry) : [],
+    awards: Array.isArray(m.awards) ? m.awards.map(normalizeAwardEntry) : []
   };
 }
 
@@ -4094,6 +4169,23 @@ function renderMyProgressInvalidPage() {
     "</div>";
 }
 
+function renderMyAwardsSection(member) {
+  var awards = (member && Array.isArray(member.awards)) ? member.awards.slice() : [];
+  if (!awards.length) return "";
+  awards.sort(function(a, b) { return (b.at || 0) - (a.at || 0); });
+  var items = awards.map(function(a) {
+    var league = a.league ? '<span class="my-award-league">' + esc(a.league) + "</span>" : "";
+    return '<div class="my-award-item">' +
+      '<span class="my-award-icon">' + (a.icon || "🏅") + "</span>" +
+      '<div class="my-award-main">' +
+      '<div class="my-award-label">' + esc(a.label) + league + "</div>" +
+      '<div class="my-award-season">' + esc(a.seasonLabel) + "</div>" +
+      "</div></div>";
+  }).join("");
+  return '<div class="card"><div class="card-title my-progress-section-title">🏅 これまでにとった賞</div>' +
+    '<div class="my-award-list">' + items + "</div></div>";
+}
+
 function renderSeniorMyProgressPage(rosterId) {
   var member = findRosterMember(rosterId);
   if (!member) return renderMyProgressInvalidPage();
@@ -4125,6 +4217,7 @@ function renderSeniorMyProgressPage(rosterId) {
     msgHtml +
     '<p class="my-progress-note">※ 中学生以上はストライプ・Jリーグの対象外です。目標と指導員メッセージをここで確認できます。</p>' +
     "</div>" +
+    renderMyAwardsSection(member) +
     '<div class="card"><div class="card-title">履歴（メッセージ）</div>' + renderMyProgressReviewHistory(member) + "</div>" +
     '<div class="card"><button type="button" class="btn btn-ghost btn-block" data-action="logoutMember">確認を終了する</button></div>';
 }
@@ -4195,6 +4288,7 @@ function renderMyProgressPage(rosterId) {
     "</div>" +
     '<div class="card"><div class="card-title my-progress-section-title">道場内リーグの結果</div>' + renderMyProgressLeagueStats(member.id) + "</div>" +
     nextSection +
+    renderMyAwardsSection(member) +
     '<div class="card"><div class="card-title my-progress-section-title">これまでの記録</div>' + renderMyProgressReviewHistory(member) + "</div>" +
     '<div class="card"><button type="button" class="btn btn-ghost btn-block" data-action="logoutMember">別のお子さまの確認／終了</button></div>';
 }
@@ -5646,6 +5740,25 @@ function loadFeedbackDraft(rosterId) {
   showToast(m.name + "さんの下書きをコピーしました", { type: "ok" });
 }
 
+function renderMemberAwardsInline(m) {
+  var awards = (m && Array.isArray(m.awards)) ? m.awards.slice() : [];
+  var fy = state.fiscalYear;
+  var thisYearCount = awards.filter(function(a) { return a.fiscalYear === fy; }).length;
+  var warn = thisYearCount ? "" : '<span class="feedback-awards-warn">今年度まだ受賞なし</span>';
+  if (!awards.length) {
+    return '<div class="feedback-awards"><div class="feedback-field-label">🏅 受賞歴' + warn + "</div>" +
+      '<div class="feedback-award-chips"><span class="feedback-award-none">まだありません</span></div></div>';
+  }
+  awards.sort(function(a, b) { return (b.at || 0) - (a.at || 0); });
+  var chips = awards.map(function(a) {
+    return '<span class="feedback-award-chip">' + (a.icon || "🏅") + " " + esc(a.label) +
+      (a.league ? " <small>" + esc(a.league) + "</small>" : "") +
+      " <small>" + esc(a.seasonLabel) + "</small></span>";
+  }).join("");
+  return '<div class="feedback-awards"><div class="feedback-field-label">🏅 受賞歴' + warn + "</div>" +
+    '<div class="feedback-award-chips">' + chips + "</div></div>";
+}
+
 function renderFeedbackEditor(m) {
   var senior = isSeniorMember(m);
   var leagues = getMemberLeagueLabels(m.id);
@@ -5673,6 +5786,7 @@ function renderFeedbackEditor(m) {
     (m.sposuruName && m.sposuruName !== m.name ? '<div class="feedback-editor-meta">' + esc(m.sposuruName) + "</div>" : "") +
     "</div>" +
     (metaBits.length ? '<div class="feedback-editor-meta">' + metaBits.join(" ／ ") + "</div>" : "") +
+    (senior ? "" : renderMemberAwardsInline(m)) +
     renderFeedbackDraftBanner(m) +
     renderFeedbackHistorySection(m) +
     goalField +
@@ -5952,6 +6066,8 @@ var ANNUAL_BEST_AWARD = {
   desc: "道場全体で最も優れた選手（指導者選定・1名）"
 };
 var SPECIAL_AWARD_SLOT_COUNT = 3;
+var SEASON_SPECIAL_AWARD_SLOT_COUNT = 5;
+var SEASON_SPECIAL_AWARD_SLOT_MAX = 24;
 var ANNUAL_SPECIAL_AWARD_SLOT_COUNT = 3;
 
 function getDefaultAnnualSpecialSlots() {
@@ -5970,7 +6086,7 @@ function normalizeAnnualSpecialSlots(raw) {
     for (i = 0; i < ANNUAL_SPECIAL_AWARD_SLOT_COUNT; i++) {
       var s = raw[i] || {};
       slots.push({
-        type: isValidSpecialAwardType(s.type) ? s.type : defaults[i].type,
+        type: isPreservableAwardType(s.type) ? s.type : defaults[i].type,
         playerId: s.playerId || s.player || ""
       });
     }
@@ -5979,20 +6095,46 @@ function normalizeAnnualSpecialSlots(raw) {
   return getDefaultAnnualSpecialSlots();
 }
 
+function normalizeCustomAwardType(raw) {
+  raw = raw || {};
+  var icon = String(raw.icon || "").trim();
+  return {
+    key: raw.key || ("custom-" + Date.now() + "-" + Math.floor(Math.random() * 1000)),
+    icon: icon ? icon.slice(0, 4) : "🏅",
+    label: String(raw.label || "").trim() || "特別賞",
+    desc: String(raw.desc || "").trim(),
+    custom: true
+  };
+}
+
+function getCustomAwardTypes() {
+  return (state && Array.isArray(state.customAwardTypes)) ? state.customAwardTypes : [];
+}
+
+function getAllSpecialAwardTypes() {
+  return SPECIAL_AWARD_TYPES.concat(getCustomAwardTypes());
+}
+
 function getSpecialAwardType(key) {
+  var all = getAllSpecialAwardTypes();
   var i;
-  for (i = 0; i < SPECIAL_AWARD_TYPES.length; i++) {
-    if (SPECIAL_AWARD_TYPES[i].key === key) return SPECIAL_AWARD_TYPES[i];
+  for (i = 0; i < all.length; i++) {
+    if (all[i].key === key) return all[i];
   }
   return SPECIAL_AWARD_TYPES[0];
 }
 
 function isValidSpecialAwardType(key) {
+  var all = getAllSpecialAwardTypes();
   var i;
-  for (i = 0; i < SPECIAL_AWARD_TYPES.length; i++) {
-    if (SPECIAL_AWARD_TYPES[i].key === key) return true;
+  for (i = 0; i < all.length; i++) {
+    if (all[i].key === key) return true;
   }
   return false;
+}
+
+function isPreservableAwardType(key) {
+  return !!key && (isValidSpecialAwardType(key) || /^custom-/.test(key));
 }
 
 function getDefaultSpecialSlots() {
@@ -6008,7 +6150,7 @@ function normalizeSpecialSlots(raw) {
     for (i = 0; i < SPECIAL_AWARD_SLOT_COUNT; i++) {
       var s = raw[i] || {};
       slots.push({
-        type: isValidSpecialAwardType(s.type) ? s.type : SPECIAL_AWARD_TYPES[i].key,
+        type: isPreservableAwardType(s.type) ? s.type : SPECIAL_AWARD_TYPES[i].key,
         playerId: s.playerId || s.player || ""
       });
     }
@@ -6073,19 +6215,24 @@ function getDefaultSeasonSpecialSlots() {
   return [
     { type: "kaikin", playerId: "" },
     { type: "energy", playerId: "" },
-    { type: "follower", playerId: "" }
+    { type: "follower", playerId: "" },
+    { type: "ganbari", playerId: "" },
+    { type: "egao", playerId: "" }
   ];
 }
 
 function normalizeSeasonSpecialSlots(raw) {
   if (Array.isArray(raw)) {
+    if (!raw.length) return getDefaultSeasonSpecialSlots();
     var slots = [];
     var defaults = getDefaultSeasonSpecialSlots();
+    var n = Math.min(raw.length, SEASON_SPECIAL_AWARD_SLOT_MAX);
     var i;
-    for (i = 0; i < SPECIAL_AWARD_SLOT_COUNT; i++) {
+    for (i = 0; i < n; i++) {
       var s = raw[i] || {};
+      var def = defaults[i] || defaults[0];
       slots.push({
-        type: isValidSpecialAwardType(s.type) ? s.type : defaults[i].type,
+        type: isPreservableAwardType(s.type) ? s.type : def.type,
         playerId: s.playerId || s.player || ""
       });
     }
@@ -6125,12 +6272,54 @@ function setSeasonSpecialAwardSlot(slotIndex, field, value, archiveId) {
     slots = ensureSeasonSpecialSlots();
   }
   var idx = parseInt(slotIndex, 10);
-  if (isNaN(idx) || idx < 0 || idx >= SPECIAL_AWARD_SLOT_COUNT) return;
+  if (isNaN(idx) || idx < 0 || idx >= slots.length) return;
   if (field === "type") {
-    slots[idx].type = value || getDefaultSeasonSpecialSlots()[idx].type;
+    var defs = getDefaultSeasonSpecialSlots();
+    slots[idx].type = value || (defs[idx] || defs[0]).type;
   } else if (field === "player") {
     slots[idx].playerId = value || "";
   }
+  saveState();
+  render();
+}
+
+function getSeasonSpecialSlotsForEdit(archiveId) {
+  if (archiveId) {
+    var arch = findArchiveById(archiveId);
+    if (!arch) return null;
+    arch.seasonSpecialAwards = normalizeSeasonSpecialSlots(arch.seasonSpecialAwards);
+    return arch.seasonSpecialAwards;
+  }
+  if (isReadonly()) return null;
+  return ensureSeasonSpecialSlots();
+}
+
+function addSeasonSpecialSlot(archiveId) {
+  if (isMemberMode) return;
+  var slots = getSeasonSpecialSlotsForEdit(archiveId);
+  if (!slots) return;
+  if (slots.length >= SEASON_SPECIAL_AWARD_SLOT_MAX) {
+    showToast("これ以上は追加できません");
+    return;
+  }
+  var defs = getDefaultSeasonSpecialSlots();
+  var def = defs[slots.length] || defs[0];
+  slots.push({ type: def.type, playerId: "" });
+  saveState();
+  render();
+}
+
+function removeSeasonSpecialSlot(slotIndex, archiveId) {
+  if (isMemberMode) return;
+  var slots = getSeasonSpecialSlotsForEdit(archiveId);
+  if (!slots) return;
+  var idx = parseInt(slotIndex, 10);
+  if (isNaN(idx) || idx < 0 || idx >= slots.length) return;
+  if (slots.length <= 1) {
+    showToast("最低1つは残してください");
+    return;
+  }
+  slots.splice(idx, 1);
   saveState();
   render();
 }
@@ -6215,11 +6404,68 @@ function getAwardConfirmations() {
 }
 
 function buildLeagueAwardsSnapshot(league) {
+  var awards = computeLeagueAwards(league);
+  var mvp = null;
+  if (awards.seasonMvp && awards.seasonMvp.winners && awards.seasonMvp.winners.length) {
+    mvp = {
+      playerIds: awards.seasonMvp.winners.map(function(w) { return w.id; }),
+      manual: !!awards.seasonMvpManual,
+      tie: !!awards.seasonMvp.tie
+    };
+  }
   return {
     name: league.name,
     special: deepClone(normalizeSpecialSlots((state.specialAwards || {})[league.id])),
-    departments: []
+    departments: [],
+    mvp: mvp
   };
+}
+
+function recordMemberSeasonAwards(entry) {
+  if (!entry || !state.roster) return;
+  var fy = entry.fiscalYear, sk = entry.seasonKey;
+  var seasonLabel = (fy && sk)
+    ? formatSeasonLabel(fy, sk)
+    : String(entry.label || "").replace(/\s*\d+月.*$/, "");
+  state.roster.forEach(function(m) {
+    if (Array.isArray(m.awards)) {
+      m.awards = m.awards.filter(function(a) { return !(a.fiscalYear === fy && a.seasonKey === sk); });
+    }
+  });
+  function add(playerId, kind, type, league) {
+    if (!playerId) return;
+    var p = findPlayerGlobal(playerId);
+    if (!p || !p.rosterId) return;
+    var m = findRosterMember(p.rosterId);
+    if (!m) return;
+    if (!Array.isArray(m.awards)) m.awards = [];
+    var icon, label;
+    if (kind === "mvp") { icon = "👑"; label = "ＭＶＰ賞"; }
+    else { var def = getSpecialAwardType(type); icon = def.icon; label = def.label; }
+    m.awards.push(normalizeAwardEntry({
+      fiscalYear: fy, seasonKey: sk, seasonLabel: seasonLabel,
+      kind: kind, type: type, icon: icon, label: label,
+      league: league || "", at: entry.confirmedAt || Date.now()
+    }));
+  }
+  ((entry.dojo && entry.dojo.seasonSpecial) || []).forEach(function(slot) {
+    if (slot && slot.playerId) add(slot.playerId, "special", slot.type, findPlayerLeagueName(slot.playerId));
+  });
+  var lmap = entry.leagues || {};
+  Object.keys(lmap).forEach(function(lid) {
+    var snap = lmap[lid];
+    var ids = (snap && snap.mvp && snap.mvp.playerIds) || [];
+    ids.forEach(function(pid) { add(pid, "mvp", "mvp", (snap && snap.name) || ""); });
+  });
+}
+
+function removeMemberSeasonAwards(fy, sk) {
+  if (!state.roster) return;
+  state.roster.forEach(function(m) {
+    if (Array.isArray(m.awards)) {
+      m.awards = m.awards.filter(function(a) { return !(a.fiscalYear === fy && a.seasonKey === sk); });
+    }
+  });
 }
 
 function confirmAwardsSnapshot() {
@@ -6231,26 +6477,35 @@ function confirmAwardsSnapshot() {
   state.leagues.forEach(function(league) {
     leaguesSnap[league.id] = buildLeagueAwardsSnapshot(league);
   });
-  state.awardConfirmations.unshift({
+  var entry = {
     id: "award-" + Date.now(),
     confirmedAt: Date.now(),
     label: label,
+    fiscalYear: state.fiscalYear,
+    seasonKey: state.seasonKey,
     dojo: {
       annualBest: deepClone(state.annualBestAward || { playerId: "" }),
       annualSpecial: deepClone(normalizeAnnualSpecialSlots(state.annualSpecialAwards)),
       seasonSpecial: deepClone(normalizeSeasonSpecialSlots(state.seasonSpecialAwards))
     },
     leagues: leaguesSnap
-  });
+  };
+  state.awardConfirmations.unshift(entry);
+  recordMemberSeasonAwards(entry);
   saveState();
   render();
   showToast("表彰を記録しました ✓");
+  if (confirm("賞状を作成しますか？\n（シーズン特別賞・MVPの賞状を印刷用に表示します）")) {
+    generateCertsFromConfirmation(entry.id);
+  }
 }
 
 function deleteAwardConfirmation(id) {
   if (isMemberMode || isReadonly() || !id) return;
   if (!confirm("この表彰記録を削除しますか？")) return;
+  var removed = (state.awardConfirmations || []).filter(function(e) { return e.id === id; })[0];
   state.awardConfirmations = (state.awardConfirmations || []).filter(function(e) { return e.id !== id; });
+  if (removed) removeMemberSeasonAwards(removed.fiscalYear, removed.seasonKey);
   saveState();
   render();
   showToast("記録を削除しました");
@@ -6260,6 +6515,135 @@ function formatConfirmDate(ts) {
   if (!ts) return "";
   var d = new Date(ts);
   return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
+}
+
+/* ===== 賞状の生成（表彰確定時） ===== */
+var MVP_CERT_BODY = "あなたは このシーズン だれよりも すばらしい かつやくを みせ、なかまの おてほんに なりました。そのがんばりをたたえ、ＭＶＰをおくります。";
+
+function awardCertLogoUrl() {
+  try { return new URL("preleague-logo.png", location.href).href; } catch (e) { return "preleague-logo.png"; }
+}
+
+function certBodyForAward(def) {
+  if (def && def.desc) return "あなたは、" + def.desc + "。そのがんばりをたたえ、この賞をおくります。";
+  return "あなたの がんばりを たたえ、この賞を おくります。";
+}
+
+function certDisplayName(player) {
+  if (!player) return "";
+  if (player.rosterId) {
+    var m = findRosterMember(player.rosterId);
+    if (m && m.sposuruName) return m.sposuruName;
+  }
+  return player.name || "";
+}
+
+function findPlayerLeagueName(playerId) {
+  if (!playerId) return "";
+  var leagues = getActiveContext().leagues || [];
+  for (var i = 0; i < leagues.length; i++) {
+    var ps = leagues[i].players || [];
+    for (var j = 0; j < ps.length; j++) {
+      if (ps[j].id === playerId) return leagues[i].name || "";
+    }
+  }
+  return "";
+}
+
+function certWinnersFromEntry(entry) {
+  var label = (entry.fiscalYear && entry.seasonKey)
+    ? formatSeasonLabel(entry.fiscalYear, entry.seasonKey)
+    : String(entry.label || "").replace(/\s*\d+月.*$/, "");
+  var winners = [];
+  ((entry.dojo && entry.dojo.seasonSpecial) || []).forEach(function(slot) {
+    if (!slot || !slot.playerId) return;
+    var def = getSpecialAwardType(slot.type);
+    var p = findPlayerGlobal(slot.playerId);
+    winners.push({
+      emoji: def.icon, title: def.label, league: findPlayerLeagueName(slot.playerId),
+      name: certDisplayName(p), body: certBodyForAward(def)
+    });
+  });
+  var lmap = entry.leagues || {};
+  Object.keys(lmap).forEach(function(lid) {
+    var snap = lmap[lid];
+    var ids = (snap && snap.mvp && snap.mvp.playerIds) || [];
+    ids.forEach(function(pid) {
+      if (!pid) return;
+      var p = findPlayerGlobal(pid);
+      winners.push({
+        emoji: "👑", title: "ＭＶＰ賞", league: (snap && snap.name) || findPlayerLeagueName(pid),
+        name: certDisplayName(p), body: MVP_CERT_BODY
+      });
+    });
+  });
+  return { label: label, winners: winners };
+}
+
+function buildCertCardHtml(w, seasonLabel) {
+  var nameHtml = w.name ? esc(w.name) : '<span class="name-blank"></span>';
+  var leagueHtml = w.league ? '<div class="cert-league">' + esc(w.league) + '</div>' : "";
+  return '<div class="cert"><div class="cert-inner">' +
+    '<div class="cert-logo"></div>' +
+    '<div class="cert-header"><span class="cert-emoji">' + w.emoji + '</span>' +
+    '<span class="cert-title">' + esc(w.title) + '</span></div>' +
+    leagueHtml +
+    '<div class="cert-name">' + nameHtml + '<span class="dono">どの</span></div>' +
+    '<div class="cert-body">' + esc(w.body) + '</div>' +
+    '<div class="cert-foot"><div class="date">' + esc(seasonLabel) + '</div>' +
+    '<div class="dojo-name">米倉道場</div>' +
+    '<div class="dojo-rep">代表　米倉優介</div></div>' +
+    '</div></div>';
+}
+
+function certDocHtml(cardsHtml, seasonLabel) {
+  var logo = awardCertLogoUrl();
+  var style = '@page{size:89mm 127mm;margin:0}' +
+    '*{box-sizing:border-box;margin:0;padding:0}' +
+    'body{font-family:"Hiragino Mincho ProN","Yu Mincho",serif;background:#cfd6e2;color:#0e1c38}' +
+    '.bar{position:sticky;top:0;display:flex;gap:10px;align-items:center;justify-content:center;padding:12px;background:#0e1c38;color:#fff;font-family:sans-serif}' +
+    '.bar button{font-size:14px;padding:8px 18px;border:0;border-radius:8px;background:#d4af37;color:#0e1c38;font-weight:700;cursor:pointer}' +
+    '.bar span{font-size:13px;opacity:.85}' +
+    '.sheets{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;padding:18px}' +
+    '.cert{width:89mm;height:127mm;background:#fff;position:relative;overflow:hidden}' +
+    '.cert-inner{position:absolute;inset:4mm;border:.7mm solid #d4af37;border-radius:2mm;padding:4mm 5mm 4mm;display:flex;flex-direction:column;align-items:center;text-align:center}' +
+    '.cert-inner:before{content:"";position:absolute;inset:1.4mm;border:.2mm solid #b9912e;border-radius:1.4mm;pointer-events:none}' +
+    '.cert-logo{flex:0 0 auto;width:23mm;height:23mm;margin-top:.5mm;background:#0e1c38;border-radius:50%;background-image:url(\'' + logo + '\');background-size:contain;background-repeat:no-repeat;background-position:center;background-color:#0e1c38}' +
+    '.cert-header{margin-top:1.5mm;display:flex;flex-direction:column;align-items:center;gap:.6mm}' +
+    '.cert-emoji{font-size:8mm;line-height:1}' +
+    '.cert-title{font-size:7mm;font-weight:700;letter-spacing:.5mm;color:#0e1c38}' +
+    '.cert-league{margin-top:1.5mm;font-size:3.6mm;font-weight:700;letter-spacing:.5mm;color:#8a6d12;border:.3mm solid #c9a227;border-radius:6mm;padding:.6mm 3mm;background:#fff7e0}' +
+    '.cert-name{margin-top:3mm;font-size:8mm;font-weight:700;display:flex;align-items:baseline;justify-content:center;gap:1.5mm;border-bottom:.3mm solid #0e1c38;padding:0 2mm 1mm}' +
+    '.cert-name .dono{font-size:4mm;font-weight:500}' +
+    '.cert-name .name-blank{display:inline-block;width:34mm}' +
+    '.cert-body{margin-top:3.5mm;font-size:3.6mm;line-height:1.7;color:#13233f;max-width:76mm}' +
+    '.cert-foot{margin-top:auto;width:100%;display:flex;flex-direction:column;align-items:center;gap:.8mm}' +
+    '.cert-foot .date{font-size:3.4mm;color:#56607a;margin-bottom:1.5mm}' +
+    '.cert-foot .dojo-name{font-size:5mm;font-weight:700;letter-spacing:1mm}' +
+    '.cert-foot .dojo-rep{font-size:3.6mm;letter-spacing:.5mm}' +
+    '@media print{body{background:#fff}.bar{display:none}.sheets{gap:0;padding:0;display:block}.cert{page-break-after:always;width:89mm;height:127mm}}';
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>賞状 ' + esc(seasonLabel) + '</title><style>' + style + '</style></head><body>' +
+    '<div class="bar"><button type="button" onclick="window.print()">印刷 / PDF保存</button>' +
+    '<span>L版（89×127mm）/ ' + esc(seasonLabel) + '</span></div>' +
+    '<div class="sheets">' + cardsHtml + '</div></body></html>';
+}
+
+function generateCertsFromConfirmation(id) {
+  if (isMemberMode || !id) return;
+  var list = getAwardConfirmations() || [];
+  var entry = null, i;
+  for (i = 0; i < list.length; i++) { if (list[i].id === id) { entry = list[i]; break; } }
+  if (!entry) { showToast("記録が見つかりません"); return; }
+  var data = certWinnersFromEntry(entry);
+  if (!data.winners.length) { showToast("賞状にする受賞者がいません"); return; }
+  var cards = data.winners.map(function(w) { return buildCertCardHtml(w, data.label); }).join("");
+  var win = window.open("", "_blank");
+  if (!win) { showToast("ポップアップを許可してください"); return; }
+  win.document.open();
+  win.document.write(certDocHtml(cards, data.label));
+  win.document.close();
 }
 
 function renderAwardConfirmPlayerLine(playerId, league) {
@@ -6322,8 +6706,11 @@ function renderAwardConfirmationCard(entry, allowDelete, scope) {
   var delBtn = allowDelete && !isMemberMode && !isReadonly() && (!awardsPageCtx || !awardsPageCtx.readonly)
     ? '<button type="button" class="award-confirm-del" data-action="deleteAwardConfirmation" data-confirm-id="' + esc(entry.id) + '">削除</button>'
     : "";
+  var certBtn = !isMemberMode
+    ? '<button type="button" class="award-confirm-cert" data-action="generateCerts" data-confirm-id="' + esc(entry.id) + '">🏅 賞状</button>'
+    : "";
   return '<div class="award-confirm-card">' +
-    '<div class="award-confirm-head"><span class="award-confirm-label">' + esc(entry.label || "表彰記録") + "</span>" + delBtn + "</div>" +
+    '<div class="award-confirm-head"><span class="award-confirm-label">' + esc(entry.label || "表彰記録") + "</span>" + certBtn + delBtn + "</div>" +
     '<div class="award-confirm-meta">確定: ' + esc(formatConfirmDate(entry.confirmedAt)) + "</div>" +
     (dojoLines.length ? '<div class="award-confirm-block"><div class="award-confirm-block-title">🏛 道場表彰</div>' + dojoLines.join("") + "</div>" : "") +
     leagueBlocks.join("") +
@@ -6576,7 +6963,7 @@ function renderDojoAwardsSettings() {
   var playerId = getAnnualBestPlayerId();
   var annualSlots = ensureAnnualSpecialSlots();
   var annualRows = annualSlots.map(function(slot, idx) {
-    var typeOpts = SPECIAL_AWARD_TYPES.map(function(def) {
+    var typeOpts = getAllSpecialAwardTypes().map(function(def) {
       return '<option value="' + esc(def.key) + '"' + (slot.type === def.key ? " selected" : "") + '>' +
         def.icon + " " + esc(def.label) + "</option>";
     }).join("");
@@ -6611,8 +6998,8 @@ function renderSeasonSpecialAwardEditRows(archiveId) {
     slots = ensureSeasonSpecialSlots();
   }
   var archAttr = archiveId ? ' data-season-special-archive="' + esc(archiveId) + '"' : "";
-  return slots.map(function(slot, idx) {
-    var typeOpts = SPECIAL_AWARD_TYPES.map(function(def) {
+  var rows = slots.map(function(slot, idx) {
+    var typeOpts = getAllSpecialAwardTypes().map(function(def) {
       return '<option value="' + esc(def.key) + '"' + (slot.type === def.key ? " selected" : "") + '>' +
         def.icon + " " + esc(def.label) + "</option>";
     }).join("");
@@ -6620,8 +7007,11 @@ function renderSeasonSpecialAwardEditRows(archiveId) {
     return '<div class="special-award-row">' +
       '<select class="player-status" data-season-special-slot="' + idx + '" data-season-special-field="type"' + archAttr + ' title="賞の種類">' + typeOpts + "</select>" +
       '<select class="player-status" data-season-special-slot="' + idx + '" data-season-special-field="player"' + archAttr + ' title="選手">' + playerOpts + "</select>" +
+      '<button type="button" class="special-award-del" data-action="removeSeasonSpecialSlot" data-season-special-slot="' + idx + '"' + archAttr + ' title="この賞を削除">×</button>' +
       "</div>";
   }).join("");
+  rows += '<button type="button" class="special-award-add" data-action="addSeasonSpecialSlot"' + archAttr + '>＋ 賞を追加</button>';
+  return rows;
 }
 
 function renderSeasonSpecialAwardsSettings() {
@@ -6629,9 +7019,58 @@ function renderSeasonSpecialAwardsSettings() {
   var rows = renderSeasonSpecialAwardEditRows();
   return '<div class="card">' +
     '<div class="card-title">🎀 シーズン特別賞（道場全体）</div>' +
-    '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">シーズンごとの特別賞です。全リーグの選手から' + SPECIAL_AWARD_SLOT_COUNT + '枠まで選べます。</p>' +
+    '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">シーズンごとの特別賞です。全リーグの選手から選べます。「＋ 賞を追加」で枠を増やせます。</p>' +
     '<div class="special-award-head"><span>賞の種類</span><span>選手</span></div>' +
     rows + "</div>";
+}
+
+function renderCustomAwardTypeManager() {
+  var customs = getCustomAwardTypes();
+  var list = customs.length
+    ? customs.map(function(t) {
+        return '<div class="custom-type-row"><span class="custom-type-info">' + (t.icon || "🏅") + " " + esc(t.label) +
+          (t.desc ? ' <small>' + esc(t.desc) + "</small>" : "") + "</span>" +
+          '<button type="button" class="special-award-del" data-action="deleteCustomAwardType" data-type-key="' + esc(t.key) + '" title="削除">×</button></div>';
+      }).join("")
+    : '<p class="custom-type-empty">まだありません</p>';
+  return '<div class="awards-section-block custom-type-block" style="margin-top:14px">' +
+    '<div class="awards-section-title">🏷 賞の種類を作る</div>' +
+    '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 8px;line-height:1.45">アイコン・賞名・説明を入れて追加できます。<b>説明は賞状の文面</b>になります（例：「いつも笑顔で道場を明るくした」→「あなたは、いつも笑顔で道場を明るくした。そのがんばりをたたえ、この賞をおくります。」）。</p>' +
+    '<div class="custom-type-form">' +
+    '<input type="text" id="customTypeIcon" class="custom-type-icon" maxlength="4" placeholder="🏅" title="アイコン（絵文字）">' +
+    '<input type="text" id="customTypeLabel" class="custom-type-label" placeholder="賞名（例：笑顔いちばん賞）" title="賞名">' +
+    '<input type="text" id="customTypeDesc" class="custom-type-desc" placeholder="説明（賞状の文面に使われます）" title="説明（賞状の文面に使われます）">' +
+    '<button type="button" class="special-award-add" data-action="addCustomAwardType">＋ 追加</button>' +
+    "</div>" +
+    '<div class="custom-type-list">' + list + "</div>" +
+    "</div>";
+}
+
+function addCustomAwardType() {
+  if (isMemberMode) return;
+  var iconEl = document.getElementById("customTypeIcon");
+  var labelEl = document.getElementById("customTypeLabel");
+  var descEl = document.getElementById("customTypeDesc");
+  var label = (labelEl && labelEl.value || "").trim();
+  if (!label) { showToast("賞名を入力してください", { type: "warn" }); return; }
+  if (!Array.isArray(state.customAwardTypes)) state.customAwardTypes = [];
+  state.customAwardTypes.push(normalizeCustomAwardType({
+    icon: (iconEl && iconEl.value) || "",
+    label: label,
+    desc: (descEl && descEl.value) || ""
+  }));
+  saveState();
+  render();
+  showToast("賞の種類を追加しました ✓");
+}
+
+function deleteCustomAwardType(key) {
+  if (isMemberMode || !key) return;
+  if (!confirm("この賞の種類を削除しますか？\n（過去の受賞記録はそのまま残ります）")) return;
+  state.customAwardTypes = (state.customAwardTypes || []).filter(function(t) { return t.key !== key; });
+  saveState();
+  render();
+  showToast("削除しました");
 }
 
 function renderMergedDeptSpecialSection(ctx, live) {
@@ -6651,13 +7090,14 @@ function renderMergedDeptSpecialSection(ctx, live) {
   var archiveId = (ctx && !ctx.live) ? ctx.archiveId : null;
   if (!isMemberMode && (live || archiveId)) {
     var editNote = archiveId
-      ? "過去シーズンの特別賞をあとから記載できます。全リーグの選手から" + SPECIAL_AWARD_SLOT_COUNT + "枠まで選べます。"
-      : "全リーグの選手から" + SPECIAL_AWARD_SLOT_COUNT + "枠まで選べます。";
+      ? "過去シーズンの特別賞をあとから記載できます。全リーグの選手から選べ、「＋ 賞を追加」で増やせます。"
+      : "全リーグの選手から選べます。「＋ 賞を追加」で枠を増やせます。";
     editHtml = '<div class="awards-section-block" style="margin-top:12px">' +
       '<div class="awards-section-title">🎀 特別賞の選定（指導者）</div>' +
       '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' + editNote + '</p>' +
       '<div class="special-award-head"><span>賞の種類</span><span>選手</span></div>' +
       renderSeasonSpecialAwardEditRows(archiveId) +
+      renderCustomAwardTypeManager() +
       "</div>";
   }
   return '<div class="card awards-merged-card">' +
@@ -6669,7 +7109,7 @@ function renderMergedDeptSpecialSection(ctx, live) {
     '<div class="awards-note">' +
     (isMemberMode
       ? "特別賞は確定後に下の「表彰記録」に表示されます。"
-      : "特別賞：指導者選定（全リーグから" + SPECIAL_AWARD_SLOT_COUNT + "枠）") +
+      : "特別賞：指導者選定（全リーグから・枠は追加可）") +
     '</div></div>';
 }
 
@@ -6688,7 +7128,7 @@ function renderSpecialAwardsSettings(league) {
   if (isReadonly()) return "";
   var slots = getLeagueSpecialSlots(league.id);
   var rows = slots.map(function(slot, idx) {
-    var typeOpts = SPECIAL_AWARD_TYPES.map(function(def) {
+    var typeOpts = getAllSpecialAwardTypes().map(function(def) {
       return '<option value="' + esc(def.key) + '"' + (slot.type === def.key ? " selected" : "") + '>' +
         def.icon + " " + esc(def.label) + "</option>";
     }).join("");
@@ -8442,6 +8882,11 @@ function handleAppTap(e) {
   else if (action === "archiveSeason") archiveCurrentSeason();
   else if (action === "confirmAwards") confirmAwardsSnapshot();
   else if (action === "deleteAwardConfirmation") deleteAwardConfirmation(target.getAttribute("data-confirm-id"));
+  else if (action === "generateCerts") generateCertsFromConfirmation(target.getAttribute("data-confirm-id"));
+  else if (action === "addSeasonSpecialSlot") addSeasonSpecialSlot(target.getAttribute("data-season-special-archive") || "");
+  else if (action === "removeSeasonSpecialSlot") removeSeasonSpecialSlot(target.getAttribute("data-season-special-slot"), target.getAttribute("data-season-special-archive") || "");
+  else if (action === "addCustomAwardType") addCustomAwardType();
+  else if (action === "deleteCustomAwardType") deleteCustomAwardType(target.getAttribute("data-type-key"));
   else if (action === "addRosterMember") addRosterMember(document.getElementById("newRosterName") ? document.getElementById("newRosterName").value : "");
   else if (action === "addRosterToLeague") {
     var pick = document.getElementById("rosterLeaguePick");
