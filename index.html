@@ -1756,6 +1756,7 @@ function resolveAwardsPageContext(fy, sk) {
       leagues: state.leagues || [],
       specialAwards: state.specialAwards || {},
       seasonSpecialAwards: state.seasonSpecialAwards || [],
+      seasonMvpOverride: state.seasonMvpOverride || {},
       annualBestAward: state.annualBestAward || { playerId: "" },
       annualSpecialAwards: state.annualSpecialAwards || [],
       monthlyMvpLocked: state.monthlyMvpLocked || {},
@@ -1778,6 +1779,7 @@ function resolveAwardsPageContext(fy, sk) {
     leagues: best.leagues || [],
     specialAwards: best.specialAwards || {},
     seasonSpecialAwards: best.seasonSpecialAwards || [],
+    seasonMvpOverride: best.seasonMvpOverride || {},
     annualBestAward: best.annualBestAward || { playerId: "" },
     annualSpecialAwards: best.annualSpecialAwards || [],
     monthlyMvpLocked: best.monthlyMvpLocked || {},
@@ -2568,6 +2570,7 @@ function getActiveContext() {
         archivedAt: arch.archivedAt,
         specialAwards: arch.specialAwards || {},
         seasonSpecialAwards: arch.seasonSpecialAwards || [],
+        seasonMvpOverride: arch.seasonMvpOverride || {},
         annualBestAward: arch.annualBestAward || { playerId: "" },
         annualSpecialAwards: arch.annualSpecialAwards || [],
         monthlyMvpLocked: arch.monthlyMvpLocked || {},
@@ -2586,6 +2589,7 @@ function getActiveContext() {
     archivedAt: null,
     specialAwards: state.specialAwards || {},
     seasonSpecialAwards: state.seasonSpecialAwards || [],
+    seasonMvpOverride: state.seasonMvpOverride || {},
     annualBestAward: state.annualBestAward || { playerId: "" },
     annualSpecialAwards: state.annualSpecialAwards || [],
     monthlyMvpLocked: state.monthlyMvpLocked || {},
@@ -3147,6 +3151,7 @@ function normalizeState(raw) {
   }
   s.annualSpecialAwards = normalizeAnnualSpecialSlots(s.annualSpecialAwards);
   s.seasonSpecialAwards = normalizeSeasonSpecialSlots(s.seasonSpecialAwards);
+  if (!s.seasonMvpOverride || typeof s.seasonMvpOverride !== "object") s.seasonMvpOverride = {};
   delete s.annualBestAwards;
   if (!s.monthlyMvpLocked || typeof s.monthlyMvpLocked !== "object") s.monthlyMvpLocked = {};
   if (!Array.isArray(s.awardConfirmations)) s.awardConfirmations = [];
@@ -6083,6 +6088,30 @@ function setSeasonSpecialAwardSlot(slotIndex, field, value, archiveId) {
   render();
 }
 
+function getSeasonMvpOverrideId(leagueId) {
+  var map = getAwardsCtx().seasonMvpOverride || {};
+  return map[leagueId] || "";
+}
+
+function setSeasonMvpOverride(leagueId, playerId, archiveId) {
+  if (isMemberMode) return;
+  var map;
+  if (archiveId) {
+    var arch = findArchiveById(archiveId);
+    if (!arch) return;
+    if (!arch.seasonMvpOverride || typeof arch.seasonMvpOverride !== "object") arch.seasonMvpOverride = {};
+    map = arch.seasonMvpOverride;
+  } else {
+    if (isReadonly()) return;
+    if (!state.seasonMvpOverride || typeof state.seasonMvpOverride !== "object") state.seasonMvpOverride = {};
+    map = state.seasonMvpOverride;
+  }
+  if (playerId) map[leagueId] = playerId;
+  else delete map[leagueId];
+  saveState();
+  render();
+}
+
 function renderAllPlayersOptions(selectedId) {
   var leagues = getAwardsCtx().leagues || [];
   var html = '<option value="">未設定</option>';
@@ -6525,6 +6554,19 @@ function computeLeagueAwards(league) {
   var seasonMvp = pickAwardWinners(seasonStats, function(p) { return p.points; }, {
     minValue: 0, minPlayed: seasonMin
   });
+  var seasonMvpManual = false;
+  var overrideId = getSeasonMvpOverrideId(league.id);
+  if (overrideId) {
+    var op = null, si;
+    for (si = 0; si < seasonStats.length; si++) {
+      if (seasonStats[si].id === overrideId) { op = seasonStats[si]; break; }
+    }
+    if (!op) {
+      var lp = findLeaguePlayer(league, overrideId);
+      if (lp) op = { id: lp.id, name: lp.name, active: lp.active, points: 0, played: 0, wins: 0, draws: 0, losses: 0, ipponWins: 0, yuseiWins: 0 };
+    }
+    if (op) { seasonMvp = { winners: [op], value: op.points, tie: false }; seasonMvpManual = true; }
+  }
   var monthlyMvp = pickAwardWinners(monthStats, function(p) { return p.points; }, {
     minValue: 0, minPlayed: MVP_MONTHLY_MIN_GAMES
   });
@@ -6539,10 +6581,19 @@ function computeLeagueAwards(league) {
   return {
     seasonMin: seasonMin,
     seasonMvp: seasonMvp,
+    seasonMvpManual: seasonMvpManual,
     monthlyMvp: monthlyMvp,
     departments: departments,
     monthLabel: getCurrentMonthLabel()
   };
+}
+
+function renderLeaguePlayerOptions(league, selectedId) {
+  var html = '<option value="">自動（勝点1位）</option>';
+  (league.players || []).forEach(function(p) {
+    html += '<option value="' + esc(p.id) + '"' + (selectedId === p.id ? " selected" : "") + '>' + esc(p.name) + "</option>";
+  });
+  return html;
 }
 
 function renderAwardWinnersHtml(wr, detailFn) {
@@ -6829,8 +6880,23 @@ function renderAwardItem(icon, label, cls, wr, detailFn) {
 function renderLeagueAwardsCard(league) {
   if (isMemberMode) return renderLeagueAwardsCardMember(league);
   var awards = computeLeagueAwards(league);
-  var seasonDetail = function(p) { return p.points + "勝点 ・ " + p.wins + "勝" + p.draws + "分" + p.losses + "敗"; };
+  var ctx = getAwardsCtx();
+  var archiveId = (ctx && !ctx.live) ? (ctx.archiveId || "") : "";
+  var seasonDetail = function(p) {
+    var txt = p.points + "勝点 ・ " + p.wins + "勝" + p.draws + "分" + p.losses + "敗";
+    if (awards.seasonMvpManual) txt += " ・ 指導者選定";
+    return txt;
+  };
   var monthDetail = function(p) { return awards.monthLabel + " " + p.points + "勝点（" + p.played + "試合）"; };
+  var mvpEditHtml = "";
+  if (!isMemberMode && (ctx.live || archiveId)) {
+    var archAttr = archiveId ? ' data-season-mvp-archive="' + esc(archiveId) + '"' : "";
+    mvpEditHtml = '<div class="awards-mvp-edit" style="margin-top:10px">' +
+      '<p style="font-size:.66rem;color:var(--muted);margin:0 0 6px;line-height:1.45">🏆 シーズンMVP：自動計算を上書きして選定できます（「自動」で元に戻します）</p>' +
+      '<select class="player-status" data-season-mvp-league="' + esc(league.id) + '"' + archAttr + ' title="シーズンMVP">' +
+      renderLeaguePlayerOptions(league, getSeasonMvpOverrideId(league.id)) +
+      "</select></div>";
+  }
   return '<div class="card awards-league-card">' +
     '<div class="card-title">📊 ' + esc(league.name) + '（リーグ表彰）</div>' +
     '<div class="awards-section-block">' +
@@ -6838,10 +6904,10 @@ function renderLeagueAwardsCard(league) {
     '<div class="awards-grid">' +
     renderAwardItem("🏆", "シーズンMVP", "award-mvp", awards.seasonMvp, seasonDetail) +
     renderAwardItem("📅", "月間MVP（" + awards.monthLabel + "）", "award-monthly", awards.monthlyMvp, monthDetail) +
-    '</div></div>' +
+    '</div>' + mvpEditHtml + '</div>' +
     renderMonthlyMvpHistorySection(league) +
     '<div class="awards-note">' +
-    'シーズンMVP：消化率' + Math.round(MVP_SEASON_MIN_RATE * 100) + '%以上（最低' + awards.seasonMin + '試合）の選手から勝点1位<br>' +
+    'シーズンMVP：消化率' + Math.round(MVP_SEASON_MIN_RATE * 100) + '%以上（最低' + awards.seasonMin + '試合）の選手から勝点1位（指導者が手動選定も可）<br>' +
     '月間MVP：' + awards.monthLabel + 'に記録された試合（日時付き）から2試合以上・勝点1位。過去月は自動確定、当月はリーグ設定で手動確定も可' +
     '</div></div>';
 }
@@ -6860,7 +6926,7 @@ function renderAwardsPage() {
     return html;
   }
   if (!ctx.live) {
-    html += '<p class="awards-archive-note">📦 アーカイブデータを表示中（成績は閲覧のみ・特別賞はあとから記載できます）</p>';
+    html += '<p class="awards-archive-note">📦 アーカイブデータを表示中（成績は閲覧のみ・シーズンMVP・特別賞はあとから選定できます）</p>';
   }
   awardsPageCtx = ctx;
   (ctx.leagues || []).forEach(function(league) {
@@ -7536,6 +7602,7 @@ function archiveCurrentSeason() {
     pointRule: deepClone(state.pointRule),
     specialAwards: deepClone(state.specialAwards || {}),
     seasonSpecialAwards: deepClone(state.seasonSpecialAwards || []),
+    seasonMvpOverride: deepClone(state.seasonMvpOverride || {}),
     annualBestAward: deepClone(state.annualBestAward || { playerId: "" }),
     annualSpecialAwards: deepClone(state.annualSpecialAwards || []),
     monthlyMvpLocked: deepClone(state.monthlyMvpLocked || {}),
@@ -7548,6 +7615,7 @@ function archiveCurrentSeason() {
   state.playoffs = { j1_j2: { results: {} } };
   state.specialAwards = {};
   state.seasonSpecialAwards = getDefaultSeasonSpecialSlots();
+  state.seasonMvpOverride = {};
   state.annualBestAward = { playerId: "" };
   state.annualSpecialAwards = getDefaultAnnualSpecialSlots();
   state.monthlyMvpLocked = {};
@@ -8611,6 +8679,9 @@ function bindAppEvents() {
     }
     else if (t.getAttribute("data-annual-special-slot") != null && t.getAttribute("data-annual-special-field")) {
       setAnnualSpecialAwardSlot(t.getAttribute("data-annual-special-slot"), t.getAttribute("data-annual-special-field"), t.value);
+    }
+    else if (t.getAttribute("data-season-mvp-league")) {
+      setSeasonMvpOverride(t.getAttribute("data-season-mvp-league"), t.value, t.getAttribute("data-season-mvp-archive") || "");
     }
     else if (t.getAttribute("data-season-special-slot") != null && t.getAttribute("data-season-special-field")) {
       setSeasonSpecialAwardSlot(t.getAttribute("data-season-special-slot"), t.getAttribute("data-season-special-field"), t.value, t.getAttribute("data-season-special-archive") || "");
