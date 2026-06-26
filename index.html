@@ -1802,6 +1802,7 @@ function getDefaultAwardsScope(ctx) {
 }
 
 function ensureAwardsViewFilters() {
+  awardsShowAnnual = false;
   if (!awardsViewYear) awardsViewYear = state.fiscalYear;
   if (!awardsViewSeason) awardsViewSeason = state.seasonKey;
   if (!awardsViewScope) awardsViewScope = AWARDS_DEFAULT_LEAGUE_ID;
@@ -1883,8 +1884,7 @@ function renderAwardsFilterTabs(periodIndex) {
     return '<button type="button" class="' + cls + '"' + (has ? "" : " disabled") +
       ' data-action="setAwardsSeason" data-awards-season="' + def.key + '">' + def.emoji + esc(def.label) + "</button>";
   }).join("");
-  var annualBtn = '<button type="button" class="awards-filter-btn awards-filter-annual' + (awardsShowAnnual ? " active" : "") +
-    '" data-action="toggleAwardsAnnual">🏛 道場表彰（年間）</button>';
+  var annualBtn = '<button type="button" class="awards-filter-btn disabled" disabled>🏛 道場表彰（年間）</button>';
   return '<div class="card awards-filter-card">' +
     '<div class="awards-filter-row"><span class="awards-filter-label">年度</span><div class="awards-filter-btns">' + yearBtns + "</div></div>" +
     '<div class="awards-filter-row"><span class="awards-filter-label">シーズン</span><div class="awards-filter-btns">' + seasonBtns + annualBtn + "</div></div>" +
@@ -1892,8 +1892,7 @@ function renderAwardsFilterTabs(periodIndex) {
 }
 
 function toggleAwardsAnnual() {
-  awardsShowAnnual = !awardsShowAnnual;
-  render();
+  return;
 }
 
 const MEMBER_SESSION_KEY = "yonekura-jleague-member-session";
