@@ -6564,6 +6564,7 @@ function certWinnersFromEntry(entry) {
       name: certDisplayName(p), body: certBodyForAward(def)
     });
   });
+  var th = certSeasonTheme(entry.seasonKey);
   var lmap = entry.leagues || {};
   Object.keys(lmap).forEach(function(lid) {
     var snap = lmap[lid];
@@ -6572,7 +6573,9 @@ function certWinnersFromEntry(entry) {
       if (!pid) return;
       var p = findPlayerGlobal(pid);
       winners.push({
-        emoji: "👑", title: "ＭＶＰ賞", league: (snap && snap.name) || findPlayerLeagueName(pid),
+        emoji: th.emoji || "👑",
+        title: th.title + "ＭＶＰ", seasonColor: th.color,
+        league: (snap && snap.name) || findPlayerLeagueName(pid),
         name: certDisplayName(p), body: MVP_CERT_BODY
       });
     });
@@ -6580,15 +6583,27 @@ function certWinnersFromEntry(entry) {
   return { label: label, winners: winners };
 }
 
+function certSeasonTheme(seasonKey) {
+  var map = {
+    spring: { emoji: "🌸", title: "春シーズン", color: "#d36c84" },
+    summer: { emoji: "☀️", title: "夏シーズン", color: "#e0901e" },
+    autumn: { emoji: "🍁", title: "秋シーズン", color: "#c0612c" },
+    winter: { emoji: "❄️", title: "冬シーズン", color: "#3f7bbf" }
+  };
+  return map[seasonKey] || { emoji: "", title: "", color: "" };
+}
+
 function buildCertCardHtml(w, seasonLabel) {
   var nameHtml = w.name ? esc(w.name) : '<span class="name-blank"></span>';
   var leagueHtml = w.league ? '<div class="cert-league">' + esc(w.league) + '</div>' : "";
-  return '<div class="cert"><div class="cert-inner">' +
+  var seasonCls = w.seasonColor ? " cert-season" : "";
+  var seasonStyle = w.seasonColor ? ' style="--sc:' + w.seasonColor + '"' : "";
+  return '<div class="cert' + seasonCls + '"' + seasonStyle + '><div class="cert-inner">' +
     '<div class="cert-logo"></div>' +
     '<div class="cert-header"><span class="cert-emoji">' + w.emoji + '</span>' +
     '<span class="cert-title">' + esc(w.title) + '</span></div>' +
     leagueHtml +
-    '<div class="cert-name">' + nameHtml + '<span class="dono">どの</span></div>' +
+    '<div class="cert-name">' + nameHtml + '<span class="dono">殿</span></div>' +
     '<div class="cert-body">' + esc(w.body) + '</div>' +
     '<div class="cert-foot"><div class="date">' + esc(seasonLabel) + '</div>' +
     '<div class="dojo-name">米倉道場</div>' +
@@ -6600,28 +6615,33 @@ function certDocHtml(cardsHtml, seasonLabel) {
   var logo = awardCertLogoUrl();
   var style = '@page{size:89mm 127mm;margin:0}' +
     '*{box-sizing:border-box;margin:0;padding:0}' +
-    'body{font-family:"Hiragino Mincho ProN","Yu Mincho",serif;background:#cfd6e2;color:#0e1c38}' +
+    'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;color:#1a2744;background:#cfd6e2}' +
     '.bar{position:sticky;top:0;display:flex;gap:10px;align-items:center;justify-content:center;padding:12px;background:#0e1c38;color:#fff;font-family:sans-serif}' +
     '.bar button{font-size:14px;padding:8px 18px;border:0;border-radius:8px;background:#d4af37;color:#0e1c38;font-weight:700;cursor:pointer}' +
     '.bar span{font-size:13px;opacity:.85}' +
     '.sheets{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;padding:18px}' +
-    '.cert{width:89mm;height:127mm;background:#fff;position:relative;overflow:hidden}' +
-    '.cert-inner{position:absolute;inset:4mm;border:.7mm solid #d4af37;border-radius:2mm;padding:4mm 5mm 4mm;display:flex;flex-direction:column;align-items:center;text-align:center}' +
-    '.cert-inner:before{content:"";position:absolute;inset:1.4mm;border:.2mm solid #b9912e;border-radius:1.4mm;pointer-events:none}' +
-    '.cert-logo{flex:0 0 auto;width:23mm;height:23mm;margin-top:.5mm;background:#0e1c38;border-radius:50%;background-image:url(\'' + logo + '\');background-size:contain;background-repeat:no-repeat;background-position:center;background-color:#0e1c38}' +
-    '.cert-header{margin-top:1.5mm;display:flex;flex-direction:column;align-items:center;gap:.6mm}' +
-    '.cert-emoji{font-size:8mm;line-height:1}' +
-    '.cert-title{font-size:7mm;font-weight:700;letter-spacing:.5mm;color:#0e1c38}' +
-    '.cert-league{margin-top:1.5mm;font-size:3.6mm;font-weight:700;letter-spacing:.5mm;color:#8a6d12;border:.3mm solid #c9a227;border-radius:6mm;padding:.6mm 3mm;background:#fff7e0}' +
-    '.cert-name{margin-top:3mm;font-size:8mm;font-weight:700;display:flex;align-items:baseline;justify-content:center;gap:1.5mm;border-bottom:.3mm solid #0e1c38;padding:0 2mm 1mm}' +
-    '.cert-name .dono{font-size:4mm;font-weight:500}' +
-    '.cert-name .name-blank{display:inline-block;width:34mm}' +
-    '.cert-body{margin-top:3.5mm;font-size:3.6mm;line-height:1.7;color:#13233f;max-width:76mm}' +
-    '.cert-foot{margin-top:auto;width:100%;display:flex;flex-direction:column;align-items:center;gap:.8mm}' +
-    '.cert-foot .date{font-size:3.4mm;color:#56607a;margin-bottom:1.5mm}' +
-    '.cert-foot .dojo-name{font-size:5mm;font-weight:700;letter-spacing:1mm}' +
-    '.cert-foot .dojo-rep{font-size:3.6mm;letter-spacing:.5mm}' +
-    '@media print{body{background:#fff}.bar{display:none}.sheets{gap:0;padding:0;display:block}.cert{page-break-after:always;width:89mm;height:127mm}}';
+    '.cert{width:89mm;height:127mm;background:#fffdf6;position:relative;overflow:hidden}' +
+    '.cert::before{content:"";position:absolute;inset:4mm;border:1.3mm solid #c9a227;z-index:0}' +
+    '.cert::after{content:"";position:absolute;inset:5.4mm;border:.35mm solid #2d5a8e;z-index:0}' +
+    '.cert-inner{position:relative;z-index:1;height:100%;padding:8mm 9mm;display:flex;flex-direction:column;align-items:center;text-align:center}' +
+    '.cert-logo{flex:0 0 auto;width:27mm;height:27mm;border-radius:2.5mm;background-image:url(\'' + logo + '\');background-size:contain;background-repeat:no-repeat;background-position:center;background-color:#0e1c38;box-shadow:0 1mm 2.5mm rgba(0,0,0,.18)}' +
+    '.cert-header{margin-top:3.5mm;display:flex;align-items:center;gap:2.5mm}' +
+    '.cert-emoji{font-size:6mm;line-height:1}' +
+    '.cert-title{font-size:6mm;font-weight:700;letter-spacing:.6mm;color:#1a2744;white-space:nowrap;border-bottom:.5mm solid #c9a227;padding:0 2mm 1.3mm}' +
+    '.cert-league{margin-top:2.5mm;font-size:3.4mm;font-weight:700;letter-spacing:.5mm;color:#2d5a8e;border:.35mm solid #c9a227;border-radius:6mm;padding:.8mm 4mm;background:#fffdf6;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif}' +
+    '.cert-name{margin-top:3.5mm;font-size:8.5mm;font-weight:700;color:#2d5a8e;letter-spacing:1mm}' +
+    '.cert-name .dono{font-size:5mm;color:#1a2744;margin-left:1.5mm;letter-spacing:0}' +
+    '.cert-name .name-blank{display:inline-block;width:40mm;height:9mm;border-bottom:.5mm solid #1a2744;vertical-align:bottom}' +
+    '.cert-body{margin-top:3.5mm;font-size:3.4mm;line-height:1.6;color:#1a2744;max-width:72mm;text-wrap:balance}' +
+    '.cert-foot{margin-top:auto;width:100%;text-align:center;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif}' +
+    '.cert-foot .date{font-size:3mm;color:#1a2744;margin-bottom:2mm}' +
+    '.cert-foot .dojo-name{font-size:5mm;font-weight:700;color:#1a2744;letter-spacing:.6mm}' +
+    '.cert-foot .dojo-rep{font-size:3.2mm;color:#2d5a8e;margin-top:1.5mm}' +
+    '.cert-season .cert-logo{box-shadow:0 0 0 .8mm var(--sc)}' +
+    '.cert-season .cert-title{color:var(--sc);border-bottom-color:var(--sc)}' +
+    '.cert-season .cert-league{color:var(--sc);border-color:var(--sc);background:#fff}' +
+    '.cert-season .cert-name{color:var(--sc)}' +
+    '@media print{body{background:#fff}.bar{display:none}.sheets{gap:0;padding:0;display:block}.cert{page-break-after:always}}';
   return '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>賞状 ' + esc(seasonLabel) + '</title><style>' + style + '</style></head><body>' +
