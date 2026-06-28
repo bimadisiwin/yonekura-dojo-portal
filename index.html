@@ -343,6 +343,21 @@ body:not(.member-mode):not(.embedded) main {
 }
 .playoff-desc { font-size: var(--fluid-text-sm); color: var(--muted); margin: calc(var(--fluid-space-xs) * -1) 0 var(--fluid-space-md); }
 .playoff-note { font-size: var(--fluid-text-sm); color: var(--text); background: #f4f8fc; border: 1px solid #d8e6f2; border-radius: 8px; padding: 8px 12px; margin: 0 0 var(--fluid-space-md); line-height: 1.5; }
+.pm-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.pm-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fcfdff; }
+.pm-num { font-size: .7rem; font-weight: 700; color: var(--muted); flex: 0 0 auto; }
+.pm-vs { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
+.pm-side { flex: 1 1 140px; min-width: 0; }
+.pm-select { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: .8rem; background: #fff; }
+.pm-vs-label { font-weight: 800; color: var(--accent2); font-size: .8rem; flex: 0 0 auto; }
+.pm-name { font-weight: 700; font-size: .9rem; }
+.pm-result { flex: 1 1 100%; }
+.pm-result-btn { width: 100%; padding: 8px 10px; border: 1px dashed var(--accent); border-radius: 8px; background: #f7fbff; color: var(--accent); font-weight: 700; font-size: .82rem; cursor: pointer; }
+.pm-result-done { font-weight: 800; color: var(--accent2); font-size: .85rem; }
+.pm-result-empty { font-size: .72rem; color: var(--muted); }
+.pm-del { flex: 0 0 auto; width: 28px; height: 28px; border: none; border-radius: 50%; background: #f3e6e6; color: #b03030; font-size: 1rem; line-height: 1; cursor: pointer; }
+.pm-add { margin-top: 4px; }
+.pm-row-ro .pm-result { flex: 0 0 auto; }
 .playoff-empty { font-size: var(--fluid-text-sm); color: var(--muted); padding: var(--fluid-space-sm) 0; }
 .playoff-participants { display: flex; flex-wrap: wrap; gap: var(--fluid-space-sm); margin-bottom: var(--fluid-space-md); }
 .playoff-pill {
@@ -2911,6 +2926,13 @@ function mergePlayoffsInto(target, source) {
       (target.playoffs[key] && target.playoffs[key].results) || {},
       sp.results || {}
     );
+    var tMatches = Array.isArray(target.playoffs[key].matches) ? target.playoffs[key].matches : [];
+    var seen = {};
+    tMatches.forEach(function(m) { if (m && m.id) seen[m.id] = true; });
+    (Array.isArray(sp.matches) ? sp.matches : []).forEach(function(m) {
+      if (m && m.id && !seen[m.id]) { tMatches.push(m); seen[m.id] = true; }
+    });
+    target.playoffs[key].matches = tMatches;
   });
 }
 
@@ -3271,6 +3293,7 @@ function normalizeState(raw) {
   if (!s.playoffs || typeof s.playoffs !== "object") s.playoffs = {};
   if (!s.playoffs.j1_j2 || typeof s.playoffs.j1_j2 !== "object") s.playoffs.j1_j2 = { results: {} };
   if (!s.playoffs.j1_j2.results || typeof s.playoffs.j1_j2.results !== "object") s.playoffs.j1_j2.results = {};
+  if (!Array.isArray(s.playoffs.j1_j2.matches)) s.playoffs.j1_j2.matches = [];
   if (s.playoffs.pre_j1) delete s.playoffs.pre_j1;
   if (!s.specialAwards || typeof s.specialAwards !== "object") s.specialAwards = {};
   if (!s.annualBestAward || typeof s.annualBestAward !== "object") {
@@ -7131,9 +7154,11 @@ function deleteCustomAwardType(key) {
 function renderMergedDeptSpecialSection(ctx, live) {
   var gridHtml = "";
   if (isMemberMode) {
+    var revealed = memberAwardsRevealed();
     getSeasonSpecialSlots().forEach(function(slot) {
       var def = getSpecialAwardType(slot.type);
-      gridHtml += renderAwardPlaceholderItem(def.icon, def.label, def.desc, "award-special");
+      if (revealed && slot.playerId) gridHtml += renderGlobalAwardItem(def, slot.playerId, "award-special");
+      else gridHtml += renderAwardPlaceholderItem(def.icon, def.label, def.desc, "award-special");
     });
   } else {
     getSeasonSpecialSlots().forEach(function(slot) {
@@ -7163,7 +7188,7 @@ function renderMergedDeptSpecialSection(ctx, live) {
     '</div>' +
     '<div class="awards-note">' +
     (isMemberMode
-      ? "特別賞は確定後に下の「表彰記録」に表示されます。"
+      ? (memberAwardsRevealed() ? "確定済みの特別賞を表示しています。" : "特別賞は確定後に表示されます。")
       : "特別賞：指導者選定（全リーグから・枠は追加可）") +
     '</div></div>';
 }
@@ -7210,13 +7235,32 @@ function renderAwardPlaceholderItem(icon, label, desc, cls) {
     '</div>';
 }
 
+// 会員に実際の受賞者を見せるか：過去シーズンは確定扱い、ライブは確定後のみ
+function memberAwardsRevealed() {
+  var ctx = getAwardsCtx();
+  if (!ctx) return false;
+  if (!ctx.live) return true;
+  return (ctx.awardConfirmations || []).length > 0;
+}
+
 function renderLeagueAwardsCardMember(league) {
+  var mvpHtml;
+  if (memberAwardsRevealed()) {
+    var awards = computeLeagueAwards(league);
+    var seasonDetail = function(p) {
+      var txt = p.points + "勝点 ・ " + p.wins + "勝" + p.draws + "分" + p.losses + "敗";
+      if (awards.seasonMvpManual) txt += " ・ 指導者選定";
+      return txt;
+    };
+    mvpHtml = renderAwardItem("🏆", "シーズンMVP", "award-mvp", awards.seasonMvp, seasonDetail);
+  } else {
+    mvpHtml = renderAwardPlaceholderItem("🏆", "シーズンMVP", "シーズン終了時に発表", "award-mvp");
+  }
   return '<div class="card awards-league-card">' +
     '<div class="card-title">📊 ' + esc(league.name) + '（リーグ表彰）</div>' +
     '<div class="awards-section-block">' +
     '<div class="awards-section-title">👑 MVP</div>' +
-    '<div class="awards-grid">' +
-    renderAwardPlaceholderItem("🏆", "シーズンMVP", "シーズン終了時に発表", "award-mvp") +
+    '<div class="awards-grid awards-grid-single">' + mvpHtml +
     '</div></div>' +
     '<div class="awards-note">特別賞は下の「🎀 特別賞」でご確認ください。</div>' +
     '</div>';
@@ -7296,6 +7340,7 @@ function ensurePlayoffs() {
   if (!state.playoffs) state.playoffs = { j1_j2: { results: {} } };
   if (!state.playoffs.j1_j2) state.playoffs.j1_j2 = { results: {} };
   if (!state.playoffs.j1_j2.results) state.playoffs.j1_j2.results = {};
+  if (!Array.isArray(state.playoffs.j1_j2.matches)) state.playoffs.j1_j2.matches = [];
   if (state.playoffs.pre_j1) delete state.playoffs.pre_j1;
 }
 
@@ -7348,14 +7393,121 @@ function getJ1J2PlayoffParticipants() {
     .concat(j2top.map(function(p) { return Object.assign({}, p, { playoffSide: "J2上位" }); }));
 }
 
+// 入れ替え戦（1マッチ形式）で選べる対象者：J1・J2の参加選手を順位付きで返す
+function getPlayoffCandidates() {
+  var out = [];
+  ["j1", "j2"].forEach(function(lid) {
+    var lg = getLeague(lid);
+    if (!lg) return;
+    var sorted = computeStats(lg).sorted.filter(function(p) { return p.active !== false; });
+    sorted.forEach(function(p) {
+      out.push({ id: p.id, name: p.name, leagueName: lg.name, rank: p.played > 0 ? p.rank : null });
+    });
+  });
+  return out;
+}
+
+function playoffCandidateLabel(c) {
+  var rankTxt = c.rank ? c.rank + "位" : "—";
+  return c.leagueName + " " + rankTxt + "　" + c.name;
+}
+
+function addPlayoffMatch() {
+  if (isMemberMode || isReadonly()) return;
+  ensurePlayoffs();
+  state.playoffs.j1_j2.matches.push({ id: "pm-" + Date.now() + "-" + Math.floor(Math.random() * 1000), aId: "", bId: "" });
+  saveState();
+  render();
+}
+
+function removePlayoffMatch(id) {
+  if (isMemberMode || isReadonly() || !id) return;
+  ensurePlayoffs();
+  var bucket = state.playoffs.j1_j2;
+  var m = bucket.matches.filter(function(x) { return x.id === id; })[0];
+  if (m && m.aId && m.bId) setPlayoffResult(bucket, m.aId, m.bId, null);
+  bucket.matches = bucket.matches.filter(function(x) { return x.id !== id; });
+  saveState();
+  render();
+}
+
+function setPlayoffMatchPlayer(id, side, playerId) {
+  if (isMemberMode || isReadonly() || !id) return;
+  ensurePlayoffs();
+  var bucket = state.playoffs.j1_j2;
+  var m = bucket.matches.filter(function(x) { return x.id === id; })[0];
+  if (!m) return;
+  // 選手を変えたら、その試合の旧結果は無効になるのでクリア
+  if (m.aId && m.bId) setPlayoffResult(bucket, m.aId, m.bId, null);
+  if (side === "a") m.aId = playerId; else m.bId = playerId;
+  saveState();
+  render();
+}
+
+// 1試合の結果テキスト（例：「ひかる の勝ち（一本）」）
+function playoffMatchResultText(aId, bId) {
+  ensurePlayoffs();
+  var res = getPlayoffResult(state.playoffs.j1_j2, aId, bId);
+  if (!res) return "";
+  if (res.r === "draw") return "引き分け";
+  var winner = findPlayerGlobal(res.w);
+  var typeTxt = res.r === "ippon" ? "一本" : "優勢";
+  return (winner ? winner.name : "?") + " の勝ち（" + typeTxt + "）";
+}
+
 function renderPlayoffPage() {
   ensurePlayoffs();
   var ctx = getActiveContext();
   var html = '<div class="print-title">🥋 米倉道場 Jリーグ 入れ替え戦 ｜ ' + esc(ctx.seasonLabel) + '</div>';
-  html += '<p class="playoff-note">入れ替え戦は適宜実施します。挑戦権は <b>J2 1位・2位</b>、挑戦を受けるのは <b>J1 6位・7位</b> です。</p>';
-  html += renderPlayoffBlock("j1_j2", "J1 ⇄ J2", "挑戦権：J2 1位・2位 × 挑戦を受ける：J1 6位・7位 の総当たり戦（適宜実施）", getJ1J2PlayoffParticipants(),
-    "J1・J2それぞれ2名以上の選手が必要です。各リーグの順位が確定すると自動で対象が表示されます。");
+  html += '<p class="playoff-note">入れ替え戦は適宜実施します。挑戦権は <b>J2 1位・2位</b>、挑戦を受けるのは <b>J1 6位・7位</b> です。<br>対象者を選んで1試合ずつ対戦し、対戦表は随時更新します。</p>';
+  html += renderPlayoffMatchesBlock();
   return html;
+}
+
+function renderPlayoffMatchesBlock() {
+  ensurePlayoffs();
+  var bucket = state.playoffs.j1_j2;
+  var editable = !isMemberMode && !isReadonly();
+  var candidates = getPlayoffCandidates();
+  function optsHtml(selId) {
+    return '<option value="">選手を選択</option>' + candidates.map(function(c) {
+      return '<option value="' + esc(c.id) + '"' + (c.id === selId ? " selected" : "") + ">" + esc(playoffCandidateLabel(c)) + "</option>";
+    }).join("");
+  }
+  var rows = bucket.matches.map(function(m, i) {
+    var pA = m.aId ? findPlayerGlobal(m.aId) : null;
+    var pB = m.bId ? findPlayerGlobal(m.bId) : null;
+    var resultText = (m.aId && m.bId) ? playoffMatchResultText(m.aId, m.bId) : "";
+    var num = '<span class="pm-num">第' + (i + 1) + "試合</span>";
+    if (editable) {
+      var selA = '<select class="pm-select" data-playoff-match-id="' + esc(m.id) + '" data-playoff-side="a">' + optsHtml(m.aId) + "</select>";
+      var selB = '<select class="pm-select" data-playoff-match-id="' + esc(m.id) + '" data-playoff-side="b">' + optsHtml(m.bId) + "</select>";
+      var resultBtn = (m.aId && m.bId)
+        ? '<button type="button" class="pm-result-btn" data-cell-a="' + esc(m.aId) + '" data-cell-b="' + esc(m.bId) + '" data-playoff-key="j1_j2">' + (resultText ? esc(resultText) : "結果を入力") + "</button>"
+        : '<span class="pm-result-empty">両者を選ぶと結果を入力できます</span>';
+      var del = '<button type="button" class="pm-del" data-action="removePlayoffMatch" data-match-id="' + esc(m.id) + '" aria-label="この試合を削除">×</button>';
+      return '<div class="pm-row">' + num +
+        '<div class="pm-vs"><div class="pm-side">' + selA + "</div>" +
+        '<span class="pm-vs-label">VS</span><div class="pm-side">' + selB + "</div></div>" +
+        '<div class="pm-result">' + resultBtn + "</div>" + del + "</div>";
+    }
+    if (!m.aId || !m.bId) return "";
+    return '<div class="pm-row pm-row-ro">' + num +
+      '<div class="pm-vs"><span class="pm-name">' + esc(pA ? pA.name : "?") + "</span>" +
+      '<span class="pm-vs-label">VS</span><span class="pm-name">' + esc(pB ? pB.name : "?") + "</span></div>" +
+      '<div class="pm-result">' + (resultText ? '<span class="pm-result-done">' + esc(resultText) + "</span>" : '<span class="pm-result-empty">対戦予定</span>') + "</div></div>";
+  }).join("");
+  var addBtn = editable ? '<button type="button" class="btn btn-secondary btn-sm pm-add" data-action="addPlayoffMatch">＋ 試合を追加</button>' : "";
+  var body;
+  if (!bucket.matches.length || (!editable && !rows.trim())) {
+    body = '<p class="playoff-empty">' + (editable ? "「＋ 試合を追加」で対戦カードを作成し、対象者を選んでください。" : "対戦カードはまだ登録されていません。") + "</p>";
+  } else {
+    body = '<div class="pm-list">' + rows + "</div>";
+  }
+  return '<div class="card playoff-card">' +
+    '<div class="card-title">J1 ⇄ J2 入れ替え戦（1マッチ）</div>' +
+    '<p class="playoff-desc">対象者を選んで1試合ずつ実施します。勝敗は一本／優勢／引き分けから入力できます。</p>' +
+    body + addBtn + "</div>";
 }
 
 function renderPlayoffBlock(key, title, subtitle, participants, emptyMsg) {
@@ -8939,6 +9091,8 @@ function handleAppTap(e) {
   else if (action === "confirmAwards") confirmAwardsSnapshot();
   else if (action === "deleteAwardConfirmation") deleteAwardConfirmation(target.getAttribute("data-confirm-id"));
   else if (action === "generateCerts") generateCertsFromConfirmation(target.getAttribute("data-confirm-id"));
+  else if (action === "addPlayoffMatch") addPlayoffMatch();
+  else if (action === "removePlayoffMatch") removePlayoffMatch(target.getAttribute("data-match-id"));
   else if (action === "addSeasonSpecialSlot") addSeasonSpecialSlot(target.getAttribute("data-season-special-archive") || "");
   else if (action === "removeSeasonSpecialSlot") removeSeasonSpecialSlot(target.getAttribute("data-season-special-slot"), target.getAttribute("data-season-special-archive") || "");
   else if (action === "addCustomAwardType") addCustomAwardType();
@@ -9030,7 +9184,10 @@ function bindAppEvents() {
   document.addEventListener("change", function(e) {
     var t = e.target;
     if (!t || !t.getAttribute) return;
-    if (t.getAttribute("data-set-rule")) setRule(t.getAttribute("data-set-rule"), t.value);
+    if (t.getAttribute("data-playoff-match-id") && t.getAttribute("data-playoff-side")) {
+      setPlayoffMatchPlayer(t.getAttribute("data-playoff-match-id"), t.getAttribute("data-playoff-side"), t.value);
+    }
+    else if (t.getAttribute("data-set-rule")) setRule(t.getAttribute("data-set-rule"), t.value);
     else if (t.getAttribute("data-rename-player")) renamePlayer(t.getAttribute("data-rename-player"), t.value);
     else if (t.getAttribute("data-player-active")) setPlayerActive(t.getAttribute("data-player-active"), t.value === "1");
     else if (t.getAttribute("data-annual-best-player") != null) {
