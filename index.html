@@ -342,6 +342,7 @@ body:not(.member-mode):not(.embedded) main {
   .grid-subtitle-item + .grid-subtitle-item::before { content: " · "; }
 }
 .playoff-desc { font-size: var(--fluid-text-sm); color: var(--muted); margin: calc(var(--fluid-space-xs) * -1) 0 var(--fluid-space-md); }
+.playoff-note { font-size: var(--fluid-text-sm); color: var(--text); background: #f4f8fc; border: 1px solid #d8e6f2; border-radius: 8px; padding: 8px 12px; margin: 0 0 var(--fluid-space-md); line-height: 1.5; }
 .playoff-empty { font-size: var(--fluid-text-sm); color: var(--muted); padding: var(--fluid-space-sm) 0; }
 .playoff-participants { display: flex; flex-wrap: wrap; gap: var(--fluid-space-sm); margin-bottom: var(--fluid-space-md); }
 .playoff-pill {
@@ -1804,6 +1805,36 @@ function collectAwardsPeriodIndex() {
   return years;
 }
 
+// その期に「実際の受賞」があるか（確定記録／特別賞の受賞者／MVP上書き）
+function periodHasAwards(fy, sk) {
+  var ctx = resolveAwardsPageContext(fy, sk);
+  if (!ctx) return false;
+  if ((ctx.awardConfirmations || []).length) return true;
+  if ((ctx.seasonSpecialAwards || []).some(function(s) { return s && s.playerId; })) return true;
+  var mvp = ctx.seasonMvpOverride || {};
+  if (Object.keys(mvp).some(function(k) {
+    var v = mvp[k];
+    return Array.isArray(v) ? v.length : !!v;
+  })) return true;
+  return false;
+}
+
+// 受賞データがある最新シーズン（年→季節の新しい順）を返す
+function latestPeriodWithAwards() {
+  var index = collectAwardsPeriodIndex();
+  var seasonOrder = {};
+  SEASON_DEFS.forEach(function(def, i) { seasonOrder[def.key] = i; });
+  var best = null;
+  Object.keys(index).forEach(function(fy) {
+    Object.keys(index[fy]).forEach(function(sk) {
+      if (!periodHasAwards(fy, sk)) return;
+      var score = parseInt(fy, 10) * 10 + (seasonOrder[sk] || 0);
+      if (!best || score > best.score) best = { fy: fy, sk: sk, score: score };
+    });
+  });
+  return best;
+}
+
 function resolveAwardsPageContext(fy, sk) {
   if (state.fiscalYear === fy && state.seasonKey === sk) {
     return {
@@ -1861,8 +1892,11 @@ function getDefaultAwardsScope(ctx) {
 
 function ensureAwardsViewFilters() {
   awardsShowAnnual = false;
-  if (!awardsViewYear) awardsViewYear = state.fiscalYear;
-  if (!awardsViewSeason) awardsViewSeason = state.seasonKey;
+  if (!awardsViewYear || !awardsViewSeason) {
+    var def = latestPeriodWithAwards();
+    awardsViewYear = def ? def.fy : state.fiscalYear;
+    awardsViewSeason = def ? def.sk : state.seasonKey;
+  }
   if (!awardsViewScope) awardsViewScope = AWARDS_DEFAULT_LEAGUE_ID;
   var index = collectAwardsPeriodIndex();
   if (!index[awardsViewYear]) {
@@ -7318,7 +7352,8 @@ function renderPlayoffPage() {
   ensurePlayoffs();
   var ctx = getActiveContext();
   var html = '<div class="print-title">🥋 米倉道場 Jリーグ 入れ替え戦 ｜ ' + esc(ctx.seasonLabel) + '</div>';
-  html += renderPlayoffBlock("j1_j2", "J1 ⇄ J2", "J1下位2名 × J2上位2名の総当たり戦", getJ1J2PlayoffParticipants(),
+  html += '<p class="playoff-note">入れ替え戦は適宜実施します。挑戦権は <b>J2 1位・2位</b>、挑戦を受けるのは <b>J1 6位・7位</b> です。</p>';
+  html += renderPlayoffBlock("j1_j2", "J1 ⇄ J2", "挑戦権：J2 1位・2位 × 挑戦を受ける：J1 6位・7位 の総当たり戦（適宜実施）", getJ1J2PlayoffParticipants(),
     "J1・J2それぞれ2名以上の選手が必要です。各リーグの順位が確定すると自動で対象が表示されます。");
   return html;
 }
