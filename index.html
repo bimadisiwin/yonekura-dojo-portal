@@ -745,6 +745,16 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
 .feedback-member-chip.has-draft:not(.active) {
   border-color: #f59e0b; background: #fffbeb;
 }
+.feedback-member-chip.senior:not(.active) {
+  border-color: #7c5cd0; background: #f3effc; color: #5b3fae;
+}
+.feedback-member-chip.senior.active {
+  background: #7c5cd0; color: #fff; border-color: #7c5cd0;
+}
+.feedback-senior-badge {
+  display: inline-block; font-size: .68rem; font-weight: 700; color: #5b3fae;
+  background: #f3effc; border: 1px solid #7c5cd0; border-radius: 999px; padding: 1px 8px; vertical-align: middle;
+}
 .feedback-draft-banner {
   margin: var(--fluid-space-md) 0;
   padding: var(--fluid-space-md) var(--fluid-space-lg);
@@ -778,6 +788,7 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
   padding: var(--fluid-space-md) var(--fluid-space-lg); border: 1px solid var(--line); border-radius: var(--fluid-radius-md);
   resize: vertical; box-sizing: border-box; font-family: inherit;
 }
+.feedback-goal-tools { margin: 4px 0 8px; }
 .feedback-preview {
   margin-top: var(--fluid-space-md); padding: var(--fluid-space-md) var(--fluid-space-lg); border-radius: var(--fluid-radius-md);
   background: #f8fafc; border: 1px dashed var(--line);
@@ -5816,6 +5827,30 @@ function renderMemberAwardsInline(m) {
     '<div class="feedback-award-chips">' + chips + "</div></div>";
 }
 
+function getJhsGoalSheetTemplate() {
+  var season = formatSeasonLabelFromPeriodKey(getCurrentPeriodKey());
+  return "【" + season + " 目標設定シート】\n\n" +
+    "■ なりたい自分（大きな目標）\n　\n\n" +
+    "■ 具体目標\n" +
+    "🥋 技：\n" +
+    "💪 体：\n" +
+    "🧠 心：\n" +
+    "📅 生活：\n\n" +
+    "■ 今シーズンやること（行動宣言）\n・\n\n" +
+    "■ 振り返り（シーズン終わりに記入）\n" +
+    "できたこと：\n" +
+    "次に活かすこと：";
+}
+
+function insertGoalSheetTemplate() {
+  if (isMemberMode || isReadonly()) return;
+  var goalEl = document.getElementById("feedbackGoalInput");
+  if (!goalEl) return;
+  if (goalEl.value.trim() && !confirm("入力中の目標を、目標設定シートのひな形で上書きしますか？")) return;
+  goalEl.value = getJhsGoalSheetTemplate();
+  goalEl.focus();
+}
+
 function renderFeedbackEditor(m) {
   var senior = isSeniorMember(m);
   var leagues = getMemberLeagueLabels(m.id);
@@ -5831,7 +5866,8 @@ function renderFeedbackEditor(m) {
     : "";
   var goalField = senior
     ? '<label class="feedback-field-label">今シーズンの目標（' + esc(formatSeasonLabelFromPeriodKey(getCurrentPeriodKey())) + "）</label>" +
-      '<textarea id="feedbackGoalInput" class="feedback-textarea" rows="3" placeholder="例：得意技の連技を試合で1回決める">' + esc(m.personalGoal || "") + "</textarea>"
+      '<div class="feedback-goal-tools"><button type="button" class="btn btn-secondary btn-sm" data-action="insertGoalSheet">📋 目標設定シートのひな形を挿入</button></div>' +
+      '<textarea id="feedbackGoalInput" class="feedback-textarea" rows="12" placeholder="例：得意技の連技を試合で1回決める／「📋 ひな形を挿入」で目標設定シートを使えます">' + esc(m.personalGoal || "") + "</textarea>"
     : "";
   var commentLabel = senior ? "指導員メッセージ（本人に表示）" : "マイ進捗コメント（保護者・本人に表示）";
   var commentPlaceholder = senior
@@ -5839,7 +5875,7 @@ function renderFeedbackEditor(m) {
     : "例：今日は礼法がとても良かったです。次は受け身からの反撃を意識しましょう。";
   return '<div class="card feedback-editor-card">' +
     '<div class="feedback-editor-head">' +
-    '<div class="feedback-editor-name">' + esc(m.name) + "さん</div>" +
+    '<div class="feedback-editor-name">' + (senior ? '<span class="feedback-senior-badge">🎯 ' + esc(m.group || "中学生以上") + "</span> " : "") + esc(m.name) + "さん</div>" +
     (m.sposuruName && m.sposuruName !== m.name ? '<div class="feedback-editor-meta">' + esc(m.sposuruName) + "</div>" : "") +
     "</div>" +
     (metaBits.length ? '<div class="feedback-editor-meta">' + metaBits.join(" ／ ") + "</div>" : "") +
@@ -5867,12 +5903,14 @@ function renderFeedbackPage() {
   var chips = filtered.map(function(m) {
     var hasComment = !!(m.memberComment && String(m.memberComment).trim());
     var hasDraft = hasMemberCommentDraft(m);
+    var senior = isSeniorMember(m);
     return '<button type="button" class="feedback-member-chip' +
       (m.id === feedbackRosterId ? " active" : "") +
+      (senior ? " senior" : "") +
       (hasComment ? " has-comment" : "") +
       (hasDraft ? " has-draft" : "") +
       '" data-action="selectFeedbackMember" data-roster-id="' + esc(m.id) + '">' +
-      esc(m.name) + (hasDraft ? " 📱" : "") + "</button>";
+      (senior ? "🎯 " : "") + esc(m.name) + (hasDraft ? " 📱" : "") + "</button>";
   }).join("");
   var selected = feedbackRosterId ? findRosterMember(feedbackRosterId) : null;
   var editorHtml = selected
@@ -9111,6 +9149,7 @@ function handleAppTap(e) {
   else if (action === "selectFeedbackMember") selectFeedbackMember(target.getAttribute("data-roster-id"));
   else if (action === "saveFeedback") saveFeedbackFromPage(target.getAttribute("data-roster-id"));
   else if (action === "loadFeedbackDraft") loadFeedbackDraft(target.getAttribute("data-roster-id"));
+  else if (action === "insertGoalSheet") insertGoalSheetTemplate();
   else if (action === "openReviewHistory") openReviewHistoryModal(target.getAttribute("data-roster-id"));
   else if (action === "closeReviewHistory") closeReviewHistoryModal();
   else if (action === "deleteStripeReview") deleteStripeReview(target.getAttribute("data-roster-id"), target.getAttribute("data-review-id"));
