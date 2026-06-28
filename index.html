@@ -6796,6 +6796,8 @@ function renderAwardConfirmationCard(entry, allowDelete, scope) {
 }
 
 function renderAwardConfirmationsSection(scope) {
+  // 道場生側はMVP・特別賞カードに受賞者を表示済みのため、重複する表彰記録は出さない
+  if (isMemberMode) return "";
   var entries = getAwardConfirmations().slice().sort(function(a, b) {
     return (b.confirmedAt || 0) - (a.confirmedAt || 0);
   });
@@ -7331,7 +7333,6 @@ function renderAwardsPage() {
     html += renderMergedDeptSpecialSection(ctx, ctx.live);
   }
   if (!isMemberMode && ctx.live) html += renderAwardConfirmSettings();
-  html += renderAwardConfirmationsSection();
   awardsPageCtx = null;
   return html;
 }
