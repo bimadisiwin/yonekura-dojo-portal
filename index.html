@@ -4324,7 +4324,7 @@ function getLeagueStripeWarningKid(rosterId, stripes) {
 }
 
 function getRecommendedLeagueLabel(stripes) {
-  if (stripes >= 3) return "J1圏（＋順位条件）";
+  if (stripes >= 3) return "J1圏（上位7名が昇格）";
   if (stripes >= 2) return "J2";
   return "J3";
 }
@@ -5871,7 +5871,8 @@ function renderStripesPage() {
     (rows || '<p style="font-size:.82rem;color:var(--muted);padding:8px">館員がいません</p>') +
     "</div>" +
     '<div class="card"><div class="card-title">リーグ参戦資格</div>' +
-    '<p style="font-size:.72rem;line-height:1.55">プレ: 0本 ／ J3: 1本以上 ／ J2: 2本以上 ／ J1: 3本以上（＋順位条件）<br>' +
+    '<p style="font-size:.72rem;line-height:1.55">プレ: 0本 ／ J3: 1本以上 ／ J2: 2本以上 ／ J1: 3本以上<br>' +
+    "🏆 J1はストライプ3本以上のうち、プレリーグ上位7名が昇格対象<br>" +
     "⚠ は所属リーグに対してストライプ不足の警告です。</p></div>";
 }
 
