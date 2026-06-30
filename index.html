@@ -869,7 +869,7 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
 }
 .grid-table tbody th {
   background: var(--empty); font-weight: 700; text-align: left;
-  padding: var(--fluid-space-xs) var(--fluid-space-sm);
+  padding: var(--fluid-space-xs) var(--fluid-space-md);
   position: -webkit-sticky; position: sticky; left: 0; z-index: 3;
   font-size: calc(var(--grid-name-font) * var(--grid-name-scale, 1));
   line-height: var(--fluid-line-tight);
@@ -1466,7 +1466,7 @@ body.embedded:not(.member-mode) .grid-table thead th {
   min-height: calc(26px + 0.35vw);
 }
 body.embedded:not(.member-mode) .grid-table tbody th {
-  padding: var(--fluid-space-xs) var(--fluid-space-sm);
+  padding: var(--fluid-space-xs) var(--fluid-space-md);
 }
 body.embedded:not(.member-mode) .grid-table tbody th .player-name-line {
   flex-wrap: nowrap;
@@ -8884,7 +8884,7 @@ function measureInlineTextWidth(text, fontSize, fontWeight, fontFamily) {
 }
 
 function measureGridNameColNeed(table) {
-  var maxW = 52;
+  var maxW = 64;
   var sampleTh = table.querySelector("tbody th");
   var cs = sampleTh ? window.getComputedStyle(sampleTh) : null;
   var lines = table.querySelectorAll("tbody th .player-name-line");
@@ -8894,9 +8894,9 @@ function measureGridNameColNeed(table) {
     line = lines[i];
     tap = line.querySelector(".player-tap");
     stripe = line.querySelector(".stripe-visual-sm, .stripe-visual");
-    w = padX + 6;
+    w = padX + 10;
     if (tap) w += measureInlineTextWidth(tap.textContent, cs && cs.fontSize, cs && cs.fontWeight, cs && cs.fontFamily);
-    if (stripe) w += stripe.offsetWidth + 4;
+    if (stripe) w += stripe.offsetWidth + 6;
     lineW = line.scrollWidth + padX;
     maxW = Math.max(maxW, w, lineW);
   }
