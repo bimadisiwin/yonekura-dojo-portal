@@ -823,6 +823,9 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
   --grid-name-scale: 1;
   --grid-head-scale: 1;
 }
+body:not(.member-mode):not(.embedded) {
+  overflow-x: clip;
+}
 /* 指導者：星取表カードを画面横幅いっぱいに */
 body:not(.member-mode):not(.embedded) main > .card-grid {
   width: 100vw;
