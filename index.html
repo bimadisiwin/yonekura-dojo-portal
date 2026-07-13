@@ -856,6 +856,27 @@ body.embedded main > .card-grid {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  max-height: none;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+.card-grid .grid-wrap-split .grid-split-body {
+  overflow: hidden;
+}
+.card-grid .grid-table th,
+.card-grid .grid-table td {
+  min-width: 0;
+  min-height: var(--grid-cell-min, calc(28px + 0.4vw));
+  height: var(--grid-cell-h, auto);
+}
+.card-grid .grid-table .cell-btn,
+.card-grid .grid-table .cell-readonly {
+  min-height: var(--grid-cell-min, calc(28px + 0.4vw));
+  font-size: var(--grid-cell-font, calc(12px + 0.28vw));
+  padding: 1px;
+}
+.card-grid .grid-table .cell-btn.empty {
+  font-size: var(--grid-cell-font-empty, calc(9px + 0.12vw));
 }
 /* 道場生：列を端末幅に合わせて縮められるように */
 body.member-mode .grid-table {
@@ -1451,6 +1472,14 @@ body.embedded.member-mode {
     --embed-grid-max: 640px;
   }
 }
+body.embedded.member-mode .card-grid .grid-wrap,
+body.embedded.member-mode .card-grid .grid-wrap-split {
+  max-height: none;
+  overflow: hidden;
+}
+body.embedded.member-mode .card-grid .grid-split-body {
+  overflow: hidden;
+}
 body.embedded.member-mode .grid-wrap {
   width: 100%;
   max-width: 100%;
@@ -1471,6 +1500,14 @@ body.embedded.member-mode .grid-split-body {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x pan-y;
+}
+body.embedded:not(.member-mode) .card-grid .grid-wrap,
+body.embedded:not(.member-mode) .card-grid .grid-wrap-split {
+  max-height: none;
+  overflow: hidden;
+}
+body.embedded:not(.member-mode) .card-grid .grid-split-body {
+  overflow: hidden;
 }
 body.embedded:not(.member-mode) .grid-wrap,
 body.embedded:not(.member-mode) .grid-wrap-split {
@@ -1666,6 +1703,16 @@ body.embedded:not(.member-mode) .cell-btn:not(.empty) {
   .standings-print tr.st-j1 td:first-child { box-shadow: inset 4px 0 0 var(--accent2); }
 
   .grid-wrap { max-height: none; overflow: visible; border: none; }
+  .card-grid .grid-wrap,
+  .card-grid .grid-wrap-split {
+    overflow: visible;
+    max-height: none;
+  }
+  .card-grid .grid-table th,
+  .card-grid .grid-table td {
+    height: auto;
+    min-height: 0;
+  }
   .grid-table { width: 100%; font-size: 8pt; table-layout: fixed; border-collapse: collapse; }
   .grid-table th, .grid-table td {
     border: .8px solid #888; height: auto; min-width: 0; padding: 2px 1px;
@@ -8960,7 +9007,7 @@ function applyGridColWidths(table, widths) {
 function applyGridNameScale(table, scale) {
   var wrap = table.closest(".grid-wrap, .grid-wrap-split");
   if (!wrap) return;
-  var s = String(Math.max(0.92, Math.min(1, scale)));
+  var s = String(Math.max(0.68, Math.min(1, scale)));
   wrap.style.setProperty("--grid-name-scale", s);
   wrap.style.setProperty("--grid-head-scale", s);
 }
@@ -9023,11 +9070,22 @@ function measureGridHeadColNeed(th) {
   return Math.ceil(Math.max(28, w));
 }
 
+function getGridAvailHeight(wrap) {
+  var vh = window.innerHeight || document.documentElement.clientHeight || 640;
+  var rect = wrap.getBoundingClientRect();
+  var pad = 12;
+  var avail = Math.floor(vh - rect.top - pad);
+  /* 画面下のほうにあるときは、ほぼ画面高さでフィット（スクロール後に全体が見える） */
+  if (avail < vh * 0.4) avail = Math.floor(vh * 0.88);
+  return Math.max(140, avail);
+}
+
 function fitGridColumns() {
   var wraps = document.querySelectorAll(".grid-wrap, .grid-wrap-split");
   for (var wi = 0; wi < wraps.length; wi++) {
     var wrap = wraps[wi];
-    var avail = wrap.clientWidth || 0;
+    var availW = wrap.clientWidth || 0;
+    var availH = getGridAvailHeight(wrap);
     var headTable = wrap.querySelector(".grid-table-head");
     var bodyTable = wrap.querySelector(".grid-table-body");
     var fullTable = wrap.querySelector(".grid-table:not(.grid-table-head):not(.grid-table-body)");
@@ -9042,11 +9100,22 @@ function fitGridColumns() {
     var dataCols = n - 1 - statCols;
     if (dataCols < 1) continue;
 
-    var minData = 32;
+    var rowCount = (nameTable.querySelectorAll("tbody tr").length || dataCols) + 1;
+    var minData = 18;
+    var minCell = 18;
+    var maxCell = 44;
+    var cellH = Math.max(minCell, Math.min(maxCell, Math.floor(availH / rowCount)));
+    var cellFont = Math.max(9, Math.min(15, Math.round(cellH * 0.42)));
+    wrap.style.setProperty("--grid-cell-min", cellH + "px");
+    wrap.style.setProperty("--grid-cell-h", cellH + "px");
+    wrap.style.setProperty("--grid-cell-font", cellFont + "px");
+    wrap.style.setProperty("--grid-cell-font-empty", Math.max(8, cellFont - 2) + "px");
+
     var scale = 1;
+    var scaleFloor = 0.68;
     var statW, nameW, dataWidths, total, d, si;
 
-    while (scale >= 0.92) {
+    while (scale >= scaleFloor) {
       applyGridNameScale(nameTable, scale);
       void wrap.offsetWidth;
       nameW = measureGridNameColNeed(nameTable);
@@ -9054,14 +9123,14 @@ function fitGridColumns() {
       for (d = 0; d < dataCols; d++) {
         dataWidths.push(Math.max(minData, measureGridHeadColNeed(headers[d + 1])));
       }
-      statW = 34;
+      statW = Math.max(22, Math.min(34, cellH + 4));
       for (si = n - statCols; si < n; si++) {
-        statW = Math.max(statW, measureGridHeadColNeed(headers[si]));
+        statW = Math.max(statW, Math.min(36, measureGridHeadColNeed(headers[si])));
       }
       total = nameW + statW * statCols;
       for (d = 0; d < dataCols; d++) total += dataWidths[d];
-      if (!avail || total <= avail) break;
-      scale = Math.round((scale - 0.02) * 100) / 100;
+      if (!availW || total <= availW) break;
+      scale = Math.round((scale - 0.03) * 100) / 100;
     }
 
     nameW = measureGridNameColNeed(nameTable);
@@ -9069,16 +9138,16 @@ function fitGridColumns() {
     for (d = 0; d < dataCols; d++) {
       dataWidths.push(Math.max(minData, measureGridHeadColNeed(headers[d + 1])));
     }
-    statW = 34;
+    statW = Math.max(22, Math.min(34, cellH + 4));
     for (si = n - statCols; si < n; si++) {
-      statW = Math.max(statW, measureGridHeadColNeed(headers[si]));
+      statW = Math.max(statW, Math.min(36, measureGridHeadColNeed(headers[si])));
     }
     total = nameW + statW * statCols;
     for (d = 0; d < dataCols; d++) total += dataWidths[d];
 
-    /* まだはみ出す場合はデータ列を下限まで縮めて端末幅に収める */
-    if (avail && total > avail && dataCols > 0) {
-      var deficit = total - avail;
+    /* はみ出す場合はデータ列を下限まで縮めて横スクロールなし */
+    if (availW && total > availW && dataCols > 0) {
+      var deficit = total - availW;
       var shrinkable = 0;
       for (d = 0; d < dataCols; d++) shrinkable += Math.max(0, dataWidths[d] - minData);
       if (shrinkable > 0) {
@@ -9095,15 +9164,32 @@ function fitGridColumns() {
       }
     }
 
-    /* 余白があればデータ列に分配して横幅いっぱい（指導者・道場生） */
-    if (avail && total < avail && dataCols > 0) {
-      var extra = avail - total;
+    /* まだはみ出す場合は全列を比例縮小（スクロールなし優先） */
+    if (availW && total > availW && total > 0) {
+      var factor = availW / total;
+      nameW = Math.max(36, Math.floor(nameW * factor));
+      statW = Math.max(18, Math.floor(statW * factor));
+      for (d = 0; d < dataCols; d++) {
+        dataWidths[d] = Math.max(14, Math.floor(dataWidths[d] * factor));
+      }
+      total = nameW + statW * statCols;
+      for (d = 0; d < dataCols; d++) total += dataWidths[d];
+      if (total > availW) {
+        nameW = Math.max(28, nameW - (total - availW));
+        total = nameW + statW * statCols;
+        for (d = 0; d < dataCols; d++) total += dataWidths[d];
+      }
+    }
+
+    /* 余白があればデータ列に分配して横幅いっぱい */
+    if (availW && total < availW && dataCols > 0) {
+      var extra = availW - total;
       var addPer = Math.floor(extra / dataCols);
       var rem = extra - addPer * dataCols;
       for (d = 0; d < dataCols; d++) {
         dataWidths[d] += addPer + (d < rem ? 1 : 0);
       }
-      total = avail;
+      total = availW;
     }
 
     var widths = [nameW];
@@ -9113,6 +9199,21 @@ function fitGridColumns() {
     var applyTables = wrap.querySelectorAll(".grid-table, .grid-table-head, .grid-table-body");
     for (var ti = 0; ti < applyTables.length; ti++) {
       applyGridColWidths(applyTables[ti], widths);
+    }
+
+    /* 高さ再測定：はみ出すときはセルをさらに縮める */
+    void wrap.offsetHeight;
+    var naturalH = wrap.scrollHeight || wrap.offsetHeight;
+    if (availH && naturalH > availH + 2 && rowCount > 1) {
+      var tighter = Math.max(minCell, Math.floor(availH / rowCount));
+      if (tighter < cellH) {
+        cellH = tighter;
+        cellFont = Math.max(8, Math.min(15, Math.round(cellH * 0.42)));
+        wrap.style.setProperty("--grid-cell-min", cellH + "px");
+        wrap.style.setProperty("--grid-cell-h", cellH + "px");
+        wrap.style.setProperty("--grid-cell-font", cellFont + "px");
+        wrap.style.setProperty("--grid-cell-font-empty", Math.max(7, cellFont - 2) + "px");
+      }
     }
   }
 }
