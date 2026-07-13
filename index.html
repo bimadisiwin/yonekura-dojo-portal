@@ -16,9 +16,9 @@
   --line: #d8e0ef;
   --accent: #c9a227;
   --accent2: #2d5a8e;
-  --header-from: #4a1320;
-  --header-to: #7d2438;
-  --header-col: #7d2438;
+  --header-from: #1a2744;
+  --header-to: #2d4a7a;
+  --header-col: #2d4a7a;
   --panel: #eef2f9;
   --panel-light: #f0f4fa;
   --panel-border: #c8d8ef;
@@ -817,8 +817,30 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
   border-radius: var(--fluid-radius-md); border: 1px solid var(--line);
   max-height: min(calc(60vh + 2vw), 70vh); touch-action: pan-x pan-y;
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   --grid-name-scale: 1;
   --grid-head-scale: 1;
+}
+/* 指導者：星取表カードを画面横幅いっぱいに */
+body:not(.member-mode):not(.embedded) main > .card-grid {
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  box-sizing: border-box;
+  padding-left: max(var(--fluid-pad-inline), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--fluid-pad-inline), env(safe-area-inset-right, 0px));
+}
+body:not(.member-mode) .card-grid .grid-wrap,
+body:not(.member-mode) .card-grid .grid-wrap-split {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .grid-table {
   border-collapse: separate; border-spacing: 0;
@@ -869,7 +891,7 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
 }
 .grid-table tbody th {
   background: var(--empty); font-weight: 700; text-align: left;
-  padding: var(--fluid-space-xs) var(--fluid-space-md);
+  padding: var(--fluid-space-xs) var(--fluid-space-sm);
   position: -webkit-sticky; position: sticky; left: 0; z-index: 3;
   font-size: calc(var(--grid-name-font) * var(--grid-name-scale, 1));
   line-height: var(--fluid-line-tight);
@@ -1466,7 +1488,7 @@ body.embedded:not(.member-mode) .grid-table thead th {
   min-height: calc(26px + 0.35vw);
 }
 body.embedded:not(.member-mode) .grid-table tbody th {
-  padding: var(--fluid-space-xs) var(--fluid-space-md);
+  padding: var(--fluid-space-xs) var(--fluid-space-sm);
 }
 body.embedded:not(.member-mode) .grid-table tbody th .player-name-line {
   flex-wrap: nowrap;
@@ -1588,6 +1610,14 @@ body.embedded:not(.member-mode) .cell-btn:not(.empty) {
   .card {
     box-shadow: none; border: none; padding: 0;
     margin: 0 0 6mm; break-inside: avoid;
+  }
+  body:not(.member-mode):not(.embedded) main > .card-grid {
+    width: auto;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
   }
   .card-title { font-size: 11pt; color: var(--ink); }
   .card-title span { display: none !important; }
@@ -5829,17 +5859,62 @@ function renderMemberAwardsInline(m) {
 
 function getJhsGoalSheetTemplate() {
   var season = formatSeasonLabelFromPeriodKey(getCurrentPeriodKey());
-  return "【" + season + " 目標設定シート】\n\n" +
-    "■ なりたい自分（大きな目標）\n　\n\n" +
+  return "【" + season + " 目標設定シート】＿＿くん\n\n" +
+    "■ なりたい自分（大きな目標）\n" +
+    "　立技・寝技の両方で、自分の得意技につながる攻め方ができる選手になる。\n" +
+    "　勝ち負けだけでなく、礼を守り、相手を大切にしながら柔道を続けられる自分になる。\n\n" +
+    "■ 今シーズンの攻め方（立技・寝技の得意技セット）\n\n" +
+    "立技の得意技：（例：大外刈り）\n" +
+    "　連絡技①：引き崩し → 体さばき\n" +
+    "　連絡技②：得意技 → けさ固め\n\n" +
+    "寝技の得意技：（例：片車）\n" +
+    "　連絡技①：引き崩し → 寝技移行\n" +
+    "　連絡技②：得意技 → 横四方固め\n\n" +
+    "※ 2ヶ月目までに得意技を確定。未決の場合は「候補：」と記入。\n\n" +
+    "■ 立技の得意技パターン\n" +
+    "組み手 → 引き崩し → 体さばき → （立技の得意技） → けさ固め\n" +
+    "・打ち込み：その場5本 → 移動5本を1セット\n\n" +
+    "■ 寝技の得意技パターン\n" +
+    "立ちが続く → 引き崩し → 寝技移行 → （寝技の得意技） → 横四方固め\n" +
+    "・入り方を毎回同じ形にする\n\n" +
+    "■ 使い分け（実戦の組み立て）\n" +
+    "・相手のバランスが崩れている → 立技パターン\n" +
+    "・立ちが続いて投げに入りにくい → 寝技パターン\n" +
+    "・シーズン末：乱取りでどちらか一方のパターンを1回つなげる\n\n" +
+    "■ 月ごとのマイルストーン\n\n" +
+    "【1ヶ月目｜土台づくり】\n" +
+    "・礼法・受け身4種（左右）・組み手・崩しの基本\n\n" +
+    "【2ヶ月目｜得意技と連絡技①】\n" +
+    "・立技・寝技の得意技をそれぞれ1技に決める\n" +
+    "・連絡技① → 得意技が打ち込みでつながる\n\n" +
+    "【3ヶ月目｜実戦につなげる】\n" +
+    "・連絡技① → 得意技 → 連絡技②まで一連でできる\n" +
+    "・乱取りで決めたパターンから1回仕掛ける\n\n" +
+    "■ 稽古ごとのマイルストーン（毎回やること）\n\n" +
+    "【稽古の始め】体調確認／道着・帯・爪を整える／準備運動を最後まで\n" +
+    "【メイン】受け身 左右各＿＿回／立技セット＿＿セット／寝技セット＿＿セット\n" +
+    "　　　　連絡技は①→得意技→②の一連で練習／分からないことは質問する\n" +
+    "【稽古の終わり】片付けを手伝う／礼／今日の良かった点・途切れた点を1つ思い出す\n\n" +
     "■ 具体目標\n" +
-    "🥋 技：\n" +
-    "💪 体：\n" +
-    "🧠 心：\n" +
-    "📅 生活：\n\n" +
-    "■ 今シーズンやること（行動宣言）\n・\n\n" +
+    "🥋 技：得意技を立技・寝技それぞれ1技／連絡技の流れを打ち込みで再現／使い分けがわかる\n" +
+    "💪 体：連絡技の途中で足が止まらない／打ち込み10本後も姿勢が崩れにくい／3分運動を続けられる\n" +
+    "🧠 心：切り替えて諦めない／「参った」を自分で言える／礼ができる\n" +
+    "📅 生活：稽古前日は早寝／道着を自分で整える／週1回、2パターンを頭の中でたどる\n\n" +
+    "■ 努力目標\n\n" +
+    "【本人が決めること】\n・\n・\n\n" +
+    "【指導員からの提案】\n・（例：受け身は毎稽古、左右それぞれ意識して練習する）\n・（例：打ち込みは決めた2セットだけを繰り返す）\n・（例：乱取りの最初の1分は連絡技①から入る）\n・\n\n" +
+    "■ 今シーズンやること（行動宣言）\n" +
+    "・稽古を欠席せず続ける\n" +
+    "・得意技は立技・寝技それぞれ1技に絞る\n" +
+    "・打ち込みは連絡技① → 得意技 → 連絡技②の1セットで練習する\n" +
+    "・乱取りは決めたパターンから入る\n" +
+    "・途切れたところを稽古後に1つ書き留める\n\n" +
     "■ 振り返り（シーズン終わりに記入）\n" +
+    "立技得意技：\n" +
+    "寝技得意技：\n" +
     "できたこと：\n" +
-    "次に活かすこと：";
+    "つながらなかったところ：\n" +
+    "次シーズンに伸ばすこと：";
 }
 
 function insertGoalSheetTemplate() {
@@ -5867,7 +5942,7 @@ function renderFeedbackEditor(m) {
   var goalField = senior
     ? '<label class="feedback-field-label">今シーズンの目標（' + esc(formatSeasonLabelFromPeriodKey(getCurrentPeriodKey())) + "）</label>" +
       '<div class="feedback-goal-tools"><button type="button" class="btn btn-secondary btn-sm" data-action="insertGoalSheet">📋 目標設定シートのひな形を挿入</button></div>' +
-      '<textarea id="feedbackGoalInput" class="feedback-textarea" rows="12" placeholder="例：得意技の連技を試合で1回決める／「📋 ひな形を挿入」で目標設定シートを使えます">' + esc(m.personalGoal || "") + "</textarea>"
+      '<textarea id="feedbackGoalInput" class="feedback-textarea" rows="20" placeholder="例：立技・寝技の得意技と連絡技を決める／「📋 ひな形を挿入」で3ヶ月目標シートを使えます">' + esc(m.personalGoal || "") + "</textarea>"
     : "";
   var commentLabel = senior ? "指導員メッセージ（本人に表示）" : "マイ進捗コメント（保護者・本人に表示）";
   var commentPlaceholder = senior
@@ -7567,8 +7642,8 @@ function renderPlayoffBlock(key, title, subtitle, participants, emptyMsg) {
     '<div class="card-title">' + esc(title) + '</div>' +
     '<p class="playoff-desc">' + esc(subtitle) + '</p>' +
     partHtml +
-    renderStandings(virtual, sorted) +
     renderGrid(virtual, sorted, { playoffKey: key, title: title + " 星取表" }) +
+    renderStandings(virtual, sorted) +
     '</div>';
 }
 
@@ -7810,7 +7885,7 @@ function renderGrid(league, sorted, opts) {
         return '<span class="grid-subtitle-item">' + esc(s) + '</span>';
       }).join("") + '</div>'
     : "";
-  return `<div class="card">
+  return `<div class="card card-grid">
     <div class="card-title">${esc(gridTitle)}</div>
     ${subtitleHtml}
     ${legend}
@@ -8083,7 +8158,7 @@ function render() {
   const { sorted } = computeStats(league);
   if (currentView === "main") {
     const printTitle = `<div class="print-title">🥋 米倉道場 Jリーグ 星取表 ｜ ${esc(league.name)}（${esc(ctx.seasonLabel)}）</div>`;
-    main.innerHTML = printTitle + renderArchiveStandingsBanner() + renderStandings(league, sorted) + renderGrid(league, sorted);
+    main.innerHTML = printTitle + renderArchiveStandingsBanner() + renderGrid(league, sorted) + renderStandings(league, sorted);
     initLegacyGridScroll();
   } else if (currentView === "settings") {
     if (ctx.readonly) {
@@ -8884,7 +8959,7 @@ function measureInlineTextWidth(text, fontSize, fontWeight, fontFamily) {
 }
 
 function measureGridNameColNeed(table) {
-  var maxW = 64;
+  var maxW = 52;
   var sampleTh = table.querySelector("tbody th");
   var cs = sampleTh ? window.getComputedStyle(sampleTh) : null;
   var lines = table.querySelectorAll("tbody th .player-name-line");
@@ -8894,9 +8969,9 @@ function measureGridNameColNeed(table) {
     line = lines[i];
     tap = line.querySelector(".player-tap");
     stripe = line.querySelector(".stripe-visual-sm, .stripe-visual");
-    w = padX + 10;
+    w = padX + 6;
     if (tap) w += measureInlineTextWidth(tap.textContent, cs && cs.fontSize, cs && cs.fontWeight, cs && cs.fontFamily);
-    if (stripe) w += stripe.offsetWidth + 6;
+    if (stripe) w += stripe.offsetWidth + 4;
     lineW = line.scrollWidth + padX;
     maxW = Math.max(maxW, w, lineW);
   }
@@ -8923,7 +8998,7 @@ function measureGridHeadColNeed(th) {
 
 function fitGridColumns() {
   var wraps = document.querySelectorAll(".grid-wrap, .grid-wrap-split");
-  var compactEmbedGrid = detectEmbedded() && !isMemberMode;
+  var fitToWidth = !isMemberMode;
   for (var wi = 0; wi < wraps.length; wi++) {
     var wrap = wraps[wi];
     var avail = wrap.clientWidth || 0;
@@ -8941,7 +9016,7 @@ function fitGridColumns() {
     var dataCols = n - 1 - statCols;
     if (dataCols < 1) continue;
 
-    var minData = compactEmbedGrid ? 32 : 36;
+    var minData = fitToWidth ? 32 : 36;
     var scale = 1;
     var statW, nameW, dataWidths, total, d, si;
 
@@ -8959,11 +9034,11 @@ function fitGridColumns() {
       }
       total = nameW + statW * statCols;
       for (d = 0; d < dataCols; d++) total += dataWidths[d];
-      if (!compactEmbedGrid || !avail || total <= avail) break;
+      if (!fitToWidth || !avail || total <= avail) break;
       scale = Math.round((scale - 0.02) * 100) / 100;
     }
 
-    if (!compactEmbedGrid) {
+    if (!fitToWidth) {
       applyGridNameScale(nameTable, 1);
       void wrap.offsetWidth;
     }
@@ -8975,6 +9050,19 @@ function fitGridColumns() {
     statW = 34;
     for (si = n - statCols; si < n; si++) {
       statW = Math.max(statW, measureGridHeadColNeed(headers[si]));
+    }
+    total = nameW + statW * statCols;
+    for (d = 0; d < dataCols; d++) total += dataWidths[d];
+
+    /* 指導者：余白があればデータ列に分配して横幅いっぱい */
+    if (fitToWidth && avail && total < avail && dataCols > 0) {
+      var extra = avail - total;
+      var addPer = Math.floor(extra / dataCols);
+      var rem = extra - addPer * dataCols;
+      for (d = 0; d < dataCols; d++) {
+        dataWidths[d] += addPer + (d < rem ? 1 : 0);
+      }
+      total = avail;
     }
 
     var widths = [nameW];
