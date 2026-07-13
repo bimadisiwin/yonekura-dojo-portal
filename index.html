@@ -823,11 +823,11 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
   --grid-name-scale: 1;
   --grid-head-scale: 1;
 }
-body:not(.member-mode):not(.embedded) {
+body:not(.embedded) {
   overflow-x: clip;
 }
-/* 指導者：星取表カードを画面横幅いっぱいに */
-body:not(.member-mode):not(.embedded) main > .card-grid {
+/* 星取表カードを横幅いっぱいに（指導者・道場生） */
+body:not(.embedded) main > .card-grid {
   width: 100vw;
   max-width: 100vw;
   margin-left: calc(50% - 50vw);
@@ -839,11 +839,31 @@ body:not(.member-mode):not(.embedded) main > .card-grid {
   padding-left: max(var(--fluid-pad-inline), env(safe-area-inset-left, 0px));
   padding-right: max(var(--fluid-pad-inline), env(safe-area-inset-right, 0px));
 }
-body:not(.member-mode) .card-grid .grid-wrap,
-body:not(.member-mode) .card-grid .grid-wrap-split {
+body.embedded main > .card-grid {
+  width: calc(100% + 2 * var(--fluid-pad-inline));
+  max-width: none;
+  margin-left: calc(-1 * var(--fluid-pad-inline));
+  margin-right: calc(-1 * var(--fluid-pad-inline));
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  box-sizing: border-box;
+  padding-left: max(var(--fluid-space-sm), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--fluid-space-sm), env(safe-area-inset-right, 0px));
+}
+.card-grid .grid-wrap,
+.card-grid .grid-wrap-split {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+/* 道場生：列を端末幅に合わせて縮められるように */
+body.member-mode .grid-table {
+  table-layout: fixed;
+}
+body.member-mode .grid-table td,
+body.member-mode .grid-table tbody th {
+  min-width: 0 !important;
 }
 .grid-table {
   border-collapse: separate; border-spacing: 0;
@@ -1614,7 +1634,8 @@ body.embedded:not(.member-mode) .cell-btn:not(.empty) {
     box-shadow: none; border: none; padding: 0;
     margin: 0 0 6mm; break-inside: avoid;
   }
-  body:not(.member-mode):not(.embedded) main > .card-grid {
+  main > .card-grid,
+  body.embedded main > .card-grid {
     width: auto;
     max-width: none;
     margin-left: 0;
@@ -9004,7 +9025,6 @@ function measureGridHeadColNeed(th) {
 
 function fitGridColumns() {
   var wraps = document.querySelectorAll(".grid-wrap, .grid-wrap-split");
-  var fitToWidth = !isMemberMode;
   for (var wi = 0; wi < wraps.length; wi++) {
     var wrap = wraps[wi];
     var avail = wrap.clientWidth || 0;
@@ -9022,7 +9042,7 @@ function fitGridColumns() {
     var dataCols = n - 1 - statCols;
     if (dataCols < 1) continue;
 
-    var minData = fitToWidth ? 32 : 36;
+    var minData = 32;
     var scale = 1;
     var statW, nameW, dataWidths, total, d, si;
 
@@ -9040,14 +9060,10 @@ function fitGridColumns() {
       }
       total = nameW + statW * statCols;
       for (d = 0; d < dataCols; d++) total += dataWidths[d];
-      if (!fitToWidth || !avail || total <= avail) break;
+      if (!avail || total <= avail) break;
       scale = Math.round((scale - 0.02) * 100) / 100;
     }
 
-    if (!fitToWidth) {
-      applyGridNameScale(nameTable, 1);
-      void wrap.offsetWidth;
-    }
     nameW = measureGridNameColNeed(nameTable);
     dataWidths = [];
     for (d = 0; d < dataCols; d++) {
@@ -9060,8 +9076,27 @@ function fitGridColumns() {
     total = nameW + statW * statCols;
     for (d = 0; d < dataCols; d++) total += dataWidths[d];
 
-    /* 指導者：余白があればデータ列に分配して横幅いっぱい */
-    if (fitToWidth && avail && total < avail && dataCols > 0) {
+    /* まだはみ出す場合はデータ列を下限まで縮めて端末幅に収める */
+    if (avail && total > avail && dataCols > 0) {
+      var deficit = total - avail;
+      var shrinkable = 0;
+      for (d = 0; d < dataCols; d++) shrinkable += Math.max(0, dataWidths[d] - minData);
+      if (shrinkable > 0) {
+        var cut = Math.min(deficit, shrinkable);
+        for (d = 0; d < dataCols && cut > 0; d++) {
+          var room = dataWidths[d] - minData;
+          if (room <= 0) continue;
+          var take = Math.min(room, Math.ceil(cut * room / shrinkable));
+          dataWidths[d] -= take;
+          cut -= take;
+        }
+        total = nameW + statW * statCols;
+        for (d = 0; d < dataCols; d++) total += dataWidths[d];
+      }
+    }
+
+    /* 余白があればデータ列に分配して横幅いっぱい（指導者・道場生） */
+    if (avail && total < avail && dataCols > 0) {
       var extra = avail - total;
       var addPer = Math.floor(extra / dataCols);
       var rem = extra - addPer * dataCols;
