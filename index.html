@@ -8161,7 +8161,10 @@ function render() {
   const { sorted } = computeStats(league);
   if (currentView === "main") {
     const printTitle = `<div class="print-title">🥋 米倉道場 Jリーグ 星取表 ｜ ${esc(league.name)}（${esc(ctx.seasonLabel)}）</div>`;
-    main.innerHTML = printTitle + renderArchiveStandingsBanner() + renderGrid(league, sorted) + renderStandings(league, sorted);
+    var standingsHtml = renderStandings(league, sorted);
+    var gridHtml = renderGrid(league, sorted);
+    main.innerHTML = printTitle + renderArchiveStandingsBanner() +
+      (isMemberMode ? standingsHtml + gridHtml : gridHtml + standingsHtml);
     initLegacyGridScroll();
   } else if (currentView === "settings") {
     if (ctx.readonly) {
