@@ -809,6 +809,48 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
   font-size: var(--fluid-text-sm); color: var(--muted); padding: var(--fluid-space-md);
   background: var(--bg); border-radius: var(--fluid-radius-md); border: 1px dashed var(--line);
 }
+/* リール投稿 */
+.reels-page-note {
+  font-size: var(--fluid-text-sm); color: var(--muted); line-height: var(--fluid-line-loose); margin: 0 0 var(--fluid-space-md);
+}
+.reels-video-grid {
+  display: flex; flex-wrap: wrap; gap: var(--fluid-space-sm); margin-bottom: var(--fluid-space-lg);
+}
+.reels-video-chip {
+  flex: 0 1 auto; min-height: var(--fluid-touch); padding: var(--fluid-space-sm) var(--fluid-space-lg);
+  border-radius: var(--fluid-radius-md); border: 1px solid var(--line);
+  background: #fff; font-size: var(--fluid-text-sm); font-weight: 700;
+  color: var(--text); cursor: pointer; text-align: left; max-width: 100%;
+}
+.reels-video-chip.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.reels-preview-wrap {
+  margin: var(--fluid-space-md) 0;
+  border-radius: var(--fluid-radius-md); overflow: hidden;
+  background: #111; max-width: 320px;
+}
+.reels-preview-wrap video {
+  display: block; width: 100%; max-height: 56vh; background: #111;
+}
+.reels-url-box {
+  font-size: var(--fluid-text-2xs); line-height: var(--fluid-line);
+  word-break: break-all; padding: var(--fluid-space-sm) var(--fluid-space-md);
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--fluid-radius-sm);
+  margin: var(--fluid-space-sm) 0 var(--fluid-space-md);
+}
+.reels-status-line {
+  font-size: var(--fluid-text-sm); line-height: var(--fluid-line-loose);
+  margin: var(--fluid-space-md) 0 0; padding: var(--fluid-space-sm) var(--fluid-space-md);
+  border-radius: var(--fluid-radius-sm); background: var(--bg); border: 1px solid var(--line);
+}
+.reels-status-line.ok { background: #f0fdf4; border-color: #86efac; color: #166534; }
+.reels-status-line.err { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+.reels-status-line.busy { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+.reels-action-row {
+  display: flex; flex-wrap: wrap; gap: var(--fluid-space-sm); margin-top: var(--fluid-space-md);
+}
+.reels-action-row .btn { flex: 1 1 auto; min-width: calc(8em + 2vw); }
 .points { font-size: var(--fluid-text-xl); font-weight: 800; color: var(--accent2); min-width: calc(32px + 0.5vw); text-align: right; }
 .points-label { font-size: var(--fluid-text-2xs); color: var(--muted); text-align: right; }
 .standings-print { display: none; }
@@ -1795,6 +1837,7 @@ body.embedded:not(.member-mode) .cell-btn:not(.empty) {
   <button type="button" class="view-tab" data-view="playoff">🔄 入れ替え戦</button>
   <button type="button" class="view-tab" data-view="awards">🏆 MVP・表彰</button>
   <button type="button" class="view-tab admin-only" data-view="feedback">💬 フィードバック</button>
+  <button type="button" class="view-tab admin-only" data-view="reels">📱 リール投稿</button>
   <button type="button" class="view-tab admin-only" data-view="stripes">🎗 ストライプ</button>
   <button type="button" class="view-tab admin-only" data-view="settings">⚙️ リーグ設定</button>
 </div>
@@ -1904,6 +1947,19 @@ let myRosterId = "";
 let feedbackRosterId = "";
 let feedbackSearchQuery = "";
 const FEEDBACK_ROSTER_KEY = "yonekura-feedback-roster";
+const REELS_CDN_BASE = "https://cdn.jsdelivr.net/gh/bimadisiwin/yonekura-dojo-reels@main/videos/";
+const REELS_REPO_CFG = { owner: "bimadisiwin", repo: "yonekura-dojo-reels", branch: "main", path: "videos" };
+const IG_CFG_KEY = "yonekura-jleague-ig-cfg";
+const REEL_DEFAULT_HASHTAGS = "#米倉道場 #柔道 #鹿児島 #吉野 #キッズ柔道";
+let reelSelectedFile = "";
+let reelCaption = "";
+let reelVideos = [];
+let reelVideosLoading = false;
+let reelVideosError = "";
+let reelPostStatus = "";
+let reelPostStatusKind = "";
+let reelPostBusy = false;
+let igCfg = loadIgCfg();
 let memberCloudRefreshBound = false;
 let memberCloudRefreshInFlight = false;
 const MEMBER_CLOUD_REFRESH_MS = 60000;
@@ -6037,6 +6093,241 @@ function renderFeedbackEditor(m) {
     "</div>";
 }
 
+function loadIgCfg() {
+  var cfg = { userId: "", token: "" };
+  try {
+    var s = localStorage.getItem(IG_CFG_KEY);
+    if (s) {
+      var saved = JSON.parse(s) || {};
+      if (saved.userId) cfg.userId = String(saved.userId);
+      if (saved.token) cfg.token = String(saved.token);
+    }
+  } catch (e) {}
+  return cfg;
+}
+
+function saveIgCfg() {
+  localStorage.setItem(IG_CFG_KEY, JSON.stringify({ userId: igCfg.userId || "", token: igCfg.token || "" }));
+}
+
+function igReady() {
+  return !!(igCfg.userId && igCfg.token);
+}
+
+function getReelCdnUrl(filename) {
+  return REELS_CDN_BASE + encodeURIComponent(filename);
+}
+
+function flushReelsInputsFromDom() {
+  var cap = document.getElementById("reelCaptionInput");
+  if (cap) reelCaption = cap.value || "";
+}
+
+function defaultReelCaption() {
+  return "🥋 米倉道場\n\n" + REEL_DEFAULT_HASHTAGS;
+}
+
+async function fetchReelVideos(force) {
+  if (reelVideosLoading) return;
+  if (reelVideos.length && !force) return;
+  reelVideosLoading = true;
+  reelVideosError = "";
+  try {
+    var path = REELS_REPO_CFG.path.split("/").map(encodeURIComponent).join("/");
+    var url = "https://api.github.com/repos/" + REELS_REPO_CFG.owner + "/" + REELS_REPO_CFG.repo + "/contents/" + path + "?ref=" + encodeURIComponent(REELS_REPO_CFG.branch);
+    var res = await fetch(url, { headers: { Accept: "application/vnd.github+json" } });
+    if (!res.ok) throw new Error("素材一覧の取得に失敗しました（" + res.status + "）");
+    var items = await res.json();
+    if (!Array.isArray(items)) throw new Error("素材一覧の形式が不正です");
+    reelVideos = items
+      .filter(function(it) { return it.type === "file" && /\.mp4$/i.test(it.name); })
+      .map(function(it) { return { name: it.name, size: it.size || 0, sha: it.sha || "" }; })
+      .sort(function(a, b) { return b.name.localeCompare(a.name, "ja"); });
+    if (!reelSelectedFile && reelVideos.length) reelSelectedFile = reelVideos[0].name;
+    if (reelSelectedFile && !reelVideos.some(function(v) { return v.name === reelSelectedFile; })) {
+      reelSelectedFile = reelVideos.length ? reelVideos[0].name : "";
+    }
+    if (!reelCaption) reelCaption = defaultReelCaption();
+  } catch (e) {
+    reelVideosError = String(e.message || e);
+  } finally {
+    reelVideosLoading = false;
+    if (currentView === "reels") render();
+  }
+}
+
+function selectReelVideo(filename) {
+  reelSelectedFile = filename || "";
+  flushReelsInputsFromDom();
+  render();
+}
+
+function saveIgSettings() {
+  var uidEl = document.getElementById("igUserId");
+  var tokEl = document.getElementById("igToken");
+  var next = loadIgCfg();
+  if (uidEl) next.userId = uidEl.value.trim();
+  if (tokEl && tokEl.value.trim()) next.token = tokEl.value.trim();
+  igCfg = next;
+  if (!igCfg.userId || !igCfg.token) {
+    showToast("Instagram User ID とアクセストークンを入力してください");
+    return;
+  }
+  saveIgCfg();
+  showToast("Instagram 設定を保存しました ✓");
+  render();
+}
+
+async function copyReelUrl() {
+  if (!reelSelectedFile) { showToast("動画を選んでください"); return; }
+  var url = getReelCdnUrl(reelSelectedFile);
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = url;
+      ta.style.cssText = "position:fixed;left:-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    showToast("公開URLをコピーしました ✓");
+  } catch (e) {
+    showToast("コピーに失敗しました");
+  }
+}
+
+function setReelPostStatus(kind, msg) {
+  reelPostStatusKind = kind || "";
+  reelPostStatus = msg || "";
+  var el = document.getElementById("reelPostStatus");
+  if (!el) return;
+  el.style.display = msg ? "" : "none";
+  el.className = "reels-status-line" + (kind ? " " + kind : "");
+  el.textContent = msg || "";
+}
+
+async function pollIgMediaStatus(containerId) {
+  var maxTries = 40;
+  for (var i = 0; i < maxTries; i++) {
+    var res = await fetch("https://graph.facebook.com/v21.0/" + encodeURIComponent(containerId) + "?fields=status_code,status&access_token=" + encodeURIComponent(igCfg.token));
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error && data.error.message ? data.error.message : "ステータス確認に失敗しました");
+    var code = data.status_code || "";
+    if (code === "FINISHED") return;
+    if (code === "ERROR") throw new Error(data.status || "動画の処理に失敗しました");
+    setReelPostStatus("busy", "Instagram が動画を処理中…（" + (i + 1) + "/" + maxTries + "）");
+    await new Promise(function(r) { setTimeout(r, 3000); });
+  }
+  throw new Error("動画処理がタイムアウトしました。しばらく待ってから再試行してください。");
+}
+
+async function postReelToInstagram() {
+  if (reelPostBusy) return;
+  flushReelsInputsFromDom();
+  if (!reelSelectedFile) { showToast("動画を選んでください"); return; }
+  if (!igReady()) { showToast("Instagram 設定を保存してください"); return; }
+  if (!reelCaption.trim()) { showToast("キャプションを入力してください"); return; }
+  if (!confirm("@" + "yonekura_dojo へリールを投稿しますか？\n\n動画: " + reelSelectedFile)) return;
+  reelPostBusy = true;
+  setReelPostStatus("busy", "投稿を開始しています…");
+  render();
+  try {
+    var videoUrl = getReelCdnUrl(reelSelectedFile);
+    var body = new URLSearchParams();
+    body.set("media_type", "REELS");
+    body.set("video_url", videoUrl);
+    body.set("caption", reelCaption.trim());
+    body.set("share_to_feed", "true");
+    body.set("access_token", igCfg.token);
+    var createRes = await fetch("https://graph.facebook.com/v21.0/" + encodeURIComponent(igCfg.userId) + "/media", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString()
+    });
+    var createData = await createRes.json();
+    if (!createRes.ok || !createData.id) {
+      throw new Error(createData.error && createData.error.message ? createData.error.message : "コンテナ作成に失敗しました");
+    }
+    setReelPostStatus("busy", "動画を処理中…");
+    await pollIgMediaStatus(createData.id);
+    var pubBody = new URLSearchParams();
+    pubBody.set("creation_id", createData.id);
+    pubBody.set("access_token", igCfg.token);
+    var pubRes = await fetch("https://graph.facebook.com/v21.0/" + encodeURIComponent(igCfg.userId) + "/media_publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: pubBody.toString()
+    });
+    var pubData = await pubRes.json();
+    if (!pubRes.ok || !pubData.id) {
+      throw new Error(pubData.error && pubData.error.message ? pubData.error.message : "公開に失敗しました");
+    }
+    setReelPostStatus("ok", "投稿しました ✓（Media ID: " + pubData.id + "）");
+    showToast("Instagram にリールを投稿しました ✓", { type: "ok" });
+  } catch (e) {
+    var errMsg = String(e.message || e);
+    setReelPostStatus("err", errMsg);
+    showToast(errMsg, { type: "error", duration: 5000 });
+  } finally {
+    reelPostBusy = false;
+    render();
+  }
+}
+
+function renderReelsPage() {
+  flushReelsInputsFromDom();
+  if (!reelCaption) reelCaption = defaultReelCaption();
+  var chips = reelVideos.map(function(v) {
+    return '<button type="button" class="reels-video-chip' + (v.name === reelSelectedFile ? " active" : "") +
+      '" data-action="selectReelVideo" data-reel-file="' + esc(v.name) + '">' + esc(v.name) + "</button>";
+  }).join("");
+  var listHtml = reelVideosLoading
+    ? '<div class="feedback-empty">素材を読み込み中…</div>'
+    : (reelVideosError
+      ? '<div class="feedback-empty" style="color:#b83232">' + esc(reelVideosError) + '</div>'
+      : (chips || '<div class="feedback-empty">videos/ に mp4 がありません。<br>yonekura-dojo-reels リポジトリへ追加してください。</div>'));
+  var previewHtml = reelSelectedFile
+    ? '<div class="reels-preview-wrap"><video src="' + esc(getReelCdnUrl(reelSelectedFile)) + '" controls playsinline preload="metadata"></video></div>' +
+      '<div class="reels-url-box">' + esc(getReelCdnUrl(reelSelectedFile)) + "</div>"
+    : "";
+  var statusHtml = '<div id="reelPostStatus" class="reels-status-line' +
+    (reelPostStatusKind ? " " + reelPostStatusKind : "") +
+    '"' + (reelPostStatus ? ">" + esc(reelPostStatus) : ' style="display:none">') + "</div>";
+  return '<div class="print-title">📱 リール投稿 ｜ @yonekura_dojo</div>' +
+    '<p class="reels-page-note">素材は <b>yonekura-dojo-reels</b> リポジトリの正本から jsDelivr 公開URLを使います。スマホ手動投稿の場合は URL をコピー、API 投稿の場合は下の設定を保存してから投稿してください。</p>' +
+    '<div class="card">' +
+    '<div class="card-title">素材を選ぶ</div>' +
+    '<div class="reels-video-grid">' + listHtml + "</div>" +
+    '<button type="button" class="btn btn-ghost btn-sm" data-action="refreshReelVideos"' + (reelVideosLoading ? " disabled" : "") + '>↻ 素材一覧を更新</button>' +
+    previewHtml +
+    '<label class="feedback-field-label" for="reelCaptionInput">キャプション</label>' +
+    '<textarea id="reelCaptionInput" class="feedback-textarea" rows="6" placeholder="キャプションとハッシュタグ">' + esc(reelCaption) + "</textarea>" +
+    '<div class="reels-action-row">' +
+    '<button type="button" class="btn btn-ghost" data-action="copyReelUrl"' + (reelSelectedFile ? "" : " disabled") + '>🔗 公開URLコピー</button>' +
+    '<button type="button" class="btn btn-primary" data-action="postReelToInstagram"' + (reelSelectedFile && igReady() && !reelPostBusy ? "" : " disabled") + '>📤 Instagram APIで投稿</button>' +
+    "</div>" +
+    statusHtml +
+    "</div>" +
+    '<div class="card">' +
+    '<div class="card-title">Instagram Graph API 設定</div>' +
+    '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">ビジネスアカウント連携の <b>Instagram User ID</b> と、<code>instagram_content_publish</code> 権限付きロングライブトークンを入力します。トークンはこの端末内にのみ保存されます。</p>' +
+    '<div class="form-row"><label for="igUserId">Instagram User ID</label>' +
+    '<input id="igUserId" inputmode="numeric" autocomplete="off" placeholder="1784..." value="' + esc(igCfg.userId) + '"></div>' +
+    '<div class="form-row"><label for="igToken">アクセストークン</label>' +
+    '<input id="igToken" type="password" autocomplete="off" placeholder="' + (igCfg.token ? "設定済み（変更する場合のみ入力）" : "EAAG...") + '"></div>' +
+    '<button type="button" class="btn btn-primary btn-block" style="margin-top:10px" data-action="saveIgSettings">設定を保存</button>' +
+    '<p style="font-size:.64rem;color:var(--muted);margin:10px 0 0;line-height:1.45">手動投稿: <a href="https://www.instagram.com/yonekura_dojo/" target="_blank" rel="noopener">@yonekura_dojo</a> アプリから動画を選んで投稿。素材の正本追加は Vault の <code>upload_reel.py</code> または reels リポジトリへ push。</p>' +
+    "</div>";
+}
+
+function initReelsPage() {
+  if (reelVideos.length || reelVideosLoading) return;
+  fetchReelVideos(false);
+}
+
 function renderFeedbackPage() {
   restoreFeedbackRosterSelection();
   var roster = sortRosterByName(getRosterList());
@@ -7774,7 +8065,7 @@ function selectLeague(id) {
 
 function renderLeagueTabs() {
   const el = document.getElementById("leagueTabs");
-  if (currentView === "playoff" || currentView === "awards" || currentView === "stripes" || currentView === "myprogress" || currentView === "master" || currentView === "feedback") {
+  if (currentView === "playoff" || currentView === "awards" || currentView === "stripes" || currentView === "myprogress" || currentView === "master" || currentView === "feedback" || currentView === "reels") {
     el.innerHTML = "";
     el.style.display = "none";
     return;
@@ -8156,7 +8447,7 @@ function renderArchiveStandingsBanner() {
 }
 
 function render() {
-  if (!currentLeagueId && currentView !== "playoff" && currentView !== "awards" && currentView !== "stripes" && currentView !== "master" && currentView !== "myprogress" && currentView !== "feedback") {
+  if (!currentLeagueId && currentView !== "playoff" && currentView !== "awards" && currentView !== "stripes" && currentView !== "master" && currentView !== "myprogress" && currentView !== "feedback" && currentView !== "reels") {
     var ctxLeagues = getActiveContext().leagues;
     currentLeagueId = ctxLeagues[0] ? ctxLeagues[0].id : null;
   }
@@ -8204,6 +8495,11 @@ function render() {
         } catch (focusErr) {}
       }
     }
+    return;
+  }
+  if (currentView === "reels") {
+    main.innerHTML = renderReelsPage();
+    initReelsPage();
     return;
   }
   if (currentView === "myprogress" && isMemberMode) {
@@ -9377,6 +9673,11 @@ function handleAppTap(e) {
   else if (action === "batchDraftMemberComments") batchDraftMemberComments();
   else if (action === "saveRosterMemberDisplay") saveRosterMemberDisplay(target.getAttribute("data-roster-id"));
   else if (action === "selectFeedbackMember") selectFeedbackMember(target.getAttribute("data-roster-id"));
+  else if (action === "selectReelVideo") selectReelVideo(target.getAttribute("data-reel-file"));
+  else if (action === "refreshReelVideos") fetchReelVideos(true);
+  else if (action === "copyReelUrl") copyReelUrl();
+  else if (action === "postReelToInstagram") postReelToInstagram();
+  else if (action === "saveIgSettings") saveIgSettings();
   else if (action === "saveFeedback") saveFeedbackFromPage(target.getAttribute("data-roster-id"));
   else if (action === "loadFeedbackDraft") loadFeedbackDraft(target.getAttribute("data-roster-id"));
   else if (action === "insertGoalSheet") insertGoalSheetTemplate();
@@ -9505,6 +9806,10 @@ function bindAppEvents() {
   document.addEventListener("input", function(e) {
     var t = e.target;
     if (!t || !t.getAttribute) return;
+    if (t.id === "reelCaptionInput") {
+      reelCaption = t.value || "";
+      return;
+    }
     if (t.id === "feedbackSearchInput") {
       feedbackSearchQuery = t.value || "";
       flushFeedbackInputsFromDom();
@@ -9552,6 +9857,7 @@ try {
   bindAppEvents();
   var urlView = parseUrlViewParam();
   if (urlView === "feedback" && !isMemberMode) currentView = "feedback";
+  if (urlView === "reels" && !isMemberMode) currentView = "reels";
   render();
   window.addEventListener("resize", function() { fitGridColumns(); initLegacyGridScroll(); }, false);
   if (isMemberMode) {
