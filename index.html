@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="勤務表">
+  <meta name="theme-color" content="#2563eb">
+  <title>保育園 勤務表作成</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563eb' width='100' height='100' rx='20'/><text y='68' x='50' text-anchor='middle' font-size='52' fill='white'>表</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar mobile-panel" id="panel-staff" data-panel="staff">
+      <div class="sidebar-header">
+        <h1>🏫 保育園勤務表</h1>
+        <p>職員配置・自動生成システム</p>
+      </div>
+
+      <div class="sidebar-section">
+        <h2>前提条件</h2>
+        <ul class="constraint-list">
+          <li>常勤 13名（うち看護師1名は保育従事者に含まない）</li>
+          <li>パート 2名（月10日 / 週4日）</li>
+          <li>勤務体系 A〜D</li>
+          <li>平日 保育従事者 ≥ 10人</li>
+          <li>毎日 保育士 ≥ 7人</li>
+        </ul>
+      </div>
+
+      <div class="sidebar-section">
+        <h2>職員 <span id="staff-count" class="staff-count"></span></h2>
+        <button class="btn btn-primary" id="btn-add-staff" style="width:100%;margin-bottom:0.75rem">＋ 職員を追加</button>
+        <ul class="staff-list" id="staff-list"></ul>
+      </div>
+
+      <div class="sidebar-footer">
+        クリックで希望休・属性を編集<br>
+        データはブラウザに自動保存
+      </div>
+    </aside>
+
+    <main class="main">
+      <!-- スマホ: 日別ビュー -->
+      <section class="mobile-panel day-view" id="panel-day" data-panel="day">
+        <div class="day-view-header">
+          <button class="btn btn-icon btn-touch" id="btn-day-prev" aria-label="前日">◀</button>
+          <div class="day-view-date" id="day-view-date"></div>
+          <button class="btn btn-icon btn-touch" id="btn-day-next" aria-label="次日">▶</button>
+        </div>
+        <div class="day-view-metrics" id="day-view-metrics"></div>
+        <ul class="day-staff-list" id="day-staff-list"></ul>
+      </section>
+
+      <section class="mobile-panel active" id="panel-schedule" data-panel="schedule">
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <button class="btn btn-icon" id="btn-prev-month" title="前月">◀</button>
+          <span class="month-label" id="month-label"></span>
+          <button class="btn btn-icon" id="btn-next-month" title="次月">▶</button>
+          <button class="btn" id="btn-today">今月</button>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <div class="toolbar-group">
+          <button class="btn btn-primary" id="btn-generate">⚡ 自動生成</button>
+          <button class="btn" id="btn-export">CSV出力</button>
+          <button class="btn" id="btn-print">印刷</button>
+          <button class="btn" id="btn-reset" title="リセット">リセット</button>
+        </div>
+      </div>
+
+      <div id="constraint-panel" class="constraint-panel"></div>
+      <div class="legend" id="legend"></div>
+
+      <div class="schedule-wrap">
+        <p class="scroll-hint mobile-only">← 左右にスワイプ →</p>
+        <table class="schedule-table">
+          <thead id="schedule-head"></thead>
+          <tbody id="schedule-body"></tbody>
+          <tfoot id="schedule-foot"></tfoot>
+        </table>
+      </div>
+      </section>
+
+      <!-- スマホ: 操作メニュー -->
+      <section class="mobile-panel menu-panel" id="panel-menu" data-panel="menu">
+        <div class="menu-panel-inner">
+          <h2>操作</h2>
+          <button class="btn btn-primary btn-block btn-touch" id="btn-generate-mobile">⚡ 勤務表を自動生成</button>
+          <button class="btn btn-block btn-touch" id="btn-export-mobile">CSV出力</button>
+          <button class="btn btn-block btn-touch" id="btn-reset-mobile">データをリセット</button>
+          <div class="menu-constraints">
+            <h3>前提条件</h3>
+            <ul class="constraint-list">
+              <li>常勤 13名（看護師1名は保育従事者に含まない）</li>
+              <li>パート 2名（月10日 / 週4日）</li>
+              <li>平日 保育従事者 ≥ 10人</li>
+              <li>毎日 保育士 ≥ 7人</li>
+            </ul>
+          </div>
+          <div class="legend mobile-legend" id="legend-mobile"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="bottom-nav mobile-only" id="bottom-nav" aria-label="メインナビ">
+    <button class="bottom-nav-item active" data-tab="day" type="button">
+      <span class="bottom-nav-icon">📅</span>
+      <span>日別</span>
+    </button>
+    <button class="bottom-nav-item" data-tab="schedule" type="button">
+      <span class="bottom-nav-icon">📊</span>
+      <span>月間</span>
+    </button>
+    <button class="bottom-nav-item" data-tab="staff" type="button">
+      <span class="bottom-nav-icon">👥</span>
+      <span>職員</span>
+    </button>
+    <button class="bottom-nav-item" data-tab="menu" type="button">
+      <span class="bottom-nav-icon">⚙️</span>
+      <span>操作</span>
+    </button>
+  </nav>
+
+  <button class="fab mobile-only" id="fab-generate" type="button" aria-label="自動生成">⚡</button>
+
+  <!-- Shift picker -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal" role="dialog">
+      <div class="modal-header" id="modal-title">勤務区分</div>
+      <div class="modal-body"><div class="shift-options" id="shift-options"></div></div>
+      <div class="modal-footer"><button class="btn" id="modal-close">閉じる</button></div>
+    </div>
+  </div>
+
+  <!-- Staff editor -->
+  <div class="modal-overlay hidden" id="staff-modal-overlay">
+    <div class="modal modal-wide" role="dialog">
+      <div class="modal-header" id="staff-modal-title">職員を追加</div>
+      <div class="modal-body">
+        <label class="field-label">名前</label>
+        <input type="text" id="sf-name" placeholder="例: 山田 花子" maxlength="30">
+
+        <label class="field-label">雇用区分</label>
+        <select id="sf-employment">
+          <option value="fulltime">常勤</option>
+          <option value="parttime">パート</option>
+        </select>
+
+        <label class="field-label">役職</label>
+        <select id="sf-role">
+          <option value="nursery_teacher">保育士</option>
+          <option value="childcare_staff">保育従事者（資格なし）</option>
+          <option value="nurse">看護師</option>
+        </select>
+
+        <label class="field-label checkbox-label">
+          <input type="checkbox" id="sf-license" checked> 保育士資格あり
+        </label>
+
+        <div id="sf-parttime-fields" style="display:none">
+          <label class="field-label">パート勤務条件</label>
+          <select id="sf-parttime">
+            <option value="monthly_10">月10日 (9:00-17:00 → B勤務)</option>
+            <option value="weekly_4">週4日 (8:00-17:00 → B勤務)</option>
+          </select>
+          <label class="field-label">固定勤務体系</label>
+          <select id="sf-shift">
+            <option value="A">A (7:00-16:00)</option>
+            <option value="B" selected>B (8:00-17:00)</option>
+            <option value="C">C (9:00-18:00)</option>
+            <option value="D">D (10:00-19:00)</option>
+          </select>
+        </div>
+
+        <label class="field-label">希望休（日付をカンマ区切り）</label>
+        <input type="text" id="sf-preferred-off" placeholder="例: 5, 12, 20">
+        <p class="field-hint">表示中の月の日付を入力（例: 9月5日 → 5）</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="staff-modal-close">キャンセル</button>
+        <button class="btn btn-primary" id="staff-modal-save">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/constants.js"></script>
+  <script src="js/scheduler.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
