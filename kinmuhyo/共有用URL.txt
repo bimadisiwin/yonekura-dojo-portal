@@ -1,0 +1,10 @@
+保育園 勤務表作成アプリ（共有用）
+
+URL:
+https://bimadisiwin.github.io/yonekura-dojo-portal/kinmuhyo/index.html
+
+スマホの使い方:
+1. 上記URLをSafari / Chrome で開く
+2. 「ホーム画面に追加」でアプリのように使えます
+3. 日別タブ → 職員タップ → 勤務変更
+4. ⚡ ボタン → 勤務表を自動生成
