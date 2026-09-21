@@ -4,9 +4,9 @@
 
   const STORAGE_KEY = 'kinmuhyo-state-v2';
 
-  /** 早番: A/B（〜17時終了）  遅番: C/D（18時以降終了） */
-  const EARLY_SHIFTS = ['A', 'B'];
-  const LATE_SHIFTS = ['C', 'D'];
+  /** 早番: Aのみ  遅番: Dのみ */
+  const EARLY_SHIFTS = ['A'];
+  const LATE_SHIFTS = ['D'];
 
   const SHIFT_TYPES = {
     A: { label: 'A (7:00-16:00)', short: 'A', className: 'shift-a', start: 7, end: 16, isWork: true, band: 'early' },

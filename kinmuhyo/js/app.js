@@ -305,7 +305,7 @@
   function renderLegend() {
     const html = Object.entries(SHIFT_TYPES).map(([, s]) =>
       `<span class="legend-item"><span class="legend-swatch ${s.className}"></span>${s.label}</span>`
-    ).join('') + `<span class="legend-item legend-note">早番=A,B / 遅番=C,D</span>`;
+    ).join('') + `<span class="legend-item legend-note">早番=A / 遅番=D</span>`;
     const legend = document.getElementById('legend');
     if (legend) legend.innerHTML = html;
     const legendMobile = document.getElementById('legend-mobile');
