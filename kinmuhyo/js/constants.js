@@ -2,7 +2,7 @@
 (function (global) {
   'use strict';
 
-  const STORAGE_KEY = 'kinmuhyo-state-v2';
+  const STORAGE_KEY = 'kinmuhyo-state-v3';
 
   /** 早番: Aのみ  遅番: Dのみ */
   const EARLY_SHIFTS = ['A'];
@@ -17,6 +17,7 @@
     paid: { label: '有給', short: '有', className: 'shift-paid', isWork: false, countsAsPaid: true },
   };
 
+  /** @deprecated 園児数から KinmuhyoStaffing.calcRequiredStaff で算出 */
   const CONSTRAINTS = {
     minChildcareWorkersWeekday: 10,
     minNurseryTeachersDaily: 7,
@@ -75,6 +76,7 @@
       createStaff({ id: 's15', name: '木村 幸子', employmentType: 'parttime', role: 'nursery_teacher', hasNurseryLicense: true, parttimeRule: 'weekly_4', preferredShift: 'B' }),
     ],
     schedules: {},
+    children: {},
     year: new Date().getFullYear(),
     month: new Date().getMonth() + 1,
   };

@@ -27,10 +27,24 @@
           <li>常勤 13名（うち看護師1名は保育従事者に含まない）</li>
           <li>パート 2名（月10日 / 週4日）</li>
           <li>勤務体系 A〜D</li>
-          <li>毎日 保育従事者 ≥ 10人</li>
-          <li>毎日 保育士 ≥ 7人</li>
-          <li>パートは平日のみ（土日は常勤のみ）</li>
+          <li>必要人数は園児数から自動計算</li>
+          <li>0歳1:3 / 1-2歳1:6 / 3歳以上1:20</li>
+          <li>パートは平日のみ</li>
         </ul>
+      </div>
+
+      <div class="sidebar-section">
+        <h2>園児数（今月の基本）</h2>
+        <label class="field-label">0歳児</label>
+        <input type="number" id="ch-under1" min="0" max="999" class="children-input">
+        <label class="field-label">1〜2歳児</label>
+        <input type="number" id="ch-age1_2" min="0" max="999" class="children-input">
+        <label class="field-label">3〜5歳児</label>
+        <input type="number" id="ch-age3_5" min="0" max="999" class="children-input">
+        <p class="children-summary">合計 <strong id="ch-total">0</strong>人</p>
+        <p class="children-summary" id="ch-required"></p>
+        <button class="btn btn-primary btn-block btn-touch" id="btn-save-children" type="button">園児数を保存</button>
+        <p class="field-hint">日ごとに変える場合は表下の「園児」行をタップ</p>
       </div>
 
       <div class="sidebar-section">
@@ -54,6 +68,7 @@
           <button class="btn btn-icon btn-touch" id="btn-day-next" aria-label="次日">▶</button>
         </div>
         <div class="day-view-metrics" id="day-view-metrics"></div>
+        <button class="btn btn-block btn-touch day-children-btn" id="btn-edit-day-children" type="button">📊 この日の園児数を編集</button>
         <ul class="day-staff-list" id="day-staff-list"></ul>
       </section>
 
@@ -99,8 +114,9 @@
             <ul class="constraint-list">
               <li>常勤 13名（看護師1名は保育従事者に含まない）</li>
               <li>パート 2名（月10日 / 週4日）</li>
-              <li>平日 保育従事者 ≥ 10人</li>
-              <li>毎日 保育士 ≥ 7人</li>
+              <li>必要人数は園児数から自動計算</li>
+              <li>0歳1:3 / 1-2歳1:6 / 3歳以上1:20</li>
+              <li>パートは平日のみ</li>
             </ul>
           </div>
           <div class="legend mobile-legend" id="legend-mobile"></div>
@@ -190,9 +206,34 @@
     </div>
   </div>
 
+  <!-- 日別園児数 -->
+  <div class="modal-overlay hidden" id="children-modal-overlay">
+    <div class="modal modal-wide" role="dialog">
+      <div class="modal-header" id="children-modal-title">園児数</div>
+      <div class="modal-body">
+        <input type="hidden" id="children-modal-day">
+        <label class="field-label checkbox-label">
+          <input type="checkbox" id="cd-use-default" checked> 月の基本値を使う
+        </label>
+        <label class="field-label">0歳児</label>
+        <input type="number" id="cd-under1" min="0" max="999" disabled>
+        <label class="field-label">1〜2歳児</label>
+        <input type="number" id="cd-age1_2" min="0" max="999" disabled>
+        <label class="field-label">3〜5歳児</label>
+        <input type="number" id="cd-age3_5" min="0" max="999" disabled>
+        <p class="children-summary" id="cd-preview"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="children-modal-close" type="button">キャンセル</button>
+        <button class="btn btn-primary" id="children-modal-save" type="button">保存</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script src="js/constants.js"></script>
+  <script src="js/staffing.js"></script>
   <script src="js/scheduler.js"></script>
   <script src="js/app.js"></script>
 </body>

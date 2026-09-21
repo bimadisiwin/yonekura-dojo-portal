@@ -3,7 +3,8 @@
 
   const C = window.KinmuhyoConstants;
   const S = window.KinmuhyoScheduler;
-  const { STORAGE_KEY, SHIFT_TYPES, CONSTRAINTS, ROLES, EMPLOYMENT, PARTTIME_RULES, DOW, EARLY_SHIFTS, LATE_SHIFTS, createStaff, SEED_DATA } = C;
+  const St = window.KinmuhyoStaffing;
+  const { STORAGE_KEY, SHIFT_TYPES, ROLES, EMPLOYMENT, PARTTIME_RULES, DOW, EARLY_SHIFTS, LATE_SHIFTS, createStaff, SEED_DATA } = C;
 
   let state = loadState();
   let modalContext = null;
@@ -57,13 +58,11 @@
     el.textContent = `${month}月${mobileDay}日 (${dow})`;
 
     const m = S.countDayMetrics(state.staff, schedule, mobileDay);
-    const weekday = S.isWeekday(year, month, mobileDay);
-    const childcareOk = !weekday || m.childcare >= CONSTRAINTS.minChildcareWorkersWeekday;
-    const teachersOk = m.teachers >= CONSTRAINTS.minNurseryTeachersDaily;
+    const req = St.getRequiredForDay(state, year, month, mobileDay);
+    const childcareOk = m.childcare >= req.childcare;
+    const teachersOk = m.teachers >= req.teachers;
     metricsEl.className = 'day-view-metrics ' + (childcareOk && teachersOk ? 'ok' : 'ng');
-    metricsEl.innerHTML = weekday
-      ? `保育従事者 <strong>${m.childcare}</strong>/${CONSTRAINTS.minChildcareWorkersWeekday} · 保育士 <strong>${m.teachers}</strong>/${CONSTRAINTS.minNurseryTeachersDaily} · 早番 <strong>${m.early}</strong> · 遅番 <strong>${m.late}</strong>`
-      : `保育士 <strong>${m.teachers}</strong>/${CONSTRAINTS.minNurseryTeachersDaily} · 早番 <strong>${m.early}</strong> · 遅番 <strong>${m.late}</strong>（土日）`;
+    metricsEl.innerHTML = `園児 <strong>${req.totalChildren}</strong>人 → 必要 従事<strong>${req.childcare}</strong> / 保育士<strong>${req.teachers}</strong><br>配置 従事<strong>${m.childcare}</strong> · 保育士<strong>${m.teachers}</strong> · 早番<strong>${m.early}</strong> · 遅番<strong>${m.late}</strong>`;
 
     listEl.innerHTML = '';
     state.staff.forEach(staff => {
@@ -116,8 +115,12 @@
 
   function loadState() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
+      const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('kinmuhyo-state-v2');
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (!data.children) data.children = {};
+        return data;
+      }
     } catch (_) { /* ignore */ }
     return JSON.parse(JSON.stringify(SEED_DATA));
   }
@@ -178,6 +181,79 @@
       else if (shift === 'off') off++;
     }
     return { work, paid, off, early, late };
+  }
+
+  function renderChildrenPanel() {
+    const cfg = St.getMonthChildrenConfig(state, state.year, state.month);
+    const g = St.normalizeAgeGroups(cfg.default);
+    const req = St.calcRequiredStaff(g);
+    const elUnder1 = document.getElementById('ch-under1');
+    const elAge12 = document.getElementById('ch-age1_2');
+    const elAge35 = document.getElementById('ch-age3_5');
+    if (!elUnder1) return;
+    elUnder1.value = g.under1;
+    elAge12.value = g.age1_2;
+    elAge35.value = g.age3_5;
+    document.getElementById('ch-total').textContent = req.totalChildren;
+    document.getElementById('ch-required').textContent =
+      `必要: 保育従事者 ${req.childcare}人 · 保育士 ${req.teachers}人`;
+  }
+
+  function saveDefaultChildren() {
+    St.setDefaultChildren(state, state.year, state.month, {
+      under1: document.getElementById('ch-under1').value,
+      age1_2: document.getElementById('ch-age1_2').value,
+      age3_5: document.getElementById('ch-age3_5').value,
+    });
+    saveState();
+    renderChildrenPanel();
+    renderSchedule();
+    showToast('園児数を保存しました ✓');
+  }
+
+  function openChildrenDayModal(day) {
+    document.getElementById('children-modal-title').textContent =
+      `${state.year}年${state.month}月${day}日の園児数`;
+    document.getElementById('children-modal-day').value = day;
+    const g = St.getChildrenForDay(state, state.year, state.month, day);
+    const cfg = St.getMonthChildrenConfig(state, state.year, state.month);
+    const hasOverride = !!(cfg.byDay && cfg.byDay[String(day)]);
+    document.getElementById('cd-under1').value = g.under1;
+    document.getElementById('cd-age1_2').value = g.age1_2;
+    document.getElementById('cd-age3_5').value = g.age3_5;
+    document.getElementById('cd-use-default').checked = !hasOverride;
+    ['cd-under1', 'cd-age1_2', 'cd-age3_5'].forEach(id => {
+      document.getElementById(id).disabled = !hasOverride;
+    });
+    updateChildrenDayPreview();
+    document.getElementById('children-modal-overlay').classList.remove('hidden');
+  }
+
+  function updateChildrenDayPreview() {
+    const req = St.calcRequiredStaff({
+      under1: document.getElementById('cd-under1').value,
+      age1_2: document.getElementById('cd-age1_2').value,
+      age3_5: document.getElementById('cd-age3_5').value,
+    });
+    document.getElementById('cd-preview').textContent =
+      `合計 ${req.totalChildren}人 → 必要 従事${req.childcare}人 / 保育士${req.teachers}人`;
+  }
+
+  function saveChildrenDayModal() {
+    const day = parseInt(document.getElementById('children-modal-day').value, 10);
+    if (document.getElementById('cd-use-default').checked) {
+      St.clearDayChildren(state, state.year, state.month, day);
+    } else {
+      St.setDayChildren(state, state.year, state.month, day, {
+        under1: document.getElementById('cd-under1').value,
+        age1_2: document.getElementById('cd-age1_2').value,
+        age3_5: document.getElementById('cd-age3_5').value,
+      });
+    }
+    saveState();
+    document.getElementById('children-modal-overlay').classList.add('hidden');
+    renderSchedule();
+    showToast('日別園児数を保存しました ✓');
   }
 
   function renderStaffList() {
@@ -260,26 +336,34 @@
     });
 
     if (tfoot) {
-      const validation = S.validateSchedule(state.staff, schedule, year, month);
-      let footChild = '<td class="col-staff"><strong>保育従事者</strong></td>';
+      const validation = S.validateSchedule(state.staff, schedule, year, month, state);
+      let footKids = '<td class="col-staff"><strong>園児</strong></td>';
+      let footReqC = '<td class="col-staff"><strong>必要従事</strong></td>';
+      let footChild = '<td class="col-staff"><strong>保育従事</strong></td>';
+      let footReqT = '<td class="col-staff"><strong>必要保育士</strong></td>';
       let footTeacher = '<td class="col-staff"><strong>保育士</strong></td>';
       let footEarly = '<td class="col-staff"><strong>早番</strong></td>';
       let footLate = '<td class="col-staff"><strong>遅番</strong></td>';
       validation.daily.forEach(row => {
         const cc = row.childcareOk ? '' : ' constraint-ng';
         const tc = row.teachersOk ? '' : ' constraint-ng';
+        const dayOverride = St.getMonthChildrenConfig(state, year, month).byDay?.[String(row.day)];
+        const kidsCls = dayOverride ? ' summary-day-override' : '';
+        footKids += `<td class="col-summary${kidsCls} children-cell" data-day="${row.day}" title="クリックで園児数編集">${row.totalChildren}</td>`;
+        footReqC += `<td class="col-summary">${row.reqChildcare}</td>`;
         footChild += `<td class="col-summary${cc}">${row.childcare}</td>`;
+        footReqT += `<td class="col-summary">${row.reqTeachers}</td>`;
         footTeacher += `<td class="col-summary${tc}">${row.teachers}</td>`;
         footEarly += `<td class="col-summary summary-early">${row.early}</td>`;
         footLate += `<td class="col-summary summary-late">${row.late}</td>`;
       });
       const sumColspan = '<td colspan="4"></td>';
-      footChild += sumColspan;
-      footTeacher += sumColspan;
-      footEarly += sumColspan;
-      footLate += sumColspan;
+      [footKids, footReqC, footChild, footReqT, footTeacher, footEarly, footLate].forEach(r => { r += sumColspan; });
       tfoot.innerHTML = [
+        `<tr class="summary-row summary-row-kids">${footKids}</tr>`,
+        `<tr class="summary-row summary-row-req">${footReqC}</tr>`,
         `<tr class="summary-row">${footChild}</tr>`,
+        `<tr class="summary-row summary-row-req">${footReqT}</tr>`,
         `<tr class="summary-row">${footTeacher}</tr>`,
         `<tr class="summary-row summary-row-early">${footEarly}</tr>`,
         `<tr class="summary-row summary-row-late">${footLate}</tr>`,
@@ -295,7 +379,7 @@
     const ngDays = validation.daily.filter(r => !r.childcareOk || !r.teachersOk);
     if (validation.ok) {
       el.className = 'constraint-panel ok';
-      el.innerHTML = `✓ すべての制約を満たしています（平日 保育従事者 ≥ ${CONSTRAINTS.minChildcareWorkersWeekday}人、毎日 保育士 ≥ ${CONSTRAINTS.minNurseryTeachersDaily}人）`;
+      el.innerHTML = '✓ すべての制約を満たしています（園児数に基づく必要人数をクリア）';
     } else {
       el.className = 'constraint-panel ng';
       el.innerHTML = `⚠ 制約未達: ${ngDays.length}日 — ${validation.issues.slice(0, 5).join(' / ')}${validation.issues.length > 5 ? ' …' : ''}`;
@@ -422,12 +506,12 @@
   function autoGenerate() {
     if (!confirm(`${state.year}年${state.month}月の勤務表を自動生成します。\n希望休を考慮し、既存の割当は上書きされます。よろしいですか？`)) return;
 
-    const schedule = S.generateSchedule(state.staff, state.year, state.month);
+    const schedule = S.generateSchedule(state.staff, state.year, state.month, state);
     state.schedules[monthKey(state.year, state.month)] = schedule;
     saveState();
     renderSchedule();
 
-    const validation = S.validateSchedule(state.staff, schedule, state.year, state.month);
+    const validation = S.validateSchedule(state.staff, schedule, state.year, state.month, state);
     if (validation.ok) showToast('勤務表を自動生成しました ✓ 制約OK');
     else showToast(`自動生成完了（${validation.issues.length}件の制約未達あり）`);
   }
@@ -438,6 +522,7 @@
     if (state.month < 1) { state.month = 12; state.year--; }
     syncMobileDay();
     saveState();
+    renderChildrenPanel();
     renderSchedule();
   }
 
@@ -470,6 +555,7 @@
     localStorage.removeItem(STORAGE_KEY);
     state = JSON.parse(JSON.stringify(SEED_DATA));
     saveState();
+    renderChildrenPanel();
     renderStaffList();
     renderSchedule();
     showToast('データをリセットしました');
@@ -484,6 +570,7 @@
       state.month = now.getMonth() + 1;
       mobileDay = now.getDate();
       saveState();
+      renderChildrenPanel();
       renderSchedule();
     });
     document.getElementById('btn-generate').addEventListener('click', autoGenerate);
@@ -494,6 +581,42 @@
     document.getElementById('btn-reset-mobile')?.addEventListener('click', resetData);
     document.getElementById('btn-day-prev')?.addEventListener('click', () => changeMobileDay(-1));
     document.getElementById('btn-day-next')?.addEventListener('click', () => changeMobileDay(1));
+    document.getElementById('btn-edit-day-children')?.addEventListener('click', () => openChildrenDayModal(mobileDay));
+    document.getElementById('btn-save-children')?.addEventListener('click', saveDefaultChildren);
+    ['ch-under1', 'ch-age1_2', 'ch-age3_5'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', () => {
+        const req = St.calcRequiredStaff({
+          under1: document.getElementById('ch-under1').value,
+          age1_2: document.getElementById('ch-age1_2').value,
+          age3_5: document.getElementById('ch-age3_5').value,
+        });
+        document.getElementById('ch-total').textContent = req.totalChildren;
+        document.getElementById('ch-required').textContent =
+          `必要: 保育従事者 ${req.childcare}人 · 保育士 ${req.teachers}人`;
+      });
+    });
+    ['cd-under1', 'cd-age1_2', 'cd-age3_5'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', updateChildrenDayPreview);
+    });
+    document.getElementById('cd-use-default')?.addEventListener('change', e => {
+      const disabled = e.target.checked;
+      ['cd-under1', 'cd-age1_2', 'cd-age3_5'].forEach(id => {
+        document.getElementById(id).disabled = disabled;
+      });
+    });
+    document.getElementById('children-modal-save')?.addEventListener('click', saveChildrenDayModal);
+    document.getElementById('children-modal-close')?.addEventListener('click', () => {
+      document.getElementById('children-modal-overlay').classList.add('hidden');
+    });
+    document.getElementById('children-modal-overlay')?.addEventListener('click', e => {
+      if (e.target.id === 'children-modal-overlay') {
+        document.getElementById('children-modal-overlay').classList.add('hidden');
+      }
+    });
+    document.getElementById('schedule-foot')?.addEventListener('click', e => {
+      const cell = e.target.closest('.children-cell');
+      if (cell) openChildrenDayModal(parseInt(cell.dataset.day, 10));
+    });
 
     document.getElementById('bottom-nav')?.addEventListener('click', e => {
       const btn = e.target.closest('.bottom-nav-item');
@@ -540,7 +663,13 @@
     document.getElementById('modal-overlay').addEventListener('click', e => {
       if (e.target.id === 'modal-overlay') closeModal();
     });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeStaffModal(); } });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        closeModal();
+        closeStaffModal();
+        document.getElementById('children-modal-overlay')?.classList.add('hidden');
+      }
+    });
   }
 
   function initMobile() {
@@ -554,6 +683,7 @@
 
   function init() {
     renderLegend();
+    renderChildrenPanel();
     renderStaffList();
     renderSchedule();
     bindEvents();
