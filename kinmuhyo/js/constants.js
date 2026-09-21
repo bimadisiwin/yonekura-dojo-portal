@@ -40,6 +40,14 @@
   };
 
   const DOW = ['日', '月', '火', '水', '木', '金', '土'];
+  const WORK_SHIFTS = ['A', 'B', 'C', 'D'];
+
+  function getAllowedShifts(staff) {
+    const allowed = (staff.allowedShifts || []).filter(s => WORK_SHIFTS.includes(s));
+    if (allowed.length) return allowed;
+    if (staff.preferredShift && WORK_SHIFTS.includes(staff.preferredShift)) return [staff.preferredShift];
+    return WORK_SHIFTS.slice();
+  }
 
   function createStaff(overrides) {
     const role = overrides.role || 'nursery_teacher';
@@ -53,6 +61,7 @@
       isChildcareWorker: roleDef.isChildcareWorker,
       parttimeRule: overrides.parttimeRule || null,
       preferredShift: overrides.preferredShift || null,
+      allowedShifts: overrides.allowedShifts || WORK_SHIFTS.slice(),
       preferredOff: overrides.preferredOff || {},
     };
   }
@@ -69,11 +78,11 @@
       createStaff({ id: 's08', name: '中村 智子', employmentType: 'fulltime', role: 'nursery_teacher', hasNurseryLicense: true }),
       createStaff({ id: 's09', name: '小林 奈々', employmentType: 'fulltime', role: 'nursery_teacher', hasNurseryLicense: true }),
       createStaff({ id: 's10', name: '加藤 久美', employmentType: 'fulltime', role: 'nursery_teacher', hasNurseryLicense: true }),
-      createStaff({ id: 's11', name: '吉田 さおり', employmentType: 'fulltime', role: 'childcare_staff', hasNurseryLicense: false }),
-      createStaff({ id: 's12', name: '山田 健太', employmentType: 'fulltime', role: 'childcare_staff', hasNurseryLicense: false }),
+      createStaff({ id: 's11', name: '吉田 さおり', employmentType: 'fulltime', role: 'childcare_staff', hasNurseryLicense: false, allowedShifts: ['A', 'B', 'C'] }),
+      createStaff({ id: 's12', name: '山田 健太', employmentType: 'fulltime', role: 'childcare_staff', hasNurseryLicense: false, allowedShifts: ['B', 'C', 'D'] }),
       createStaff({ id: 's13', name: '松本 洋子', employmentType: 'fulltime', role: 'nurse', hasNurseryLicense: false }),
-      createStaff({ id: 's14', name: '井上 春子', employmentType: 'parttime', role: 'nursery_teacher', hasNurseryLicense: true, parttimeRule: 'monthly_10', preferredShift: 'B' }),
-      createStaff({ id: 's15', name: '木村 幸子', employmentType: 'parttime', role: 'nursery_teacher', hasNurseryLicense: true, parttimeRule: 'weekly_4', preferredShift: 'B' }),
+      createStaff({ id: 's14', name: '井上 春子', employmentType: 'parttime', role: 'nursery_teacher', hasNurseryLicense: true, parttimeRule: 'monthly_10', preferredShift: 'B', allowedShifts: ['B'] }),
+      createStaff({ id: 's15', name: '木村 幸子', employmentType: 'parttime', role: 'nursery_teacher', hasNurseryLicense: true, parttimeRule: 'weekly_4', preferredShift: 'B', allowedShifts: ['B'] }),
     ],
     schedules: {},
     children: {},
@@ -83,6 +92,6 @@
 
   global.KinmuhyoConstants = {
     STORAGE_KEY, SHIFT_TYPES, CONSTRAINTS, ROLES, EMPLOYMENT, PARTTIME_RULES, DOW,
-    EARLY_SHIFTS, LATE_SHIFTS, createStaff, SEED_DATA,
+    EARLY_SHIFTS, LATE_SHIFTS, WORK_SHIFTS, getAllowedShifts, createStaff, SEED_DATA,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

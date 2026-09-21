@@ -2,7 +2,7 @@
 (function (global) {
   'use strict';
 
-  const { SHIFT_TYPES, PARTTIME_RULES, EARLY_SHIFTS, LATE_SHIFTS } = global.KinmuhyoConstants;
+  const { SHIFT_TYPES, PARTTIME_RULES, EARLY_SHIFTS, LATE_SHIFTS, getAllowedShifts } = global.KinmuhyoConstants;
   const { getRequiredForDay } = global.KinmuhyoStaffing;
 
   function daysInMonth(year, month) {
@@ -87,13 +87,15 @@
   }
 
   function pickShift(staff, dayIndex) {
-    const allowed = staff.preferredShift ? [staff.preferredShift] : ['A', 'B', 'C', 'D'];
-    const shifts = ['A', 'B', 'C', 'D'];
-    const idx = (dayIndex + staff.id.charCodeAt(staff.id.length - 1)) % shifts.length;
-    for (let i = 0; i < 4; i++) {
-      const s = shifts[(idx + i) % 4];
-      if (allowed.includes(s)) return s;
-    }
+    const allowed = getAllowedShifts(staff);
+    const idx = (dayIndex + staff.id.charCodeAt(staff.id.length - 1)) % allowed.length;
+    return allowed[idx] || allowed[0] || 'B';
+  }
+
+  function pickParttimeShift(staff, rule) {
+    const allowed = getAllowedShifts(staff);
+    if (staff.preferredShift && allowed.includes(staff.preferredShift)) return staff.preferredShift;
+    if (allowed.includes(rule?.defaultShift)) return rule.defaultShift;
     return allowed[0] || 'B';
   }
 
@@ -108,7 +110,7 @@
 
     ptWorking.forEach(s => {
       const rule = PARTTIME_RULES[s.parttimeRule];
-      schedule[`${s.id}:${day}`] = s.preferredShift || rule?.defaultShift || 'B';
+      schedule[`${s.id}:${day}`] = pickParttimeShift(s, rule);
     });
 
     const ptChildcare = ptWorking.filter(s => s.isChildcareWorker).length;
