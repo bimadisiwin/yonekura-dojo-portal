@@ -822,6 +822,18 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
   padding: var(--fluid-space-sm) var(--fluid-space-md); margin-bottom: var(--fluid-space-sm); line-height: var(--fluid-line);
 }
 .feedback-archive-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.feedback-past-seasons {
+  margin: 0 0 var(--fluid-space-md);
+  padding: var(--fluid-space-sm) var(--fluid-space-md);
+  background: var(--bg); border: 1px dashed var(--line); border-radius: var(--fluid-radius-md);
+}
+.feedback-season-past { margin-top: var(--fluid-space-sm); }
+.feedback-season-past:first-child { margin-top: var(--fluid-space-xs); }
+.feedback-season-past-body {
+  font-size: var(--fluid-text-sm); line-height: var(--fluid-line);
+  white-space: pre-wrap; color: var(--muted); margin-top: 4px;
+}
+.feedback-season-date { font-weight: 400; color: var(--muted); font-size: var(--fluid-text-2xs); }
 .points { font-size: var(--fluid-text-xl); font-weight: 800; color: var(--accent2); min-width: calc(32px + 0.5vw); text-align: right; }
 .points-label { font-size: var(--fluid-text-2xs); color: var(--muted); text-align: right; }
 .standings-print { display: none; }
@@ -2592,6 +2604,138 @@ function prependSeasonHeader(memo, periodKey) {
   return header + "\n" + text;
 }
 
+function stripSeasonHeaderFromComment(text) {
+  text = (text || "").trim();
+  if (!text) return "";
+  var lines = text.split("\n");
+  if (lines[0] && /^【.+】$/.test(lines[0].trim())) return lines.slice(1).join("\n").trim();
+  return text;
+}
+
+function ensureMemberSeasonComments(m) {
+  if (!m) return;
+  if (!m.memberSeasonComments || typeof m.memberSeasonComments !== "object") m.memberSeasonComments = {};
+  var text = (m.memberComment || "").trim();
+  if (!text) return;
+  var meta = m.memberCommentMeta || {};
+  var pk = meta.periodKey || getCurrentPeriodKey();
+  var existing = m.memberSeasonComments[pk];
+  var legacyAt = meta.updatedAt || meta.generatedAt || 0;
+  if (!existing || legacyAt >= (existing.updatedAt || existing.generatedAt || 0)) {
+    m.memberSeasonComments[pk] = {
+      text: stripSeasonHeaderFromComment(text),
+      updatedAt: legacyAt || Date.now(),
+      source: meta.source || "legacy",
+      generatedAt: meta.generatedAt || 0,
+      status: meta.status || ""
+    };
+  }
+}
+
+function syncMemberCommentFromSeasons(m) {
+  if (!m) return;
+  var cur = getCurrentPeriodKey();
+  var entry = m.memberSeasonComments && m.memberSeasonComments[cur];
+  if (entry && (entry.text || "").trim()) {
+    m.memberComment = entry.text;
+    m.memberCommentMeta = {
+      updatedAt: entry.updatedAt || 0,
+      generatedAt: entry.generatedAt || 0,
+      periodKey: cur,
+      source: entry.source || "manual",
+      status: entry.status || ""
+    };
+  } else {
+    m.memberComment = "";
+    if (!m.memberCommentMeta || typeof m.memberCommentMeta !== "object") m.memberCommentMeta = {};
+    m.memberCommentMeta.periodKey = cur;
+  }
+}
+
+function getMemberSeasonComment(m, periodKey) {
+  if (!m) return null;
+  periodKey = periodKey || getCurrentPeriodKey();
+  ensureMemberSeasonComments(m);
+  var entry = m.memberSeasonComments && m.memberSeasonComments[periodKey];
+  if (!entry) return null;
+  var text = (entry.text || "").trim();
+  if (!text) return null;
+  return {
+    text: text,
+    updatedAt: entry.updatedAt || entry.generatedAt || 0,
+    source: entry.source || "",
+    periodKey: periodKey
+  };
+}
+
+function setMemberSeasonComment(m, periodKey, text, opts) {
+  if (!m) return;
+  opts = opts || {};
+  periodKey = periodKey || getCurrentPeriodKey();
+  ensureMemberSeasonComments(m);
+  text = stripSeasonHeaderFromComment(text || "");
+  if (!text) {
+    if (m.memberSeasonComments[periodKey]) delete m.memberSeasonComments[periodKey];
+  } else {
+    var prev = m.memberSeasonComments[periodKey] || {};
+    m.memberSeasonComments[periodKey] = {
+      text: text,
+      updatedAt: Date.now(),
+      source: opts.source || prev.source || "manual",
+      generatedAt: opts.generatedAt || prev.generatedAt || 0,
+      status: opts.status || prev.status || ""
+    };
+  }
+  if (periodKey === getCurrentPeriodKey()) syncMemberCommentFromSeasons(m);
+}
+
+function getMemberSeasonCommentKeys(m) {
+  if (!m || !m.memberSeasonComments) return [];
+  return Object.keys(m.memberSeasonComments).filter(function(pk) {
+    return (m.memberSeasonComments[pk].text || "").trim();
+  }).sort(function(a, b) { return b.localeCompare(a); });
+}
+
+function mergeMemberSeasonComments(local, remote) {
+  var out = {};
+  var keys = {};
+  [local, remote].forEach(function(src) {
+    if (!src || typeof src !== "object") return;
+    Object.keys(src).forEach(function(k) { keys[k] = true; });
+  });
+  Object.keys(keys).forEach(function(pk) {
+    var l = local && local[pk];
+    var r = remote && remote[pk];
+    if (!l && !r) return;
+    if (!l) { out[pk] = deepClone(r); return; }
+    if (!r) { out[pk] = deepClone(l); return; }
+    var lt = l.updatedAt || l.generatedAt || 0;
+    var rt = r.updatedAt || r.generatedAt || 0;
+    out[pk] = deepClone(lt >= rt ? l : r);
+  });
+  return out;
+}
+
+function importLegacyCommentIntoSeasonMap(m, map) {
+  map = map || {};
+  if (!m) return map;
+  var text = (m.memberComment || "").trim();
+  if (!text) return map;
+  var meta = m.memberCommentMeta || {};
+  var pk = meta.periodKey || getCurrentPeriodKey();
+  var legacyAt = meta.updatedAt || meta.generatedAt || 0;
+  if (!map[pk] || legacyAt >= (map[pk].updatedAt || map[pk].generatedAt || 0)) {
+    map[pk] = {
+      text: stripSeasonHeaderFromComment(text),
+      updatedAt: legacyAt || Date.now(),
+      source: meta.source || "legacy",
+      generatedAt: meta.generatedAt || 0,
+      status: meta.status || ""
+    };
+  }
+  return map;
+}
+
 var STRIPE_CAT_LABELS = { shin: "心", gi: "技", tai: "体", safety: "安全", prereq: "受験資格" };
 
 function resolveCheckItemLabel(targetLevel, checkKey) {
@@ -2720,16 +2864,16 @@ function draftMemberCommentFromReviews(rosterId, forceReplace) {
     showToast("今シーズンの審査メモ・審査記録がありません", { type: "warn" });
     return;
   }
-  if (!forceReplace && m.memberComment && String(m.memberComment).trim()) {
-    if (!confirm("既存のコメントを下書きで置き換えますか？\n\n────────\n" + draft)) return;
+  var periodKey = getCurrentPeriodKey();
+  var existing = getMemberSeasonComment(m, periodKey);
+  if (!forceReplace && existing && existing.text) {
+    if (!confirm("今シーズンのコメントを下書きで置き換えますか？\n\n────────\n" + draft)) return;
   }
-  m.memberComment = draft;
-  m.memberCommentMeta = {
-    generatedAt: Date.now(),
-    periodKey: getCurrentPeriodKey(),
+  setMemberSeasonComment(m, periodKey, draft, {
     source: "auto-draft",
+    generatedAt: Date.now(),
     status: "draft"
-  };
+  });
   appendMemberMessageHistory(m, draft, "auto-draft");
   saveState();
   render();
@@ -2743,9 +2887,10 @@ function saveRosterMemberDisplay(rosterId) {
   var commentEl = document.querySelector('textarea[data-roster-field="memberComment"][data-roster-id="' + rosterId + '"]');
   var goalEl = document.querySelector('textarea[data-roster-field="personalGoal"][data-roster-id="' + rosterId + '"]');
   if (commentEl) {
-    m.memberComment = commentEl.value || "";
+    var commentText = commentEl.value || "";
+    setMemberSeasonComment(m, getCurrentPeriodKey(), commentText, { source: "manual" });
     touchMemberCommentMeta(m, true);
-    appendMemberMessageHistory(m, m.memberComment, "manual");
+    appendMemberMessageHistory(m, commentText, "manual");
   }
   if (goalEl) {
     m.personalGoal = goalEl.value || "";
@@ -2766,16 +2911,14 @@ function batchDraftMemberComments() {
   for (i = 0; i < roster.length; i++) {
     m = roster[i];
     if (isSeniorMember(m)) continue;
-    if (m.memberComment && String(m.memberComment).trim()) continue;
+    if (getMemberSeasonComment(m)) continue;
     draft = generateMemberCommentDraft(m);
     if (!draft) continue;
-    m.memberComment = draft;
-    m.memberCommentMeta = {
-      generatedAt: Date.now(),
-      periodKey: getCurrentPeriodKey(),
+    setMemberSeasonComment(m, getCurrentPeriodKey(), draft, {
       source: "auto-draft",
+      generatedAt: Date.now(),
       status: "draft"
-    };
+    });
     appendMemberMessageHistory(m, draft, "auto-draft");
     count++;
   }
@@ -2985,10 +3128,10 @@ function mergeRosterMember(local, remote) {
   else if (remoteAtt > localAtt) out.attendanceUpdatedAt = remote.attendanceUpdatedAt || 0;
   else out.attendanceUpdatedAt = Math.max(local.attendanceUpdatedAt || 0, remote.attendanceUpdatedAt || 0);
   out.reviews = mergeReviewLists(local.reviews, remote.reviews);
-  if (memberMetaTime(other) > memberMetaTime(out)) {
-    out.memberComment = other.memberComment;
-    out.memberCommentMeta = deepClone(other.memberCommentMeta);
-  }
+  var lSeason = importLegacyCommentIntoSeasonMap(local, deepClone(local.memberSeasonComments || {}));
+  var rSeason = importLegacyCommentIntoSeasonMap(remote, deepClone(remote.memberSeasonComments || {}));
+  out.memberSeasonComments = mergeMemberSeasonComments(lSeason, rSeason);
+  syncMemberCommentFromSeasons(out);
   if (memberDraftMetaTime(other) > memberDraftMetaTime(out)) {
     out.memberCommentDraft = other.memberCommentDraft;
     out.memberCommentDraftMeta = deepClone(other.memberCommentDraftMeta);
@@ -3923,6 +4066,7 @@ function normalizeRosterMember(raw) {
     personalGoalPeriodKey: m.personalGoalPeriodKey || "",
     memberComment: m.memberComment || "",
     memberCommentMeta: m.memberCommentMeta && typeof m.memberCommentMeta === "object" ? m.memberCommentMeta : null,
+    memberSeasonComments: m.memberSeasonComments && typeof m.memberSeasonComments === "object" ? deepClone(m.memberSeasonComments) : {},
     memberCommentDraft: m.memberCommentDraft || "",
     memberCommentDraftMeta: m.memberCommentDraftMeta && typeof m.memberCommentDraftMeta === "object" ? m.memberCommentDraftMeta : null,
     reviews: Array.isArray(m.reviews) ? m.reviews.map(normalizeReviewEntry) : [],
@@ -3938,6 +4082,8 @@ function ensureRosterLinks(s) {
   var i, j, league, p, m, byName = {}, byId = {};
   for (i = 0; i < s.roster.length; i++) {
     s.roster[i] = normalizeRosterMember(s.roster[i]);
+    ensureMemberSeasonComments(s.roster[i]);
+    syncMemberCommentFromSeasons(s.roster[i]);
     ensureMessageHistoryFromComment(s.roster[i]);
     byName[s.roster[i].name] = s.roster[i];
     byId[s.roster[i].id] = s.roster[i];
@@ -4326,6 +4472,12 @@ function touchMemberCommentMeta(m, forceManual) {
   if (forceManual) m.memberCommentMeta.source = "manual";
   else if (m.memberCommentMeta.source === "auto-draft") m.memberCommentMeta.status = "edited";
   else if (!m.memberCommentMeta.source) m.memberCommentMeta.source = "manual";
+  var cur = getCurrentPeriodKey();
+  if (m.memberSeasonComments && m.memberSeasonComments[cur]) {
+    m.memberSeasonComments[cur].updatedAt = m.memberCommentMeta.updatedAt;
+    if (forceManual) m.memberSeasonComments[cur].source = "manual";
+    else if (m.memberCommentMeta.status === "edited") m.memberSeasonComments[cur].status = "edited";
+  }
 }
 
 function isManualMemberComment(member) {
@@ -4336,9 +4488,9 @@ function isManualMemberComment(member) {
 
 function getInstructorMessageForMember(member) {
   var latestMsg = getLatestMessageEntry(member);
-  var comment = (member.memberComment || "").trim();
-  var meta = member.memberCommentMeta || {};
-  var commentAt = meta.updatedAt || meta.generatedAt || 0;
+  var seasonComment = getMemberSeasonComment(member, getCurrentPeriodKey());
+  var comment = seasonComment ? seasonComment.text : (member.memberComment || "").trim();
+  var commentAt = seasonComment ? seasonComment.updatedAt : ((member.memberCommentMeta || {}).updatedAt || (member.memberCommentMeta || {}).generatedAt || 0);
   var senior = isSeniorMember(member);
   var latestReview = senior ? null : getLatestStripeReview(member);
   var candidates = [];
@@ -4672,7 +4824,7 @@ function updateRosterMember(rosterId, field, value) {
   else if (field === "attendanceCount") setMemberAttendanceCount(m, value);
   else if (field === "memo") m.memo = value || "";
   else if (field === "memberComment") {
-    m.memberComment = value || "";
+    setMemberSeasonComment(m, getCurrentPeriodKey(), value || "", { source: "manual" });
     touchMemberCommentMeta(m);
   }
   else if (field === "personalGoal") {
@@ -5247,7 +5399,7 @@ function flushRosterInputsFromDom() {
       m.stripes = n;
     } else if (field === "birthMd") m.birthMd = normalizeBirthMd(val);
     else if (field === "memberComment") {
-      m.memberComment = val || "";
+      setMemberSeasonComment(m, getCurrentPeriodKey(), val || "", { source: "manual" });
       touchMemberCommentMeta(m);
     } else if (field === "personalGoal") {
       m.personalGoal = val || "";
@@ -5714,9 +5866,13 @@ function deleteStripeReview(rosterId, reviewId) {
   if (!confirm(confirmText)) return;
   m.reviews = m.reviews.filter(function(r) { return r.id !== reviewId; });
   if (isMessageEntry(review)) {
-    var latestMsg = getLatestMessageEntry(m);
-    m.memberComment = latestMsg ? (latestMsg.memo || "") : "";
-    if (latestMsg) touchMemberCommentMeta(m, true);
+    var pk = review.periodKey || getCurrentPeriodKey();
+    var memoText = stripSeasonHeaderFromComment(review.memo || "");
+    var sc = m.memberSeasonComments && m.memberSeasonComments[pk];
+    if (sc && stripSeasonHeaderFromComment(sc.text) === memoText) {
+      delete m.memberSeasonComments[pk];
+      syncMemberCommentFromSeasons(m);
+    }
   } else {
     recalcMemberStripesFromReviews(m);
   }
@@ -5959,7 +6115,7 @@ function flushFeedbackInputsFromDom() {
   if (!m) return;
   var commentEl = document.getElementById("feedbackCommentInput");
   var goalEl = document.getElementById("feedbackGoalInput");
-  if (commentEl) m.memberComment = commentEl.value || "";
+  if (commentEl) setMemberSeasonComment(m, getCurrentPeriodKey(), commentEl.value || "", { source: "manual" });
   if (goalEl) m.personalGoal = goalEl.value || "";
 }
 
@@ -5991,9 +6147,10 @@ function saveFeedbackFromPage(rosterId) {
   var commentEl = document.getElementById("feedbackCommentInput");
   var goalEl = document.getElementById("feedbackGoalInput");
   if (commentEl) {
-    m.memberComment = commentEl.value || "";
+    var savedComment = commentEl.value || "";
+    setMemberSeasonComment(m, getCurrentPeriodKey(), savedComment, { source: "manual" });
     touchMemberCommentMeta(m, true);
-    appendMemberMessageHistory(m, m.memberComment, "manual");
+    appendMemberMessageHistory(m, savedComment, "manual");
     m.memberCommentDraft = "";
     m.memberCommentDraftMeta = null;
   }
@@ -6131,6 +6288,26 @@ function insertGoalSheetTemplate() {
   goalEl.focus();
 }
 
+function renderPastSeasonComments(m) {
+  var cur = getCurrentPeriodKey();
+  var keys = getMemberSeasonCommentKeys(m).filter(function(pk) { return pk !== cur; });
+  if (!keys.length) return "";
+  var blocks = keys.map(function(pk) {
+    var entry = m.memberSeasonComments[pk];
+    var label = formatSeasonLabelFromPeriodKey(pk);
+    var when = entry.updatedAt ? formatConfirmDate(entry.updatedAt) : "";
+    return '<div class="feedback-season-past">' +
+      '<div class="feedback-field-label">' + esc(label) +
+      (when ? ' <span class="feedback-season-date">' + esc(when) + "</span>" : "") +
+      "</div>" +
+      '<div class="feedback-season-past-body">' + esc(entry.text) + "</div></div>";
+  }).join("");
+  return '<div class="feedback-past-seasons">' +
+    '<div class="feedback-field-label" style="margin-top:0">過去シーズンのコメント（参照のみ）</div>' +
+    blocks +
+    "</div>";
+}
+
 function renderFeedbackEditor(m) {
   var senior = isSeniorMember(m);
   var leagues = getMemberLeagueLabels(m.id);
@@ -6149,7 +6326,11 @@ function renderFeedbackEditor(m) {
       '<div class="feedback-goal-tools"><button type="button" class="btn btn-secondary btn-sm" data-action="insertGoalSheet">📋 目標設定シートのひな形を挿入</button></div>' +
       '<textarea id="feedbackGoalInput" class="feedback-textarea" rows="20" placeholder="例：立技・寝技の得意技と連絡技を決める／「📋 ひな形を挿入」で3ヶ月目標シートを使えます">' + esc(m.personalGoal || "") + "</textarea>"
     : "";
-  var commentLabel = senior ? "指導員メッセージ（本人に表示）" : "マイ進捗コメント（保護者・本人に表示）";
+  var seasonLabel = formatSeasonLabelFromPeriodKey(getCurrentPeriodKey());
+  var currentSeasonComment = getMemberSeasonComment(m, getCurrentPeriodKey());
+  var commentLabel = senior
+    ? "指導員メッセージ（本人に表示・" + seasonLabel + "）"
+    : "マイ進捗コメント（保護者・本人に表示・" + seasonLabel + "）";
   var commentPlaceholder = senior
     ? "例：打ち込みの再現性が上がってきました。次は試合で使いましょう。"
     : "例：今日は礼法がとても良かったです。次は受け身からの反撃を意識しましょう。";
@@ -6170,9 +6351,10 @@ function renderFeedbackEditor(m) {
     (senior ? "" : renderMemberAwardsInline(m)) +
     renderFeedbackDraftBanner(m) +
     renderFeedbackHistorySection(m) +
+    renderPastSeasonComments(m) +
     goalField +
     '<label class="feedback-field-label">' + esc(commentLabel) + "</label>" +
-    '<textarea id="feedbackCommentInput" class="feedback-textarea" rows="5" placeholder="' + esc(commentPlaceholder) + '">' + esc(m.memberComment || "") + "</textarea>" +
+    '<textarea id="feedbackCommentInput" class="feedback-textarea" rows="5" placeholder="' + esc(commentPlaceholder) + '">' + esc(currentSeasonComment ? currentSeasonComment.text : "") + "</textarea>" +
     previewHtml +
     '<button type="button" class="btn btn-primary btn-block feedback-save-btn" data-action="saveFeedback" data-roster-id="' + esc(m.id) + '">💾 保存' + (archived ? "（履歴のみ）" : "して会員に反映") + "</button>" +
     archiveActions +
@@ -6181,7 +6363,7 @@ function renderFeedbackEditor(m) {
 }
 
 function renderFeedbackMemberChip(m, active) {
-  var hasComment = !!(m.memberComment && String(m.memberComment).trim());
+  var hasComment = !!getMemberSeasonComment(m);
   var hasDraft = hasMemberCommentDraft(m);
   var senior = isSeniorMember(m);
   var archived = isArchivedRosterMember(m);
@@ -9687,7 +9869,7 @@ function bindAppEvents() {
     if (!m) return;
     if (field === "sposuruName") m.sposuruName = t.value || "";
     else if (field === "memberComment") {
-      m.memberComment = t.value || "";
+      setMemberSeasonComment(m, getCurrentPeriodKey(), t.value || "", { source: "manual" });
       touchMemberCommentMeta(m);
     }
     else if (field === "name") {
