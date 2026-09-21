@@ -718,6 +718,26 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
 .feedback-page-note {
   font-size: var(--fluid-text-sm); color: var(--muted); line-height: var(--fluid-line-loose); margin: 0 0 var(--fluid-space-md);
 }
+.feedback-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--fluid-space-sm);
+  margin-bottom: var(--fluid-space-md);
+}
+.feedback-filter-group { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; }
+.feedback-filter-btn {
+  min-height: calc(var(--fluid-touch) - 6px); padding: var(--fluid-space-xs) var(--fluid-space-md);
+  border-radius: 999px; border: 1px solid var(--line); background: #fff;
+  font-size: var(--fluid-text-sm); font-weight: 700; color: var(--text); cursor: pointer;
+}
+.feedback-filter-btn.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.feedback-memo-guide {
+  margin: 0 0 var(--fluid-space-md); padding: var(--fluid-space-md) var(--fluid-space-lg);
+  border-radius: var(--fluid-radius-md); background: #f8fafc; border: 1px solid var(--line);
+  font-size: var(--fluid-text-sm); line-height: var(--fluid-line-loose); color: var(--text);
+}
+.feedback-memo-guide strong { color: var(--text); }
+.feedback-comment-tools { margin: 4px 0 8px; display: flex; flex-wrap: wrap; gap: 8px; }
 .feedback-search-wrap {
   position: sticky; top: 0; z-index: 5;
   background: var(--bg); padding: 0 0 var(--fluid-space-md); margin-bottom: var(--fluid-space-xs);
@@ -1928,6 +1948,7 @@ let isMemberMode = false;
 let myRosterId = "";
 let feedbackRosterId = "";
 let feedbackSearchQuery = "";
+let feedbackFilterMode = "all";
 const FEEDBACK_ROSTER_KEY = "yonekura-feedback-roster";
 let memberCloudRefreshBound = false;
 let memberCloudRefreshInFlight = false;
@@ -2854,30 +2875,56 @@ function renderMemberCommentMetaHint(m) {
   return '<div class="roster-comment-meta">📝 審査メモから自動生成: ' + esc(when) + esc(status) + "</div>";
 }
 
+function applyMemberCommentDraft(m, draft, source) {
+  if (!m || !draft) return;
+  m.memberCommentDraft = stripSeasonHeaderFromComment(draft);
+  m.memberCommentDraftMeta = {
+    generatedAt: Date.now(),
+    periodKey: getCurrentPeriodKey(),
+    source: source || "auto-draft",
+    status: "draft"
+  };
+}
+
+function canGenerateMemberCommentDraft(m) {
+  if (!m || isSeniorMember(m)) return false;
+  return !!generateMemberCommentDraft(m);
+}
+
+function countBatchDraftTargets(list) {
+  var n = 0;
+  (list || []).forEach(function(m) {
+    if (isSeniorMember(m)) return;
+    if (getMemberSeasonComment(m)) return;
+    if (generateMemberCommentDraft(m)) n++;
+  });
+  return n;
+}
+
 function draftMemberCommentFromReviews(rosterId, forceReplace) {
   if (isMemberMode || isReadonly()) return;
+  flushFeedbackInputsFromDom();
   flushRosterInputsFromDom();
   var m = findRosterMember(rosterId);
   if (!m) return;
   var draft = generateMemberCommentDraft(m);
   if (!draft) {
-    showToast("今シーズンの審査メモ・審査記録がありません", { type: "warn" });
+    showToast("今シーズンの審査メモ・審査記録がありません。\n🎗ストライプ → 随時審査 → 審査メモ に入力してください。", { type: "warn" });
     return;
   }
   var periodKey = getCurrentPeriodKey();
   var existing = getMemberSeasonComment(m, periodKey);
   if (!forceReplace && existing && existing.text) {
-    if (!confirm("今シーズンのコメントを下書きで置き換えますか？\n\n────────\n" + draft)) return;
+    if (!confirm("今シーズンの保存済みコメントがあります。下書きで上書きしますか？\n（会員に反映済みの内容は変わりません。保存するまで下書きのみ更新）\n\n────────\n" + stripSeasonHeaderFromComment(draft))) return;
   }
-  setMemberSeasonComment(m, periodKey, draft, {
-    source: "auto-draft",
-    generatedAt: Date.now(),
-    status: "draft"
-  });
-  appendMemberMessageHistory(m, draft, "auto-draft");
+  if (!forceReplace && hasMemberCommentDraft(m)) {
+    if (!confirm("既存の下書きを、審査記録から再生成した下書きで置き換えますか？")) return;
+  }
+  applyMemberCommentDraft(m, draft, "auto-draft");
   saveState();
+  if (feedbackRosterId !== rosterId) feedbackRosterId = rosterId;
   render();
-  showToast(m.name + "さんのコメント下書きを生成しました ✓", { type: "ok" });
+  showToast(m.name + "さんの下書きを生成しました。コピーして保存してください ✓", { type: "ok" });
 }
 
 function saveRosterMemberDisplay(rosterId) {
@@ -2903,10 +2950,17 @@ function saveRosterMemberDisplay(rosterId) {
 
 function batchDraftMemberComments() {
   if (isMemberMode || isReadonly()) return;
-  if (!confirm("今シーズンの審査記録がある館員について、コメント下書きを生成します。\n既にコメントがある館員はスキップします。よろしいですか？")) return;
+  flushFeedbackInputsFromDom();
   flushRosterInputsFromDom();
   var roster = getRosterList();
+  var targets = countBatchDraftTargets(roster);
+  if (!targets) {
+    showToast("一括下書きの対象がありません。\n🎗ストライプ → 随時審査 → 審査メモ を入力した子、または未保存の子がいるか確認してください。", { type: "warn", duration: 4000 });
+    return;
+  }
+  if (!confirm("今シーズンの審査記録がある館員 " + targets + " 名に、下書きを生成します。\n\n・保存済みコメントがある館員はスキップ\n・下書きは会員に表示されません（💾保存が必要）\n\nよろしいですか？")) return;
   var count = 0;
+  var skippedDraft = 0;
   var i, m, draft;
   for (i = 0; i < roster.length; i++) {
     m = roster[i];
@@ -2914,17 +2968,16 @@ function batchDraftMemberComments() {
     if (getMemberSeasonComment(m)) continue;
     draft = generateMemberCommentDraft(m);
     if (!draft) continue;
-    setMemberSeasonComment(m, getCurrentPeriodKey(), draft, {
-      source: "auto-draft",
-      generatedAt: Date.now(),
-      status: "draft"
-    });
-    appendMemberMessageHistory(m, draft, "auto-draft");
+    if (hasMemberCommentDraft(m)) skippedDraft++;
+    applyMemberCommentDraft(m, draft, "auto-draft");
     count++;
   }
-  saveState();
+  saveState(true);
   render();
-  showToast(count > 0 ? count + "名分の下書きを生成しました ✓" : "生成対象の館員がいません", { type: count > 0 ? "ok" : "warn" });
+  var msg = count + "名分の下書きを生成しました ✓";
+  if (skippedDraft) msg += "（うち " + skippedDraft + " 名は既存下書きを更新）";
+  msg += "\n📝付きの選手を開き、保存してください。";
+  showToast(msg, { type: "ok", duration: 4500 });
 }
 
 function getNextSeason(fiscalYear, seasonKey) {
@@ -6129,6 +6182,21 @@ function filterRosterForFeedback(list, query) {
   });
 }
 
+function filterRosterForFeedbackMode(list, mode) {
+  if (mode === "no-comment") {
+    return list.filter(function(m) { return !getMemberSeasonComment(m); });
+  }
+  return list;
+}
+
+function countMembersWithoutSeasonComment(list) {
+  var n = 0;
+  (list || []).forEach(function(m) {
+    if (!getMemberSeasonComment(m)) n++;
+  });
+  return n;
+}
+
 function selectFeedbackMember(rosterId) {
   if (isMemberMode || isReadonly()) return;
   flushFeedbackInputsFromDom();
@@ -6165,6 +6233,7 @@ function saveFeedbackFromPage(rosterId) {
 
 function formatFeedbackDraftSourceLabel(meta) {
   if (!meta || !meta.source) return "下書き";
+  if (meta.source === "auto-draft") return "審査記録";
   if (meta.source === "slack") return "Slack";
   if (meta.source === "voice-shortcut" || meta.source === "api") return "音声";
   return "下書き";
@@ -6354,6 +6423,9 @@ function renderFeedbackEditor(m) {
     renderPastSeasonComments(m) +
     goalField +
     '<label class="feedback-field-label">' + esc(commentLabel) + "</label>" +
+    (!senior && canGenerateMemberCommentDraft(m)
+      ? '<div class="feedback-comment-tools"><button type="button" class="btn btn-secondary btn-sm" data-action="draftMemberComment" data-roster-id="' + esc(m.id) + '">📝 審査記録から下書き</button></div>'
+      : "") +
     '<textarea id="feedbackCommentInput" class="feedback-textarea" rows="5" placeholder="' + esc(commentPlaceholder) + '">' + esc(currentSeasonComment ? currentSeasonComment.text : "") + "</textarea>" +
     previewHtml +
     '<button type="button" class="btn btn-primary btn-block feedback-save-btn" data-action="saveFeedback" data-roster-id="' + esc(m.id) + '">💾 保存' + (archived ? "（履歴のみ）" : "して会員に反映") + "</button>" +
@@ -6375,7 +6447,7 @@ function renderFeedbackMemberChip(m, active) {
     (hasDraft ? " has-draft" : "") +
     '" data-action="selectFeedbackMember" data-roster-id="' + esc(m.id) + '">' +
     (archived ? "📦 " : senior ? "🎯 " : "") +
-    esc(m.name) + (hasDraft ? " 📱" : "") + "</button>";
+    esc(m.name) + (hasDraft ? " 📝" : "") + "</button>";
 }
 
 function renderFeedbackPage() {
@@ -6387,9 +6459,24 @@ function renderFeedbackPage() {
   var archivedRoster = sortRosterByName(getArchivedRosterList());
   var filtered = filterRosterForFeedback(roster, query);
   var filteredArchived = filterRosterForFeedback(archivedRoster, query);
+  var noCommentCount = countMembersWithoutSeasonComment(roster);
+  var batchDraftCount = countBatchDraftTargets(roster);
+  filtered = filterRosterForFeedbackMode(filtered, feedbackFilterMode);
+  filteredArchived = filterRosterForFeedbackMode(filteredArchived, feedbackFilterMode);
   if (feedbackRosterId && !findRosterMember(feedbackRosterId)) feedbackRosterId = "";
   if (!feedbackRosterId && filtered.length === 1 && !filteredArchived.length) feedbackRosterId = filtered[0].id;
   var chips = filtered.map(function(m) { return renderFeedbackMemberChip(m, feedbackRosterId); }).join("");
+  var rosterLabel = feedbackFilterMode === "no-comment"
+    ? "未保存（" + filtered.length + "名 / 全" + roster.length + "名）"
+    : "在籍（" + filtered.length + "名）";
+  var toolbar = '<div class="feedback-toolbar">' +
+    '<div class="feedback-filter-group">' +
+    '<button type="button" class="feedback-filter-btn' + (feedbackFilterMode === "all" ? " active" : "") + '" data-action="setFeedbackFilter" data-filter="all">全員</button>' +
+    '<button type="button" class="feedback-filter-btn' + (feedbackFilterMode === "no-comment" ? " active" : "") + '" data-action="setFeedbackFilter" data-filter="no-comment">未保存 ' + noCommentCount + "</button>" +
+    "</div>" +
+    '<button type="button" class="btn btn-secondary btn-sm" data-action="batchDraftMemberComments">📝 審査記録から一括下書き' +
+    (batchDraftCount ? "（" + batchDraftCount + "名）" : "") + "</button>" +
+    "</div>";
   var archivedSection = filteredArchived.length
     ? '<div class="feedback-archive-section">' +
       '<div class="feedback-field-label">📦 退会・アーカイブ（' + filteredArchived.length + "名）</div>" +
@@ -6405,12 +6492,17 @@ function renderFeedbackPage() {
     ? '<p style="font-size:.64rem;color:var(--muted);margin:12px 0 0;line-height:1.45">保存するとクラウドに自動同期されます。保護者は会員ページの🎗マイ進捗から確認できます。</p>'
     : '<p style="font-size:.64rem;color:#b83232;margin:12px 0 0;line-height:1.45">⚠️ クラウド同期が未設定です。📋マスターでGitHubトークンを設定してください。</p>';
   return '<div class="print-title">💬 練習フィードバック ｜ ' + esc(getActiveContext().seasonLabel) + "</div>" +
-    '<p class="feedback-page-note">稽古後に<strong>Slack</strong>やスマホから下書きを送れます。iPadで推敲して保存すると、会員ページの🎗マイ進捗に反映されます。</p>' +
+    '<div class="feedback-memo-guide">' +
+    "<strong>メモはどこに残す？</strong><br>" +
+    "① <strong>シーズン中</strong> … 🎗ストライプ → <strong>随時審査</strong> → <strong>審査メモ</strong>（○×と一緒に1〜2行）<br>" +
+    "② <strong>シーズン末</strong> … この画面で「一括下書き」→ 推敲 → <strong>💾保存</strong>（保存するまで会員には表示されません）" +
+    "</div>" +
     '<div class="card">' +
+    toolbar +
     '<div class="feedback-search-wrap">' +
     '<input type="search" id="feedbackSearchInput" class="feedback-search" placeholder="名前で検索（例：なぎ、だいと）" value="' + esc(query) + '" autocomplete="off" enterkeyhint="search">' +
     "</div>" +
-    '<div class="feedback-field-label" style="margin-top:0">在籍（' + filtered.length + "名）</div>" +
+    '<div class="feedback-field-label" style="margin-top:0">' + rosterLabel + "</div>" +
     '<div class="feedback-member-grid">' + (chips || '<span class="feedback-empty">該当する選手がいません</span>') + "</div>" +
     archivedSection +
     editorHtml +
@@ -9716,6 +9808,11 @@ function handleAppTap(e) {
   else if (action === "draftMemberComment") draftMemberCommentFromReviews(target.getAttribute("data-roster-id"));
   else if (action === "importMemberListCsv") importMemberListCsvPrompt();
   else if (action === "batchDraftMemberComments") batchDraftMemberComments();
+  else if (action === "setFeedbackFilter") {
+    feedbackFilterMode = target.getAttribute("data-filter") || "all";
+    flushFeedbackInputsFromDom();
+    render();
+  }
   else if (action === "saveRosterMemberDisplay") saveRosterMemberDisplay(target.getAttribute("data-roster-id"));
   else if (action === "selectFeedbackMember") selectFeedbackMember(target.getAttribute("data-roster-id"));
   else if (action === "saveFeedback") saveFeedbackFromPage(target.getAttribute("data-roster-id"));
