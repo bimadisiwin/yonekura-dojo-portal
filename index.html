@@ -809,6 +809,19 @@ body.member-mode .card-title.my-progress-section-title { font-size: var(--fluid-
   font-size: var(--fluid-text-sm); color: var(--muted); padding: var(--fluid-space-md);
   background: var(--bg); border-radius: var(--fluid-radius-md); border: 1px dashed var(--line);
 }
+.feedback-archive-section { margin-top: var(--fluid-space-md); padding-top: var(--fluid-space-sm); border-top: 1px dashed var(--line); }
+.feedback-member-chip.archived:not(.active) {
+  opacity: .72; border-style: dashed; background: #f5f3ef;
+}
+.feedback-member-chip.archived.active {
+  border-color: #8a7a4a; background: #f0ebe0;
+}
+.feedback-archived-banner {
+  font-size: var(--fluid-text-sm); color: #6b5a2a; background: #faf6ea;
+  border: 1px solid #e8dcc0; border-radius: var(--fluid-radius-md);
+  padding: var(--fluid-space-sm) var(--fluid-space-md); margin-bottom: var(--fluid-space-sm); line-height: var(--fluid-line);
+}
+.feedback-archive-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .points { font-size: var(--fluid-text-xl); font-weight: 800; color: var(--accent2); min-width: calc(32px + 0.5vw); text-align: right; }
 .points-label { font-size: var(--fluid-text-2xs); color: var(--muted); text-align: right; }
 .standings-print { display: none; }
@@ -2263,7 +2276,7 @@ function updateMemberProgressUI() {
 function activateMyRoster(rosterId) {
   if (!rosterId) return false;
   var m = findRosterMember(rosterId);
-  if (!m) return false;
+  if (!m || isArchivedRosterMember(m)) return false;
   myRosterId = rosterId;
   document.body.className = document.body.className.replace(/\s*has-my-roster/g, "");
   document.body.className += " has-my-roster";
@@ -2995,6 +3008,15 @@ function mergeRosterMember(local, remote) {
   ["name", "group", "sposuruName", "birthMd", "track", "enrolledAt"].forEach(function(key) {
     if (!out[key] && other[key]) out[key] = other[key];
   });
+  var localArch = local.archivedAt || 0;
+  var remoteArch = remote.archivedAt || 0;
+  if (localArch || remoteArch) {
+    out.archivedAt = Math.max(localArch, remoteArch);
+    out.archivedReason = (localArch >= remoteArch ? local.archivedReason : remote.archivedReason) || out.archivedReason || "退会";
+  } else {
+    out.archivedAt = 0;
+    out.archivedReason = "";
+  }
   return out;
 }
 
@@ -3783,13 +3805,27 @@ function getStripeCheckGroups(def) {
   return [];
 }
 
-function getRosterList() {
+function isArchivedRosterMember(m) {
+  return !!(m && m.archivedAt);
+}
+
+function getAllRosterMembers() {
   return getActiveContext().roster || [];
+}
+
+function getRosterList(includeArchived) {
+  var list = getAllRosterMembers();
+  if (includeArchived) return list;
+  return list.filter(function(m) { return !isArchivedRosterMember(m); });
+}
+
+function getArchivedRosterList() {
+  return getAllRosterMembers().filter(isArchivedRosterMember);
 }
 
 function findRosterMember(rosterId) {
   if (!rosterId) return null;
-  var list = getRosterList();
+  var list = getAllRosterMembers();
   var i;
   for (i = 0; i < list.length; i++) {
     if (list[i].id === rosterId) return list[i];
@@ -3835,7 +3871,9 @@ function normalizeRosterMember(raw) {
     memberCommentDraft: m.memberCommentDraft || "",
     memberCommentDraftMeta: m.memberCommentDraftMeta && typeof m.memberCommentDraftMeta === "object" ? m.memberCommentDraftMeta : null,
     reviews: Array.isArray(m.reviews) ? m.reviews.map(normalizeReviewEntry) : [],
-    awards: Array.isArray(m.awards) ? m.awards.map(normalizeAwardEntry) : []
+    awards: Array.isArray(m.awards) ? m.awards.map(normalizeAwardEntry) : [],
+    archivedAt: Math.max(0, parseInt(m.archivedAt, 10) || 0),
+    archivedReason: m.archivedReason || ""
   };
 }
 
@@ -4618,12 +4656,7 @@ function purgeLeaguePlayerResults(league, playerId) {
   });
 }
 
-function removeRosterMember(rosterId) {
-  if (isMemberMode || isReadonly()) return;
-  var m = findRosterMember(rosterId);
-  if (!m) return;
-  if (!confirm(m.name + " を館員台帳から削除しますか？\n（全リーグからも除外され、関連する対戦結果も削除されます）")) return;
-  state.roster = (state.roster || []).filter(function(x) { return x.id !== rosterId; });
+function detachRosterFromLeagues(rosterId) {
   state.leagues.forEach(function(league) {
     var removeIds = [];
     league.players.forEach(function(p) {
@@ -4632,6 +4665,50 @@ function removeRosterMember(rosterId) {
     league.players = league.players.filter(function(p) { return p.rosterId !== rosterId; });
     removeIds.forEach(function(playerId) { purgeLeaguePlayerResults(league, playerId); });
   });
+}
+
+function formatRosterArchivedLabel(m) {
+  if (!m || !m.archivedAt) return "";
+  var when = new Date(m.archivedAt).toLocaleDateString("ja-JP");
+  var reason = (m.archivedReason || "退会").trim();
+  return when + " " + reason;
+}
+
+function archiveRosterMember(rosterId, reason) {
+  if (isMemberMode || isReadonly()) return;
+  var m = findRosterMember(rosterId);
+  if (!m || isArchivedRosterMember(m)) return;
+  var label = reason || "退会";
+  if (!confirm(m.name + " さんを「" + label + "」でアーカイブしますか？\n\n・Jリーグ・出席取込の対象から外れます\n・フィードバック履歴は残ります\n・会員ページには表示されません")) return;
+  m.archivedAt = Date.now();
+  m.archivedReason = label;
+  detachRosterFromLeagues(rosterId);
+  if (feedbackRosterId === rosterId) feedbackRosterId = rosterId;
+  saveState();
+  render();
+  showToast(m.name + " さんをアーカイブしました ✓");
+}
+
+function restoreRosterMember(rosterId) {
+  if (isMemberMode || isReadonly()) return;
+  var m = findRosterMember(rosterId);
+  if (!m || !isArchivedRosterMember(m)) return;
+  if (!confirm(m.name + " さんを在籍に復帰しますか？\n（Jリーグへの再追加は📋マスターから行ってください）")) return;
+  m.archivedAt = 0;
+  m.archivedReason = "";
+  saveState();
+  render();
+  showToast(m.name + " さんを在籍に復帰しました ✓");
+}
+
+function removeRosterMember(rosterId) {
+  if (isMemberMode || isReadonly()) return;
+  var m = findRosterMember(rosterId);
+  if (!m) return;
+  if (!confirm(m.name + " を館員台帳から削除しますか？\n（全リーグからも除外され、関連する対戦結果も削除されます）")) return;
+  state.roster = (state.roster || []).filter(function(x) { return x.id !== rosterId; });
+  detachRosterFromLeagues(rosterId);
+  if (feedbackRosterId === rosterId) feedbackRosterId = "";
   saveState();
   render();
   showToast("館員を削除しました");
@@ -6019,7 +6096,15 @@ function renderFeedbackEditor(m) {
   var commentPlaceholder = senior
     ? "例：打ち込みの再現性が上がってきました。次は試合で使いましょう。"
     : "例：今日は礼法がとても良かったです。次は受け身からの反撃を意識しましょう。";
+  var archived = isArchivedRosterMember(m);
+  var archivedBanner = archived
+    ? '<div class="feedback-archived-banner">📦 退会アーカイブ（' + esc(formatRosterArchivedLabel(m)) + "）— 会員ページ・Jリーグには表示されません。履歴の確認・メモ保存はできます。</div>"
+    : "";
+  var archiveActions = archived
+    ? '<div class="feedback-archive-actions"><button type="button" class="btn btn-secondary btn-sm" data-action="restoreRosterMember" data-roster-id="' + esc(m.id) + '">↩ 在籍に復帰</button></div>'
+    : '<div class="feedback-archive-actions"><button type="button" class="btn btn-ghost btn-sm" data-action="archiveRosterMember" data-roster-id="' + esc(m.id) + '">📦 退会でアーカイブ</button></div>';
   return '<div class="card feedback-editor-card">' +
+    archivedBanner +
     '<div class="feedback-editor-head">' +
     '<div class="feedback-editor-name">' + (senior ? '<span class="feedback-senior-badge">🎯 ' + esc(m.group || "中学生以上") + "</span> " : "") + esc(m.name) + "さん</div>" +
     (m.sposuruName && m.sposuruName !== m.name ? '<div class="feedback-editor-meta">' + esc(m.sposuruName) + "</div>" : "") +
@@ -6032,9 +6117,26 @@ function renderFeedbackEditor(m) {
     '<label class="feedback-field-label">' + esc(commentLabel) + "</label>" +
     '<textarea id="feedbackCommentInput" class="feedback-textarea" rows="5" placeholder="' + esc(commentPlaceholder) + '">' + esc(m.memberComment || "") + "</textarea>" +
     previewHtml +
-    '<button type="button" class="btn btn-primary btn-block feedback-save-btn" data-action="saveFeedback" data-roster-id="' + esc(m.id) + '">💾 保存して会員に反映</button>' +
+    '<button type="button" class="btn btn-primary btn-block feedback-save-btn" data-action="saveFeedback" data-roster-id="' + esc(m.id) + '">💾 保存' + (archived ? "（履歴のみ）" : "して会員に反映") + "</button>" +
+    archiveActions +
     renderMemberCommentMetaHint(m) +
     "</div>";
+}
+
+function renderFeedbackMemberChip(m, active) {
+  var hasComment = !!(m.memberComment && String(m.memberComment).trim());
+  var hasDraft = hasMemberCommentDraft(m);
+  var senior = isSeniorMember(m);
+  var archived = isArchivedRosterMember(m);
+  return '<button type="button" class="feedback-member-chip' +
+    (m.id === active ? " active" : "") +
+    (senior ? " senior" : "") +
+    (archived ? " archived" : "") +
+    (hasComment ? " has-comment" : "") +
+    (hasDraft ? " has-draft" : "") +
+    '" data-action="selectFeedbackMember" data-roster-id="' + esc(m.id) + '">' +
+    (archived ? "📦 " : senior ? "🎯 " : "") +
+    esc(m.name) + (hasDraft ? " 📱" : "") + "</button>";
 }
 
 function renderFeedbackPage() {
@@ -6043,21 +6145,19 @@ function renderFeedbackPage() {
   var searchEl = document.getElementById("feedbackSearchInput");
   if (searchEl) feedbackSearchQuery = searchEl.value;
   var query = feedbackSearchQuery;
+  var archivedRoster = sortRosterByName(getArchivedRosterList());
   var filtered = filterRosterForFeedback(roster, query);
+  var filteredArchived = filterRosterForFeedback(archivedRoster, query);
   if (feedbackRosterId && !findRosterMember(feedbackRosterId)) feedbackRosterId = "";
-  if (!feedbackRosterId && filtered.length === 1) feedbackRosterId = filtered[0].id;
-  var chips = filtered.map(function(m) {
-    var hasComment = !!(m.memberComment && String(m.memberComment).trim());
-    var hasDraft = hasMemberCommentDraft(m);
-    var senior = isSeniorMember(m);
-    return '<button type="button" class="feedback-member-chip' +
-      (m.id === feedbackRosterId ? " active" : "") +
-      (senior ? " senior" : "") +
-      (hasComment ? " has-comment" : "") +
-      (hasDraft ? " has-draft" : "") +
-      '" data-action="selectFeedbackMember" data-roster-id="' + esc(m.id) + '">' +
-      (senior ? "🎯 " : "") + esc(m.name) + (hasDraft ? " 📱" : "") + "</button>";
-  }).join("");
+  if (!feedbackRosterId && filtered.length === 1 && !filteredArchived.length) feedbackRosterId = filtered[0].id;
+  var chips = filtered.map(function(m) { return renderFeedbackMemberChip(m, feedbackRosterId); }).join("");
+  var archivedSection = filteredArchived.length
+    ? '<div class="feedback-archive-section">' +
+      '<div class="feedback-field-label">📦 退会・アーカイブ（' + filteredArchived.length + "名）</div>" +
+      '<div class="feedback-member-grid">' +
+      filteredArchived.map(function(m) { return renderFeedbackMemberChip(m, feedbackRosterId); }).join("") +
+      "</div></div>"
+    : "";
   var selected = feedbackRosterId ? findRosterMember(feedbackRosterId) : null;
   var editorHtml = selected
     ? renderFeedbackEditor(selected)
@@ -6071,7 +6171,9 @@ function renderFeedbackPage() {
     '<div class="feedback-search-wrap">' +
     '<input type="search" id="feedbackSearchInput" class="feedback-search" placeholder="名前で検索（例：なぎ、だいと）" value="' + esc(query) + '" autocomplete="off" enterkeyhint="search">' +
     "</div>" +
+    '<div class="feedback-field-label" style="margin-top:0">在籍（' + filtered.length + "名）</div>" +
     '<div class="feedback-member-grid">' + (chips || '<span class="feedback-empty">該当する選手がいません</span>') + "</div>" +
+    archivedSection +
     editorHtml +
     syncHint +
     "</div>";
@@ -9394,6 +9496,8 @@ function handleAppTap(e) {
   else if (action === "closeStripeReview") closeStripeReview();
   else if (action === "submitStripeReview") submitStripeReview(target.getAttribute("data-result"));
   else if (action === "removeRosterMember") removeRosterMember(target.getAttribute("data-roster-id"));
+  else if (action === "archiveRosterMember") archiveRosterMember(target.getAttribute("data-roster-id"), "退会");
+  else if (action === "restoreRosterMember") restoreRosterMember(target.getAttribute("data-roster-id"));
   else if (action === "adjustAttendance") adjustRosterAttendance(target.getAttribute("data-roster-id"), parseInt(target.getAttribute("data-delta"), 10) || 1);
   else if (action === "setMarubatsu") setMarubatsu(target.getAttribute("data-mb-cat"), target.getAttribute("data-mb-idx"), target.getAttribute("data-mb-val"));
   else if (action === "pasteSposuruCsv") pasteSposuruCsv();
