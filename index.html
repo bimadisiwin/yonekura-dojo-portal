@@ -3270,6 +3270,14 @@ async function cloudPush() {
   ghPushInFlight = (async function() {
     try {
       if (ghSha === null) { try { ghSha = await ghGetSha(); } catch (e) {} }
+      var remoteBeforePush = null;
+      try { remoteBeforePush = await cloudPull(); } catch (pullErr) { remoteBeforePush = null; }
+      if (remoteBeforePush) {
+        var mergedPush = mergeCloudStates(state, remoteBeforePush);
+        state = mergedPush;
+        state.updatedAt = Date.now();
+        saveLocal();
+      }
       var encoded = "";
       try {
         encoded = b64Encode(stateJsonForCloud());
@@ -3453,6 +3461,8 @@ function normalizeState(raw) {
   if (!Array.isArray(s.awardConfirmations)) s.awardConfirmations = [];
   if (!Array.isArray(s.roster)) s.roster = [];
   ensureRosterLinks(s);
+  applyRosterArchiveDefaults(s);
+  detachArchivedFromLeagues(s);
   ensureSposuruSettings(s);
   dropArchivesMatchingLiveSeason(s);
   enforceSeasonLeagueShape(s);
@@ -3805,6 +3815,51 @@ function getStripeCheckGroups(def) {
   return [];
 }
 
+var ROSTER_ARCHIVE_DEFAULTS = {
+  "東郷 千咲": { at: "2026/08/31", reason: "退会" },
+  "長谷川 出海": { at: "2026/08/27", reason: "削除" },
+  "長谷川 辰海": { at: "2026/08/27", reason: "削除" }
+};
+
+function parseArchiveDateMs(dateStr) {
+  var m = (dateStr || "").match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (!m) return 0;
+  return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)).getTime();
+}
+
+function applyRosterArchiveDefaults(s) {
+  if (!s || !Array.isArray(s.roster)) return;
+  var i, m, def, ms;
+  for (i = 0; i < s.roster.length; i++) {
+    m = s.roster[i];
+    if (!m || m.archiveRestored) continue;
+    def = ROSTER_ARCHIVE_DEFAULTS[(m.sposuruName || "").trim()];
+    if (!def || m.archivedAt) continue;
+    ms = parseArchiveDateMs(def.at);
+    if (!ms) continue;
+    m.archivedAt = ms;
+    m.archivedReason = def.reason || "退会";
+  }
+}
+
+function detachArchivedFromLeagues(s) {
+  if (!s || !Array.isArray(s.roster) || !Array.isArray(s.leagues)) return;
+  var archivedIds = {}, i, m;
+  for (i = 0; i < s.roster.length; i++) {
+    m = s.roster[i];
+    if (m && m.archivedAt) archivedIds[m.id] = true;
+  }
+  s.leagues.forEach(function(league) {
+    if (!Array.isArray(league.players)) return;
+    var removeIds = [];
+    league.players.forEach(function(p) {
+      if (p && archivedIds[p.rosterId]) removeIds.push(p.id);
+    });
+    league.players = league.players.filter(function(p) { return !archivedIds[p.rosterId]; });
+    removeIds.forEach(function(playerId) { purgeLeaguePlayerResults(league, playerId); });
+  });
+}
+
 function isArchivedRosterMember(m) {
   return !!(m && m.archivedAt);
 }
@@ -3873,7 +3928,8 @@ function normalizeRosterMember(raw) {
     reviews: Array.isArray(m.reviews) ? m.reviews.map(normalizeReviewEntry) : [],
     awards: Array.isArray(m.awards) ? m.awards.map(normalizeAwardEntry) : [],
     archivedAt: Math.max(0, parseInt(m.archivedAt, 10) || 0),
-    archivedReason: m.archivedReason || ""
+    archivedReason: m.archivedReason || "",
+    archiveRestored: !!m.archiveRestored
   };
 }
 
@@ -4696,6 +4752,7 @@ function restoreRosterMember(rosterId) {
   if (!confirm(m.name + " さんを在籍に復帰しますか？\n（Jリーグへの再追加は📋マスターから行ってください）")) return;
   m.archivedAt = 0;
   m.archivedReason = "";
+  m.archiveRestored = true;
   saveState();
   render();
   showToast(m.name + " さんを在籍に復帰しました ✓");
