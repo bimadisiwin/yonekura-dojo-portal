@@ -146,6 +146,66 @@ body {
   font-size: 0.7rem;
 }
 
+.summary-row-early td { background: #eff6ff; }
+.summary-row-late td { background: #fdf4ff; }
+
+.summary-early { color: #1e40af; font-weight: 600; }
+.summary-late { color: #9d174d; font-weight: 600; }
+
+.legend-note {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 0.15rem 0.5rem;
+  background: var(--bg);
+  border-radius: 4px;
+}
+
+.children-input {
+  width: 100%;
+  margin-bottom: 0.35rem;
+}
+
+.children-summary {
+  font-size: 0.8125rem;
+  margin: 0.35rem 0;
+  color: var(--text-muted);
+}
+
+.summary-row-req td {
+  background: #f1f5f9;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+}
+
+.summary-row-kids td {
+  background: #fffbeb;
+  font-weight: 600;
+}
+
+.children-cell {
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.summary-day-override {
+  background: #fef3c7 !important;
+}
+
+.day-children-btn {
+  margin: 0 0.5rem 0.5rem;
+  flex-shrink: 0;
+}
+
+.modal-body input[type="time"] {
+  width: 100%;
+  margin-bottom: 0.25rem;
+}
+
+#sf-available-preview {
+  color: var(--primary);
+  font-size: 0.75rem;
+}
+
 .shift-a { background: var(--shift-a); color: #1e40af; font-weight: 700; }
 .shift-b { background: var(--shift-b); color: #166534; font-weight: 700; }
 .shift-c { background: var(--shift-c); color: #854d0e; font-weight: 700; }

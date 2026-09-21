@@ -2,7 +2,8 @@
 (function (global) {
   'use strict';
 
-  const { SHIFT_TYPES, CONSTRAINTS, PARTTIME_RULES } = global.KinmuhyoConstants;
+  const { SHIFT_TYPES, PARTTIME_RULES, EARLY_SHIFTS, LATE_SHIFTS, getAllowedShifts } = global.KinmuhyoConstants;
+  const { getRequiredForDay } = global.KinmuhyoStaffing;
 
   function daysInMonth(year, month) {
     return new Date(year, month, 0).getDate();
@@ -26,15 +27,17 @@
   }
 
   function countDayMetrics(staff, schedule, day) {
-    let childcare = 0, teachers = 0, total = 0;
+    let childcare = 0, teachers = 0, total = 0, early = 0, late = 0;
     staff.forEach(s => {
       const shift = schedule[`${s.id}:${day}`];
       if (!isWorkingShift(shift)) return;
       total++;
       if (s.isChildcareWorker) childcare++;
       if (s.hasNurseryLicense) teachers++;
+      if (EARLY_SHIFTS.includes(shift)) early++;
+      if (LATE_SHIFTS.includes(shift)) late++;
     });
-    return { childcare, teachers, total };
+    return { childcare, teachers, total, early, late };
   }
 
   function getWorkCount(staffId, schedule, dim) {
@@ -45,8 +48,7 @@
     return n;
   }
 
-  /** パート勤務日を決定 */
-  function planParttimeDays(staff, year, month, holidays) {
+  function planParttimeDays(staff, year, month) {
     const dim = daysInMonth(year, month);
     const plan = {};
 
@@ -84,32 +86,37 @@
     return plan;
   }
 
-  function pickShift(staff, dayIndex, workingStaffIds) {
-    const allowed = staff.preferredShift ? [staff.preferredShift] : ['A', 'B', 'C', 'D'];
-    const shifts = ['A', 'B', 'C', 'D'];
-    const idx = (dayIndex + staff.id.charCodeAt(staff.id.length - 1)) % shifts.length;
-    for (let i = 0; i < 4; i++) {
-      const s = shifts[(idx + i) % 4];
-      if (allowed.includes(s)) return s;
-    }
+  function pickShift(staff, dayIndex) {
+    const allowed = getAllowedShifts(staff);
+    const idx = (dayIndex + staff.id.charCodeAt(staff.id.length - 1)) % allowed.length;
+    return allowed[idx] || allowed[0] || 'B';
+  }
+
+  function pickParttimeShift(staff, rule) {
+    const allowed = getAllowedShifts(staff);
+    if (staff.preferredShift && allowed.includes(staff.preferredShift)) return staff.preferredShift;
+    if (allowed.includes(rule?.defaultShift)) return rule.defaultShift;
     return allowed[0] || 'B';
   }
 
-  function assignWeekday(staff, schedule, year, month, day, parttimePlan, dim) {
+  function assignDay(staff, schedule, year, month, day, parttimePlan, dim, appState) {
+    const req = getRequiredForDay(appState, year, month, day);
+    const needChildcare = req.childcare;
+    const needTeachers = req.teachers;
+
     const ptWorking = staff.filter(s =>
       s.employmentType === 'parttime' && parttimePlan[`${s.id}:${day}`]
     );
 
     ptWorking.forEach(s => {
       const rule = PARTTIME_RULES[s.parttimeRule];
-      schedule[`${s.id}:${day}`] = s.preferredShift || rule?.defaultShift || 'B';
+      schedule[`${s.id}:${day}`] = pickParttimeShift(s, rule);
     });
 
     const ptChildcare = ptWorking.filter(s => s.isChildcareWorker).length;
     const ftChildcare = staff.filter(s => s.employmentType === 'fulltime' && s.isChildcareWorker);
     const ftAll = staff.filter(s => s.employmentType === 'fulltime');
 
-    const needChildcare = CONSTRAINTS.minChildcareWorkersWeekday;
     const requiredFtChildcare = Math.max(0, needChildcare - ptChildcare);
     const maxFtChildcareOff = Math.max(0, ftChildcare.length - requiredFtChildcare);
 
@@ -122,7 +129,7 @@
       if (assignedOff.size >= maxFtChildcareOff) break;
       schedule[`${s.id}:${day}`] = 'off';
       const m = countDayMetrics(staff, schedule, day);
-      if (m.teachers < CONSTRAINTS.minNurseryTeachersDaily || m.childcare < needChildcare) {
+      if (m.teachers < needTeachers || m.childcare < needChildcare) {
         delete schedule[`${s.id}:${day}`];
       } else {
         assignedOff.add(s.id);
@@ -135,17 +142,17 @@
         schedule[`${s.id}:${day}`] = 'off';
         return;
       }
-      schedule[`${s.id}:${day}`] = pickShift(s, day, null);
+      schedule[`${s.id}:${day}`] = pickShift(s, day);
     });
 
     let metrics = countDayMetrics(staff, schedule, day);
-    if (metrics.teachers < CONSTRAINTS.minNurseryTeachersDaily) {
+    if (metrics.teachers < needTeachers) {
       const fixOrder = staff
         .filter(s => schedule[`${s.id}:${day}`] === 'off' && s.hasNurseryLicense)
         .sort((a, b) => getWorkCount(a.id, schedule, dim) - getWorkCount(b.id, schedule, dim));
       for (const s of fixOrder) {
-        if (metrics.teachers >= CONSTRAINTS.minNurseryTeachersDaily) break;
-        schedule[`${s.id}:${day}`] = pickShift(s, day, null);
+        if (metrics.teachers >= needTeachers) break;
+        schedule[`${s.id}:${day}`] = pickShift(s, day);
         metrics = countDayMetrics(staff, schedule, day);
       }
     }
@@ -156,40 +163,13 @@
         .sort((a, b) => getWorkCount(a.id, schedule, dim) - getWorkCount(b.id, schedule, dim));
       for (const s of fixOrder) {
         if (metrics.childcare >= needChildcare) break;
-        schedule[`${s.id}:${day}`] = pickShift(s, day, null);
+        schedule[`${s.id}:${day}`] = pickShift(s, day);
         metrics = countDayMetrics(staff, schedule, day);
       }
     }
   }
 
-  function assignWeekend(staff, schedule, year, month, day, dim) {
-    staff.forEach(s => {
-      if (schedule[`${s.id}:${day}`]) return;
-      if (getPreferredOffDays(s, year, month).includes(day)) {
-        schedule[`${s.id}:${day}`] = 'off';
-        return;
-      }
-    });
-
-    const needTeachers = CONSTRAINTS.minNurseryTeachersDaily;
-    let metrics = countDayMetrics(staff, schedule, day);
-    const candidates = staff
-      .filter(s => !schedule[`${s.id}:${day}`] && s.hasNurseryLicense)
-      .sort((a, b) => getWorkCount(a.id, schedule, dim) - getWorkCount(b.id, schedule, dim));
-
-    for (const s of candidates) {
-      if (metrics.teachers >= needTeachers) break;
-      schedule[`${s.id}:${day}`] = pickShift(s, day, null);
-      metrics = countDayMetrics(staff, schedule, day);
-    }
-
-    staff.forEach(s => {
-      if (schedule[`${s.id}:${day}`]) return;
-      schedule[`${s.id}:${day}`] = 'off';
-    });
-  }
-
-  function generateSchedule(staff, year, month) {
+  function generateSchedule(staff, year, month, appState) {
     const dim = daysInMonth(year, month);
     const schedule = {};
 
@@ -199,35 +179,38 @@
       });
     });
 
-    const parttimePlan = planParttimeDays(staff, year, month, {});
+    const parttimePlan = planParttimeDays(staff, year, month);
 
     for (let d = 1; d <= dim; d++) {
-      if (isWeekday(year, month, d)) {
-        assignWeekday(staff, schedule, year, month, d, parttimePlan, dim);
-      } else {
-        assignWeekend(staff, schedule, year, month, d, dim);
-      }
+      assignDay(staff, schedule, year, month, d, parttimePlan, dim, appState);
     }
 
     return schedule;
   }
 
-  function validateSchedule(staff, schedule, year, month) {
+  function validateSchedule(staff, schedule, year, month, appState) {
     const dim = daysInMonth(year, month);
     const issues = [];
     const daily = [];
 
     for (let d = 1; d <= dim; d++) {
       const m = countDayMetrics(staff, schedule, d);
+      const req = getRequiredForDay(appState, year, month, d);
       const weekday = isWeekday(year, month, d);
-      const childcareOk = !weekday || m.childcare >= CONSTRAINTS.minChildcareWorkersWeekday;
-      const teachersOk = m.teachers >= CONSTRAINTS.minNurseryTeachersDaily;
-      daily.push({ day: d, weekday, ...m, childcareOk, teachersOk });
-      if (weekday && !childcareOk) {
-        issues.push(`${d}日: 保育従事者 ${m.childcare}人（必要 ${CONSTRAINTS.minChildcareWorkersWeekday}人）`);
+      const childcareOk = m.childcare >= req.childcare;
+      const teachersOk = m.teachers >= req.teachers;
+      daily.push({
+        day: d, weekday, ...m,
+        reqChildcare: req.childcare,
+        reqTeachers: req.teachers,
+        totalChildren: req.totalChildren,
+        childcareOk, teachersOk,
+      });
+      if (!childcareOk) {
+        issues.push(`${d}日: 保育従事者 ${m.childcare}人（必要 ${req.childcare}人・園児${req.totalChildren}人）`);
       }
       if (!teachersOk) {
-        issues.push(`${d}日: 保育士 ${m.teachers}人（必要 ${CONSTRAINTS.minNurseryTeachersDaily}人）`);
+        issues.push(`${d}日: 保育士 ${m.teachers}人（必要 ${req.teachers}人）`);
       }
     }
 

@@ -1,0 +1,6 @@
+保育園 勤務表作成アプリ（独立リポジトリ）
+
+https://bimadisiwin.github.io/kinmuhyo-app/
+
+※ 道場ポータル（yonekura-dojo-portal）とは別リポジトリ・別 URL です
+※ リポジトリ初回作成手順: SETUP.md
