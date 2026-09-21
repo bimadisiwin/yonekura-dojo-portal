@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>勤務表作成アプリ</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>📋 勤務表作成</h1>
+        <p>月次勤務表管理システム</p>
+      </div>
+
+      <div class="sidebar-section">
+        <h2>スタッフ追加</h2>
+        <div class="form-row">
+          <input type="text" id="input-staff-name" placeholder="名前" maxlength="30">
+        </div>
+        <div class="form-row">
+          <input type="text" id="input-staff-dept" placeholder="部署" maxlength="30">
+        </div>
+        <button class="btn btn-primary" id="btn-add-staff" style="width:100%">＋ スタッフ追加</button>
+      </div>
+
+      <div class="sidebar-section" style="flex:1">
+        <h2>スタッフ一覧</h2>
+        <ul class="staff-list" id="staff-list"></ul>
+      </div>
+
+      <div class="sidebar-footer">
+        データはブラウザに自動保存されます
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <button class="btn btn-icon" id="btn-prev-month" title="前月">◀</button>
+          <span class="month-label" id="month-label">2026年 9月</span>
+          <button class="btn btn-icon" id="btn-next-month" title="次月">▶</button>
+          <button class="btn" id="btn-today">今月</button>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <div class="toolbar-group">
+          <button class="btn" id="btn-export">CSV出力</button>
+          <button class="btn" id="btn-print">印刷</button>
+          <button class="btn" id="btn-reset" title="データリセット">リセット</button>
+        </div>
+      </div>
+
+      <div class="legend" id="legend"></div>
+
+      <div class="schedule-wrap">
+        <table class="schedule-table">
+          <thead id="schedule-head"></thead>
+          <tbody id="schedule-body"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- Shift picker modal -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header" id="modal-title">勤務区分を選択</div>
+      <div class="modal-body">
+        <div class="shift-options" id="shift-options"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="modal-close">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
