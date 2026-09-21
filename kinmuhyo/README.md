@@ -1,44 +1,20 @@
-# 保育園 勤務表作成アプリ
+# 勤務表アプリ — 移行済み
 
-保育園の月次勤務表を、職員配置ルールと希望休を考慮して自動生成するWebアプリケーション。
+保育園勤務表アプリは **独立リポジトリ** に移行しました。
 
-> **道場ポータル（yonekura-dojo-portal）とは別リポジトリです。**
-
-## 公開URL（GitHub Pages 設定後）
+## 新しい公開 URL
 
 ```
 https://bimadisiwin.github.io/kinmuhyo-app/
 ```
 
-## 機能
+## リポジトリ
 
-- 15名の職員管理（常勤13・パート2・看護師1）
-- 勤務体系 A/B/C/D、希望休、自動生成
-- 制約: 平日 保育従事者 ≥ 10人、毎日 保育士 ≥ 7人
-- スマホ対応（日別ビュー・ボトムナビ）
+- **アプリ本体:** [bimadisiwin/kinmuhyo-app](https://github.com/bimadisiwin/kinmuhyo-app)（要作成 → SETUP.md 参照）
+- **エクスポート元:** `cursor/kinmuhyo-standalone-45a3` ブランチ（yonekura-dojo-portal）
 
-## ローカル起動
+## セットアップ
 
-```bash
-python3 -m http.server 8000
-# http://localhost:8000/index.html
-```
+GitHub で空の `kinmuhyo-app` リポジトリを作成後、[SETUP.md](./SETUP.md) の手順でプッシュしてください。
 
-## リポジトリの初回セットアップ
-
-GitHub で空のリポジトリ `kinmuhyo-app` を作成後:
-
-```bash
-git clone https://github.com/bimadisiwin/yonekura-dojo-portal.git temp-clone
-cd temp-clone
-git checkout cursor/kinmuhyo-standalone-45a3
-git remote rename origin old-origin
-git remote add origin https://github.com/bimadisiwin/kinmuhyo-app.git
-git push -u origin cursor/kinmuhyo-standalone-45a3:main
-```
-
-GitHub → Settings → Pages → Branch: `main` → Save
-
-## ライセンス
-
-MIT
+このフォルダ（`yonekura-dojo-portal/kinmuhyo/`）は移行案内ページのみ残しています。

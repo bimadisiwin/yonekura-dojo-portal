@@ -1,14 +1,11 @@
-# 独立リポジトリのセットアップ手順
-
-道場ポータルと完全に分離して運用するための手順です。
+# 独立リポジトリ kinmuhyo-app のセットアップ
 
 ## 1. GitHub で新規リポジトリを作成
 
-1. https://github.com/new を開く
-2. Repository name: `kinmuhyo-app`
-3. Public を選択
-4. **README 等は追加しない**（空のリポジトリ）
-5. Create repository
+1. https://github.com/new
+2. Repository name: **`kinmuhyo-app`**
+3. Public、**README 等は追加しない**
+4. Create repository
 
 ## 2. コードをプッシュ
 
@@ -21,21 +18,14 @@ git remote add origin https://github.com/bimadisiwin/kinmuhyo-app.git
 git push -u origin cursor/kinmuhyo-standalone-45a3:main
 ```
 
-## 3. GitHub Pages を有効化
+## 3. GitHub Pages
 
-1. `kinmuhyo-app` リポジトリ → **Settings** → **Pages**
-2. Source: **Deploy from a branch**
-3. Branch: **main** / **/ (root)**
-4. Save
+Settings → Pages → Branch: **main** / **/ (root)** → Save
 
-数分後、次のURLで公開されます:
+公開 URL: **https://bimadisiwin.github.io/kinmuhyo-app/**
 
-**https://bimadisiwin.github.io/kinmuhyo-app/**
-
-## 4. 先方への共有URL
+## 4. 先方への共有
 
 ```
 https://bimadisiwin.github.io/kinmuhyo-app/
 ```
-
-スマホ: ブラウザで開き → 「ホーム画面に追加」
