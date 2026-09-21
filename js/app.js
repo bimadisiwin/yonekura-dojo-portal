@@ -8,6 +8,79 @@
   let state = loadState();
   let modalContext = null;
   let staffEditId = null;
+  let mobileDay = Math.min(new Date().getDate(), S.daysInMonth(state.year, state.month));
+
+  function isMobileLayout() {
+    return window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  function setMobileTab(tab) {
+    document.body.dataset.mobileTab = tab;
+    document.querySelectorAll('.bottom-nav-item').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    if (tab === 'day') renderDayView();
+  }
+
+  function syncMobileDay() {
+    const dim = S.daysInMonth(state.year, state.month);
+    if (mobileDay > dim) mobileDay = dim;
+    if (mobileDay < 1) mobileDay = 1;
+  }
+
+  function changeMobileDay(delta) {
+    syncMobileDay();
+    mobileDay += delta;
+    const dim = S.daysInMonth(state.year, state.month);
+    if (mobileDay > dim) {
+      changeMonth(1);
+      mobileDay = 1;
+    } else if (mobileDay < 1) {
+      changeMonth(-1);
+      mobileDay = S.daysInMonth(state.year, state.month);
+    } else {
+      renderDayView();
+    }
+  }
+
+  function renderDayView() {
+    const el = document.getElementById('day-view-date');
+    const metricsEl = document.getElementById('day-view-metrics');
+    const listEl = document.getElementById('day-staff-list');
+    if (!el || !listEl) return;
+
+    syncMobileDay();
+    const { year, month } = state;
+    const schedule = getSchedule(year, month);
+    const date = new Date(year, month - 1, mobileDay);
+    const dow = DOW[date.getDay()];
+    el.textContent = `${month}月${mobileDay}日 (${dow})`;
+
+    const m = S.countDayMetrics(state.staff, schedule, mobileDay);
+    const weekday = S.isWeekday(year, month, mobileDay);
+    const childcareOk = !weekday || m.childcare >= CONSTRAINTS.minChildcareWorkersWeekday;
+    const teachersOk = m.teachers >= CONSTRAINTS.minNurseryTeachersDaily;
+    metricsEl.className = 'day-view-metrics ' + (childcareOk && teachersOk ? 'ok' : 'ng');
+    metricsEl.innerHTML = weekday
+      ? `保育従事者 <strong>${m.childcare}</strong>/${CONSTRAINTS.minChildcareWorkersWeekday} · 保育士 <strong>${m.teachers}</strong>/${CONSTRAINTS.minNurseryTeachersDaily}`
+      : `保育士 <strong>${m.teachers}</strong>/${CONSTRAINTS.minNurseryTeachersDaily}（土日）`;
+
+    listEl.innerHTML = '';
+    state.staff.forEach(staff => {
+      const shift = schedule[`${staff.id}:${mobileDay}`];
+      const shiftDef = shift && SHIFT_TYPES[shift];
+      const li = document.createElement('li');
+      li.className = 'day-staff-card';
+      li.dataset.staff = staff.id;
+      li.innerHTML = `
+        <div class="day-staff-card-info">
+          <div class="day-staff-card-name">${staffBadge(staff)} ${escapeHtml(staff.name)}</div>
+          <div class="day-staff-card-role">${escapeHtml(ROLES[staff.role]?.label || '')}</div>
+        </div>
+        <div class="day-staff-card-shift ${shiftDef ? shiftDef.className : 'shift-off'}">${shiftDef ? shiftDef.short : '—'}</div>`;
+      listEl.appendChild(li);
+    });
+  }
 
   function getJapaneseHolidays(year) {
     const fixed = {
@@ -198,6 +271,7 @@
       tfoot.innerHTML = `<tr class="summary-row">${footChild}</tr><tr class="summary-row">${footTeacher}</tr>`;
       renderConstraintPanel(validation);
     }
+    if (isMobileLayout()) renderDayView();
   }
 
   function renderConstraintPanel(validation) {
@@ -214,9 +288,13 @@
   }
 
   function renderLegend() {
-    document.getElementById('legend').innerHTML = Object.entries(SHIFT_TYPES).map(([, s]) =>
+    const html = Object.entries(SHIFT_TYPES).map(([, s]) =>
       `<span class="legend-item"><span class="legend-swatch ${s.className}"></span>${s.label}</span>`
     ).join('');
+    const legend = document.getElementById('legend');
+    if (legend) legend.innerHTML = html;
+    const legendMobile = document.getElementById('legend-mobile');
+    if (legendMobile) legendMobile.innerHTML = html;
   }
 
   function toggleParttimeFields() {
@@ -343,6 +421,7 @@
     state.month += delta;
     if (state.month > 12) { state.month = 1; state.year++; }
     if (state.month < 1) { state.month = 12; state.year--; }
+    syncMobileDay();
     saveState();
     renderSchedule();
   }
@@ -388,11 +467,28 @@
       const now = new Date();
       state.year = now.getFullYear();
       state.month = now.getMonth() + 1;
+      mobileDay = now.getDate();
       saveState();
       renderSchedule();
     });
     document.getElementById('btn-generate').addEventListener('click', autoGenerate);
+    document.getElementById('btn-generate-mobile')?.addEventListener('click', autoGenerate);
+    document.getElementById('fab-generate')?.addEventListener('click', autoGenerate);
     document.getElementById('btn-export').addEventListener('click', exportCSV);
+    document.getElementById('btn-export-mobile')?.addEventListener('click', exportCSV);
+    document.getElementById('btn-reset-mobile')?.addEventListener('click', resetData);
+    document.getElementById('btn-day-prev')?.addEventListener('click', () => changeMobileDay(-1));
+    document.getElementById('btn-day-next')?.addEventListener('click', () => changeMobileDay(1));
+
+    document.getElementById('bottom-nav')?.addEventListener('click', e => {
+      const btn = e.target.closest('.bottom-nav-item');
+      if (btn) setMobileTab(btn.dataset.tab);
+    });
+
+    document.getElementById('day-staff-list')?.addEventListener('click', e => {
+      const card = e.target.closest('.day-staff-card');
+      if (card) openShiftModal(card.dataset.staff, mobileDay);
+    });
     document.getElementById('btn-print').addEventListener('click', () => window.print());
     document.getElementById('btn-reset').addEventListener('click', resetData);
     document.getElementById('btn-add-staff').addEventListener('click', () => openStaffModal(null));
@@ -421,6 +517,7 @@
       setCellShift(modalContext.staffId, state.year, state.month, modalContext.day, opt.dataset.shift || null);
       closeModal();
       renderSchedule();
+      if (isMobileLayout() && modalContext.day === mobileDay) renderDayView();
       showToast('更新しました ✓');
     });
 
@@ -431,11 +528,25 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeStaffModal(); } });
   }
 
+  function initMobile() {
+    if (isMobileLayout()) {
+      document.body.dataset.mobileTab = 'day';
+      setMobileTab('day');
+    } else {
+      delete document.body.dataset.mobileTab;
+    }
+  }
+
   function init() {
     renderLegend();
     renderStaffList();
     renderSchedule();
     bindEvents();
+    initMobile();
+    window.addEventListener('resize', () => {
+      initMobile();
+      if (isMobileLayout()) renderDayView();
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

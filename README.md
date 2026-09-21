@@ -21,7 +21,23 @@
 - **手動修正** — セルクリックで A/B/C/D/休/有給 を個別変更
 - **CSV出力・印刷**
 
-## 起動方法
+## スマホで使う
+
+1. **GitHub Pages で公開**（推奨）  
+   リポジトリ Settings → Pages → Branch を `cursor/kinmuhyo-app-prototype-45a3` に設定  
+   スマホブラウザで **https://bimadisiwin.github.io/yonekura-dojo-portal/** を開く
+
+2. **ホーム画面に追加**（iPhone / Android）  
+   ブラウザの「ホーム画面に追加」でアプリのように起動できます
+
+3. **スマホ向けUI**  
+   - **日別**タブ … 1日分をリスト表示（タップで勤務変更）  
+   - **月間**タブ … 従来の一覧表（左右スワイプ）  
+   - **職員**タブ … 職員・希望休の編集  
+   - **操作**タブ … 自動生成・CSV出力  
+   - 右下 **⚡** ボタン … ワンタップ自動生成
+
+## 起動方法（PC）
 
 ```bash
 python3 -m http.server 8000
