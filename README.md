@@ -35,6 +35,19 @@ python3 -m http.server 8000
 - ビルド不要
 - データ永続化: localStorage
 
+## 独立リポジトリとして公開する場合
+
+GitHub で新規リポジトリ（例: `kinmuhyo-app`）を作成後、以下のコマンドでこのブランチの内容をプッシュできます:
+
+```bash
+git clone https://github.com/bimadisiwin/yonekura-dojo-portal.git
+cd yonekura-dojo-portal
+git checkout cursor/kinmuhyo-app-prototype-45a3
+git remote rename origin old-origin
+git remote add origin https://github.com/bimadisiwin/kinmuhyo-app.git
+git push -u origin cursor/kinmuhyo-app-prototype-45a3:main
+```
+
 ## ライセンス
 
 MIT
