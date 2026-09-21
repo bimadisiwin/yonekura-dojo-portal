@@ -10,8 +10,8 @@
 
   const SHIFT_TYPES = {
     A: { label: 'A (7:00-16:00)', short: 'A', className: 'shift-a', start: 7, end: 16, isWork: true, band: 'early' },
-    B: { label: 'B (8:00-17:00)', short: 'B', className: 'shift-b', start: 8, end: 17, isWork: true, band: 'early' },
-    C: { label: 'C (9:00-18:00)', short: 'C', className: 'shift-c', start: 9, end: 18, isWork: true, band: 'late' },
+    B: { label: 'B (8:00-17:00)', short: 'B', className: 'shift-b', start: 8, end: 17, isWork: true, band: 'middle' },
+    C: { label: 'C (9:00-18:00)', short: 'C', className: 'shift-c', start: 9, end: 18, isWork: true, band: 'middle' },
     D: { label: 'D (10:00-19:00)', short: 'D', className: 'shift-d', start: 10, end: 19, isWork: true, band: 'late' },
     off:  { label: '休日', short: '休', className: 'shift-off',  isWork: false },
     paid: { label: '有給', short: '有', className: 'shift-paid', isWork: false, countsAsPaid: true },

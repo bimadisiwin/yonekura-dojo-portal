@@ -164,33 +164,6 @@
     }
   }
 
-  function assignWeekend(staff, schedule, year, month, day, dim) {
-    staff.forEach(s => {
-      if (schedule[`${s.id}:${day}`]) return;
-      if (getPreferredOffDays(s, year, month).includes(day)) {
-        schedule[`${s.id}:${day}`] = 'off';
-        return;
-      }
-    });
-
-    const needTeachers = CONSTRAINTS.minNurseryTeachersDaily;
-    let metrics = countDayMetrics(staff, schedule, day);
-    const candidates = staff
-      .filter(s => !schedule[`${s.id}:${day}`] && s.hasNurseryLicense)
-      .sort((a, b) => getWorkCount(a.id, schedule, dim) - getWorkCount(b.id, schedule, dim));
-
-    for (const s of candidates) {
-      if (metrics.teachers >= needTeachers) break;
-      schedule[`${s.id}:${day}`] = pickShift(s, day, null);
-      metrics = countDayMetrics(staff, schedule, day);
-    }
-
-    staff.forEach(s => {
-      if (schedule[`${s.id}:${day}`]) return;
-      schedule[`${s.id}:${day}`] = 'off';
-    });
-  }
-
   function generateSchedule(staff, year, month) {
     const dim = daysInMonth(year, month);
     const schedule = {};
@@ -204,11 +177,9 @@
     const parttimePlan = planParttimeDays(staff, year, month, {});
 
     for (let d = 1; d <= dim; d++) {
-      if (isWeekday(year, month, d)) {
-        assignWeekday(staff, schedule, year, month, d, parttimePlan, dim);
-      } else {
-        assignWeekend(staff, schedule, year, month, d, dim);
-      }
+      // 土日も平日と同じ制約（保育従事者10人・保育士7人）で配置
+      // パートは平日のみ planParttimeDays で割当
+      assignWeekday(staff, schedule, year, month, d, parttimePlan, dim);
     }
 
     return schedule;
@@ -222,11 +193,12 @@
     for (let d = 1; d <= dim; d++) {
       const m = countDayMetrics(staff, schedule, d);
       const weekday = isWeekday(year, month, d);
-      const childcareOk = !weekday || m.childcare >= CONSTRAINTS.minChildcareWorkersWeekday;
+      const childcareOk = m.childcare >= CONSTRAINTS.minChildcareWorkersWeekday;
       const teachersOk = m.teachers >= CONSTRAINTS.minNurseryTeachersDaily;
       daily.push({ day: d, weekday, ...m, childcareOk, teachersOk });
-      if (weekday && !childcareOk) {
-        issues.push(`${d}日: 保育従事者 ${m.childcare}人（必要 ${CONSTRAINTS.minChildcareWorkersWeekday}人）`);
+      if (!childcareOk) {
+        const label = weekday ? `${d}日` : `${d}日(土日)`;
+        issues.push(`${label}: 保育従事者 ${m.childcare}人（必要 ${CONSTRAINTS.minChildcareWorkersWeekday}人）`);
       }
       if (!teachersOk) {
         issues.push(`${d}日: 保育士 ${m.teachers}人（必要 ${CONSTRAINTS.minNurseryTeachersDaily}人）`);
