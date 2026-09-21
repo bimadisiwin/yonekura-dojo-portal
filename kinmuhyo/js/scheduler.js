@@ -2,7 +2,7 @@
 (function (global) {
   'use strict';
 
-  const { SHIFT_TYPES, CONSTRAINTS, PARTTIME_RULES } = global.KinmuhyoConstants;
+  const { SHIFT_TYPES, CONSTRAINTS, PARTTIME_RULES, EARLY_SHIFTS, LATE_SHIFTS } = global.KinmuhyoConstants;
 
   function daysInMonth(year, month) {
     return new Date(year, month, 0).getDate();
@@ -26,15 +26,17 @@
   }
 
   function countDayMetrics(staff, schedule, day) {
-    let childcare = 0, teachers = 0, total = 0;
+    let childcare = 0, teachers = 0, total = 0, early = 0, late = 0;
     staff.forEach(s => {
       const shift = schedule[`${s.id}:${day}`];
       if (!isWorkingShift(shift)) return;
       total++;
       if (s.isChildcareWorker) childcare++;
       if (s.hasNurseryLicense) teachers++;
+      if (EARLY_SHIFTS.includes(shift)) early++;
+      if (LATE_SHIFTS.includes(shift)) late++;
     });
-    return { childcare, teachers, total };
+    return { childcare, teachers, total, early, late };
   }
 
   function getWorkCount(staffId, schedule, dim) {

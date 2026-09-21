@@ -3,7 +3,7 @@
 
   const C = window.KinmuhyoConstants;
   const S = window.KinmuhyoScheduler;
-  const { STORAGE_KEY, SHIFT_TYPES, CONSTRAINTS, ROLES, EMPLOYMENT, PARTTIME_RULES, DOW, createStaff, SEED_DATA } = C;
+  const { STORAGE_KEY, SHIFT_TYPES, CONSTRAINTS, ROLES, EMPLOYMENT, PARTTIME_RULES, DOW, EARLY_SHIFTS, LATE_SHIFTS, createStaff, SEED_DATA } = C;
 
   let state = loadState();
   let modalContext = null;
@@ -62,8 +62,8 @@
     const teachersOk = m.teachers >= CONSTRAINTS.minNurseryTeachersDaily;
     metricsEl.className = 'day-view-metrics ' + (childcareOk && teachersOk ? 'ok' : 'ng');
     metricsEl.innerHTML = weekday
-      ? `保育従事者 <strong>${m.childcare}</strong>/${CONSTRAINTS.minChildcareWorkersWeekday} · 保育士 <strong>${m.teachers}</strong>/${CONSTRAINTS.minNurseryTeachersDaily}`
-      : `保育士 <strong>${m.teachers}</strong>/${CONSTRAINTS.minNurseryTeachersDaily}（土日）`;
+      ? `保育従事者 <strong>${m.childcare}</strong>/${CONSTRAINTS.minChildcareWorkersWeekday} · 保育士 <strong>${m.teachers}</strong>/${CONSTRAINTS.minNurseryTeachersDaily} · 早番 <strong>${m.early}</strong> · 遅番 <strong>${m.late}</strong>`
+      : `保育士 <strong>${m.teachers}</strong>/${CONSTRAINTS.minNurseryTeachersDaily} · 早番 <strong>${m.early}</strong> · 遅番 <strong>${m.late}</strong>（土日）`;
 
     listEl.innerHTML = '';
     state.staff.forEach(staff => {
@@ -166,15 +166,18 @@
 
   function calcSummary(staffId, year, month) {
     const dim = S.daysInMonth(year, month);
-    let work = 0, paid = 0, off = 0;
+    let work = 0, paid = 0, off = 0, early = 0, late = 0;
     for (let d = 1; d <= dim; d++) {
       const shift = getCellShift(staffId, year, month, d);
       if (!shift || !SHIFT_TYPES[shift]) continue;
-      if (SHIFT_TYPES[shift].isWork) work++;
-      else if (shift === 'paid') paid++;
+      if (SHIFT_TYPES[shift].isWork) {
+        work++;
+        if (EARLY_SHIFTS.includes(shift)) early++;
+        if (LATE_SHIFTS.includes(shift)) late++;
+      } else if (shift === 'paid') paid++;
       else if (shift === 'off') off++;
     }
-    return { work, paid, off };
+    return { work, paid, off, early, late };
   }
 
   function renderStaffList() {
@@ -220,7 +223,7 @@
       else if (dow === 6) cls += ' sat';
       headRow += `<th class="${cls}"><div>${d}</div><div class="dow">${DOW[dow]}</div></th>`;
     }
-    headRow += '<th class="col-summary">出勤</th><th class="col-summary">休日</th>';
+    headRow += '<th class="col-summary">出勤</th><th class="col-summary">早番</th><th class="col-summary">遅番</th><th class="col-summary">休日</th>';
     thead.innerHTML = `<tr>${headRow}</tr>`;
     document.getElementById('month-label').textContent = `${year}年 ${month}月`;
 
@@ -251,7 +254,7 @@
       }
 
       const sum = calcSummary(staff.id, year, month);
-      cells += `<td class="col-summary">${sum.work}</td><td class="col-summary">${sum.off + sum.paid}</td>`;
+      cells += `<td class="col-summary">${sum.work}</td><td class="col-summary summary-early">${sum.early}</td><td class="col-summary summary-late">${sum.late}</td><td class="col-summary">${sum.off + sum.paid}</td>`;
       tr.innerHTML = cells;
       tbody.appendChild(tr);
     });
@@ -260,15 +263,27 @@
       const validation = S.validateSchedule(state.staff, schedule, year, month);
       let footChild = '<td class="col-staff"><strong>保育従事者</strong></td>';
       let footTeacher = '<td class="col-staff"><strong>保育士</strong></td>';
+      let footEarly = '<td class="col-staff"><strong>早番</strong></td>';
+      let footLate = '<td class="col-staff"><strong>遅番</strong></td>';
       validation.daily.forEach(row => {
         const cc = row.childcareOk ? '' : ' constraint-ng';
         const tc = row.teachersOk ? '' : ' constraint-ng';
         footChild += `<td class="col-summary${cc}">${row.childcare}</td>`;
         footTeacher += `<td class="col-summary${tc}">${row.teachers}</td>`;
+        footEarly += `<td class="col-summary summary-early">${row.early}</td>`;
+        footLate += `<td class="col-summary summary-late">${row.late}</td>`;
       });
-      footChild += '<td colspan="2"></td>';
-      footTeacher += '<td colspan="2"></td>';
-      tfoot.innerHTML = `<tr class="summary-row">${footChild}</tr><tr class="summary-row">${footTeacher}</tr>`;
+      const sumColspan = '<td colspan="4"></td>';
+      footChild += sumColspan;
+      footTeacher += sumColspan;
+      footEarly += sumColspan;
+      footLate += sumColspan;
+      tfoot.innerHTML = [
+        `<tr class="summary-row">${footChild}</tr>`,
+        `<tr class="summary-row">${footTeacher}</tr>`,
+        `<tr class="summary-row summary-row-early">${footEarly}</tr>`,
+        `<tr class="summary-row summary-row-late">${footLate}</tr>`,
+      ].join('');
       renderConstraintPanel(validation);
     }
     if (isMobileLayout()) renderDayView();
@@ -290,7 +305,7 @@
   function renderLegend() {
     const html = Object.entries(SHIFT_TYPES).map(([, s]) =>
       `<span class="legend-item"><span class="legend-swatch ${s.className}"></span>${s.label}</span>`
-    ).join('');
+    ).join('') + `<span class="legend-item legend-note">早番=A,B / 遅番=C,D</span>`;
     const legend = document.getElementById('legend');
     if (legend) legend.innerHTML = html;
     const legendMobile = document.getElementById('legend-mobile');
@@ -429,7 +444,7 @@
   function exportCSV() {
     const { year, month } = state;
     const dim = S.daysInMonth(year, month);
-    const headers = ['職員', '区分', '資格', ...Array.from({ length: dim }, (_, i) => `${i + 1}日`), '出勤', '休日'];
+    const headers = ['職員', '区分', '資格', ...Array.from({ length: dim }, (_, i) => `${i + 1}日`), '出勤', '早番', '遅番', '休日'];
     const rows = [headers];
     state.staff.forEach(staff => {
       const row = [staff.name, EMPLOYMENT[staff.employmentType]?.label, staff.hasNurseryLicense ? '保育士' : ''];
@@ -438,7 +453,7 @@
         row.push(shift ? SHIFT_TYPES[shift].label : '');
       }
       const sum = calcSummary(staff.id, year, month);
-      row.push(sum.work, sum.off + sum.paid);
+      row.push(sum.work, sum.early, sum.late, sum.off + sum.paid);
       rows.push(row);
     });
     const bom = '\uFEFF';

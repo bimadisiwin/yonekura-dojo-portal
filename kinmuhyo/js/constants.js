@@ -4,11 +4,15 @@
 
   const STORAGE_KEY = 'kinmuhyo-state-v2';
 
+  /** 早番: A/B（〜17時終了）  遅番: C/D（18時以降終了） */
+  const EARLY_SHIFTS = ['A', 'B'];
+  const LATE_SHIFTS = ['C', 'D'];
+
   const SHIFT_TYPES = {
-    A: { label: 'A (7:00-16:00)', short: 'A', className: 'shift-a', start: 7, end: 16, isWork: true },
-    B: { label: 'B (8:00-17:00)', short: 'B', className: 'shift-b', start: 8, end: 17, isWork: true },
-    C: { label: 'C (9:00-18:00)', short: 'C', className: 'shift-c', start: 9, end: 18, isWork: true },
-    D: { label: 'D (10:00-19:00)', short: 'D', className: 'shift-d', start: 10, end: 19, isWork: true },
+    A: { label: 'A (7:00-16:00)', short: 'A', className: 'shift-a', start: 7, end: 16, isWork: true, band: 'early' },
+    B: { label: 'B (8:00-17:00)', short: 'B', className: 'shift-b', start: 8, end: 17, isWork: true, band: 'early' },
+    C: { label: 'C (9:00-18:00)', short: 'C', className: 'shift-c', start: 9, end: 18, isWork: true, band: 'late' },
+    D: { label: 'D (10:00-19:00)', short: 'D', className: 'shift-d', start: 10, end: 19, isWork: true, band: 'late' },
     off:  { label: '休日', short: '休', className: 'shift-off',  isWork: false },
     paid: { label: '有給', short: '有', className: 'shift-paid', isWork: false, countsAsPaid: true },
   };
@@ -77,6 +81,6 @@
 
   global.KinmuhyoConstants = {
     STORAGE_KEY, SHIFT_TYPES, CONSTRAINTS, ROLES, EMPLOYMENT, PARTTIME_RULES, DOW,
-    createStaff, SEED_DATA,
+    EARLY_SHIFTS, LATE_SHIFTS, createStaff, SEED_DATA,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
