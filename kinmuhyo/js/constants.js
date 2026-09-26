@@ -41,12 +41,49 @@
 
   const DOW = ['日', '月', '火', '水', '木', '金', '土'];
   const WORK_SHIFTS = ['A', 'B', 'C', 'D'];
+  const DEFAULT_AVAILABLE = { start: '07:00', end: '19:00' };
+
+  function parseTimeToMinutes(timeStr) {
+    if (!timeStr) return 0;
+    const [h, m] = timeStr.split(':').map(Number);
+    return h * 60 + (m || 0);
+  }
+
+  function formatAvailableHours(staff) {
+    const start = staff.availableStart || DEFAULT_AVAILABLE.start;
+    const end = staff.availableEnd || DEFAULT_AVAILABLE.end;
+    return `${start}〜${end}`;
+  }
+
+  /** 入れる時間帯と勤務体系が重なるシフトを返す */
+  function canWorkShift(staff, shiftKey) {
+    const aStart = parseTimeToMinutes(staff.availableStart || DEFAULT_AVAILABLE.start);
+    const aEnd = parseTimeToMinutes(staff.availableEnd || DEFAULT_AVAILABLE.end);
+    const sh = SHIFT_TYPES[shiftKey];
+    if (!sh?.isWork) return false;
+    const shStart = sh.start * 60;
+    const shEnd = sh.end * 60;
+    return aStart < shEnd && aEnd > shStart;
+  }
 
   function getAllowedShifts(staff) {
-    const allowed = (staff.allowedShifts || []).filter(s => WORK_SHIFTS.includes(s));
-    if (allowed.length) return allowed;
-    if (staff.preferredShift && WORK_SHIFTS.includes(staff.preferredShift)) return [staff.preferredShift];
-    return WORK_SHIFTS.slice();
+    return WORK_SHIFTS.filter(key => canWorkShift(staff, key));
+  }
+
+  function migrateStaffAvailability(staff) {
+    if (staff.availableStart && staff.availableEnd) return;
+    if (staff.allowedShifts?.length) {
+      const shifts = staff.allowedShifts.filter(s => WORK_SHIFTS.includes(s));
+      if (shifts.length) {
+        const starts = shifts.map(s => SHIFT_TYPES[s].start);
+        const ends = shifts.map(s => SHIFT_TYPES[s].end);
+        staff.availableStart = `${String(Math.min(...starts)).padStart(2, '0')}:00`;
+        staff.availableEnd = `${String(Math.max(...ends)).padStart(2, '0')}:00`;
+        return;
+      }
+    }
+    staff.availableStart = DEFAULT_AVAILABLE.start;
+    staff.availableEnd = DEFAULT_AVAILABLE.end;
   }
 
   function createStaff(overrides) {
@@ -61,7 +98,8 @@
       isChildcareWorker: roleDef.isChildcareWorker,
       parttimeRule: overrides.parttimeRule || null,
       preferredShift: overrides.preferredShift || null,
-      allowedShifts: overrides.allowedShifts || WORK_SHIFTS.slice(),
+      availableStart: overrides.availableStart || DEFAULT_AVAILABLE.start,
+      availableEnd: overrides.availableEnd || DEFAULT_AVAILABLE.end,
       preferredOff: overrides.preferredOff || {},
     };
   }
@@ -78,11 +116,11 @@
       createStaff({ id: 's08', name: '中村 智子', employmentType: 'fulltime', role: 'nursery_teacher', hasNurseryLicense: true }),
       createStaff({ id: 's09', name: '小林 奈々', employmentType: 'fulltime', role: 'nursery_teacher', hasNurseryLicense: true }),
       createStaff({ id: 's10', name: '加藤 久美', employmentType: 'fulltime', role: 'nursery_teacher', hasNurseryLicense: true }),
-      createStaff({ id: 's11', name: '吉田 さおり', employmentType: 'fulltime', role: 'childcare_staff', hasNurseryLicense: false, allowedShifts: ['A', 'B', 'C'] }),
-      createStaff({ id: 's12', name: '山田 健太', employmentType: 'fulltime', role: 'childcare_staff', hasNurseryLicense: false, allowedShifts: ['B', 'C', 'D'] }),
+      createStaff({ id: 's11', name: '吉田 さおり', employmentType: 'fulltime', role: 'childcare_staff', hasNurseryLicense: false, availableStart: '07:00', availableEnd: '16:00' }),
+      createStaff({ id: 's12', name: '山田 健太', employmentType: 'fulltime', role: 'childcare_staff', hasNurseryLicense: false, availableStart: '09:00', availableEnd: '19:00' }),
       createStaff({ id: 's13', name: '松本 洋子', employmentType: 'fulltime', role: 'nurse', hasNurseryLicense: false }),
-      createStaff({ id: 's14', name: '井上 春子', employmentType: 'parttime', role: 'nursery_teacher', hasNurseryLicense: true, parttimeRule: 'monthly_10', preferredShift: 'B', allowedShifts: ['B'] }),
-      createStaff({ id: 's15', name: '木村 幸子', employmentType: 'parttime', role: 'nursery_teacher', hasNurseryLicense: true, parttimeRule: 'weekly_4', preferredShift: 'B', allowedShifts: ['B'] }),
+      createStaff({ id: 's14', name: '井上 春子', employmentType: 'parttime', role: 'nursery_teacher', hasNurseryLicense: true, parttimeRule: 'monthly_10', preferredShift: 'B', availableStart: '09:00', availableEnd: '17:00' }),
+      createStaff({ id: 's15', name: '木村 幸子', employmentType: 'parttime', role: 'nursery_teacher', hasNurseryLicense: true, parttimeRule: 'weekly_4', preferredShift: 'B', availableStart: '08:00', availableEnd: '17:00' }),
     ],
     schedules: {},
     children: {},
@@ -92,6 +130,8 @@
 
   global.KinmuhyoConstants = {
     STORAGE_KEY, SHIFT_TYPES, CONSTRAINTS, ROLES, EMPLOYMENT, PARTTIME_RULES, DOW,
-    EARLY_SHIFTS, LATE_SHIFTS, WORK_SHIFTS, getAllowedShifts, createStaff, SEED_DATA,
+    EARLY_SHIFTS, LATE_SHIFTS, WORK_SHIFTS, DEFAULT_AVAILABLE,
+    parseTimeToMinutes, formatAvailableHours, canWorkShift, getAllowedShifts, migrateStaffAvailability,
+    createStaff, SEED_DATA,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
