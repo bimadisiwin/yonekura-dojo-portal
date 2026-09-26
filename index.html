@@ -8103,11 +8103,6 @@ function getPrePlayoffParticipants() {
   return tied7.length > 1 ? tied7 : [];
 }
 
-function playerIdAtRank(sortedPlayers, rank) {
-  var found = sortedPlayers.filter(function(p) { return p.rank === rank; });
-  return found.length ? found[0].id : "";
-}
-
 function getJ1J2PlayoffParticipants() {
   var j1 = getLeague("j1");
   var j2 = getLeague("j2");
