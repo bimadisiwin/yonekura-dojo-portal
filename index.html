@@ -8110,13 +8110,12 @@ function getJ1J2PlayoffParticipants() {
   var j1s = computeStats(j1).sorted.filter(function(p) { return p.active !== false && p.played > 0; });
   var j2s = computeStats(j2).sorted.filter(function(p) { return p.active !== false && p.played > 0; });
   var out = [];
-  [1, 2].forEach(function(rank) {
-    var p = j2s.filter(function(x) { return x.rank === rank; })[0];
-    if (p) out.push(Object.assign({}, p, { playoffSide: "J2上位" }));
+  j2s.slice(0, 2).forEach(function(p) {
+    out.push(Object.assign({}, p, { playoffSide: "J2上位" }));
   });
-  [6, 7].forEach(function(rank) {
-    var p = j1s.filter(function(x) { return x.rank === rank; })[0];
-    if (p) out.push(Object.assign({}, p, { playoffSide: "J1下位" }));
+  // 6位同点など rank 番号が重複しても、順位表の並び6・7番目を採用する
+  j1s.slice(5, 7).forEach(function(p) {
+    out.push(Object.assign({}, p, { playoffSide: "J1下位" }));
   });
   return out;
 }
