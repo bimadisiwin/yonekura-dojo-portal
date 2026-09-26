@@ -8103,17 +8103,64 @@ function getPrePlayoffParticipants() {
   return tied7.length > 1 ? tied7 : [];
 }
 
+function playerIdAtRank(sortedPlayers, rank) {
+  var found = sortedPlayers.filter(function(p) { return p.rank === rank; });
+  return found.length ? found[0].id : "";
+}
+
 function getJ1J2PlayoffParticipants() {
   var j1 = getLeague("j1");
   var j2 = getLeague("j2");
   if (!j1 || !j2) return [];
   var j1s = computeStats(j1).sorted.filter(function(p) { return p.active !== false && p.played > 0; });
   var j2s = computeStats(j2).sorted.filter(function(p) { return p.active !== false && p.played > 0; });
-  if (j1s.length < 2 || j2s.length < 2) return [];
-  var j1bottom = j1s.slice(Math.max(0, j1s.length - 2));
-  var j2top = j2s.slice(0, 2);
-  return j1bottom.map(function(p) { return Object.assign({}, p, { playoffSide: "J1下位" }); })
-    .concat(j2top.map(function(p) { return Object.assign({}, p, { playoffSide: "J2上位" }); }));
+  var j1targets = j1s.filter(function(p) { return p.rank === 6 || p.rank === 7; });
+  var j2targets = j2s.filter(function(p) { return p.rank === 1 || p.rank === 2; });
+  if (!j1targets.length && !j2targets.length) return [];
+  return j2targets.map(function(p) { return Object.assign({}, p, { playoffSide: "J2上位" }); })
+    .concat(j1targets.map(function(p) { return Object.assign({}, p, { playoffSide: "J1下位" }); }));
+}
+
+function getDefaultJ1J2PlayoffMatchups() {
+  var j1 = getLeague("j1");
+  var j2 = getLeague("j2");
+  if (!j1 || !j2) return [];
+  var j1s = computeStats(j1).sorted.filter(function(p) { return p.active !== false && p.played > 0; });
+  var j2s = computeStats(j2).sorted.filter(function(p) { return p.active !== false && p.played > 0; });
+  return [
+    { id: "pm-default-1", aId: playerIdAtRank(j2s, 1), bId: playerIdAtRank(j1s, 7), label: "J2 1位 vs J1 7位" },
+    { id: "pm-default-2", aId: playerIdAtRank(j2s, 2), bId: playerIdAtRank(j1s, 6), label: "J2 2位 vs J1 6位" }
+  ];
+}
+
+function syncJ1J2PlayoffMatches() {
+  ensurePlayoffs();
+  var bucket = state.playoffs.j1_j2;
+  var defaults = getDefaultJ1J2PlayoffMatchups();
+  if (!defaults.length) return false;
+  var changed = false;
+  defaults.forEach(function(def) {
+    var m = bucket.matches.filter(function(x) { return x.id === def.id; })[0];
+    if (!m) {
+      bucket.matches.push({ id: def.id, aId: def.aId || "", bId: def.bId || "" });
+      changed = true;
+      return;
+    }
+    var hasResult = m.aId && m.bId && getPlayoffResult(bucket, m.aId, m.bId);
+    if (hasResult) return;
+    if (def.aId && m.aId !== def.aId) { m.aId = def.aId; changed = true; }
+    if (def.bId && m.bId !== def.bId) { m.bId = def.bId; changed = true; }
+  });
+  var defaultOrder = { "pm-default-1": 0, "pm-default-2": 1 };
+  bucket.matches.sort(function(a, b) {
+    var ao = defaultOrder[a.id];
+    var bo = defaultOrder[b.id];
+    if (ao != null && bo != null) return ao - bo;
+    if (ao != null) return -1;
+    if (bo != null) return 1;
+    return 0;
+  });
+  return changed;
 }
 
 // 入れ替え戦（1マッチ形式）で選べる対象者：J1・J2の参加選手を順位付きで返す
@@ -8180,9 +8227,18 @@ function playoffMatchResultText(aId, bId) {
 
 function renderPlayoffPage() {
   ensurePlayoffs();
+  if (!isMemberMode && !isReadonly() && syncJ1J2PlayoffMatches()) saveState();
   var ctx = getActiveContext();
+  var participants = getJ1J2PlayoffParticipants();
   var html = '<div class="print-title">🥋 米倉道場 Jリーグ 入れ替え戦 ｜ ' + esc(ctx.seasonLabel) + '</div>';
-  html += '<p class="playoff-note">入れ替え戦は適宜実施します。挑戦権は <b>J2 1位・2位</b>、挑戦を受けるのは <b>J1 6位・7位</b> です。<br>対象者を選んで1試合ずつ対戦し、対戦表は随時更新します。</p>';
+  html += '<p class="playoff-note">入れ替え戦は適宜実施します。挑戦権は <b>J2 1位・2位</b>、挑戦を受けるのは <b>J1 6位・7位</b> です。<br>J1・J2の順位表から対戦カードへ自動入力します。結果は一本／優勢／引き分けから記録できます。</p>';
+  if (participants.length) {
+    html += '<div class="playoff-participants">' + participants.map(function(p) {
+      var tag = p.playoffSide ? '<span class="playoff-side-tag">' + esc(p.playoffSide) + "</span>" : "";
+      var rankTxt = p.rank ? p.rank + "位" : "";
+      return '<span class="playoff-pill">' + esc(rankTxt + " " + p.name) + tag + renderStripeVisual(p, true) + "</span>";
+    }).join("") + "</div>";
+  }
   html += renderPlayoffMatchesBlock();
   return html;
 }
@@ -8191,6 +8247,8 @@ function renderPlayoffMatchesBlock() {
   ensurePlayoffs();
   var bucket = state.playoffs.j1_j2;
   var editable = !isMemberMode && !isReadonly();
+  var defaultLabels = {};
+  getDefaultJ1J2PlayoffMatchups().forEach(function(def) { defaultLabels[def.id] = def.label; });
   var candidates = getPlayoffCandidates();
   function optsHtml(selId) {
     return '<option value="">選手を選択</option>' + candidates.map(function(c) {
@@ -8201,7 +8259,8 @@ function renderPlayoffMatchesBlock() {
     var pA = m.aId ? findPlayerGlobal(m.aId) : null;
     var pB = m.bId ? findPlayerGlobal(m.bId) : null;
     var resultText = (m.aId && m.bId) ? playoffMatchResultText(m.aId, m.bId) : "";
-    var num = '<span class="pm-num">第' + (i + 1) + "試合</span>";
+    var matchLabel = defaultLabels[m.id] || ("第" + (i + 1) + "試合");
+    var num = '<span class="pm-num">' + esc(matchLabel) + "</span>";
     if (editable) {
       var selA = '<select class="pm-select" data-playoff-match-id="' + esc(m.id) + '" data-playoff-side="a">' + optsHtml(m.aId) + "</select>";
       var selB = '<select class="pm-select" data-playoff-match-id="' + esc(m.id) + '" data-playoff-side="b">' + optsHtml(m.bId) + "</select>";
@@ -8223,13 +8282,13 @@ function renderPlayoffMatchesBlock() {
   var addBtn = editable ? '<button type="button" class="btn btn-secondary btn-sm pm-add" data-action="addPlayoffMatch">＋ 試合を追加</button>' : "";
   var body;
   if (!bucket.matches.length || (!editable && !rows.trim())) {
-    body = '<p class="playoff-empty">' + (editable ? "「＋ 試合を追加」で対戦カードを作成し、対象者を選んでください。" : "対戦カードはまだ登録されていません。") + "</p>";
+    body = '<p class="playoff-empty">' + (editable ? "J1・J2の順位が確定すると、J2 1位 vs J1 7位・J2 2位 vs J1 6位の対戦カードが自動入力されます。" : "対戦カードはまだ登録されていません。") + "</p>";
   } else {
     body = '<div class="pm-list">' + rows + "</div>";
   }
   return '<div class="card playoff-card">' +
     '<div class="card-title">J1 ⇄ J2 入れ替え戦（1マッチ）</div>' +
-    '<p class="playoff-desc">対象者を選んで1試合ずつ実施します。勝敗は一本／優勢／引き分けから入力できます。</p>' +
+    '<p class="playoff-desc">J1 6位・7位と J2 1位・2位を自動で組み合わせます。必要なら選手を変更して1試合ずつ実施してください。</p>' +
     body + addBtn + "</div>";
 }
 
