@@ -3217,7 +3217,10 @@ function mergeRosterMember(local, remote) {
   if (localAtt > remoteAtt) out.attendanceUpdatedAt = local.attendanceUpdatedAt || 0;
   else if (remoteAtt > localAtt) out.attendanceUpdatedAt = remote.attendanceUpdatedAt || 0;
   else out.attendanceUpdatedAt = Math.max(local.attendanceUpdatedAt || 0, remote.attendanceUpdatedAt || 0);
-  out.reviews = mergeReviewLists(local.reviews, remote.reviews);
+  var delIds = {};
+  (local.deletedReviewIds || []).concat(remote.deletedReviewIds || []).forEach(function(id) { if (id) delIds[String(id)] = true; });
+  out.deletedReviewIds = Object.keys(delIds);
+  out.reviews = mergeReviewLists(local.reviews, remote.reviews).filter(function(r) { return r && !delIds[String(r.id)]; });
   var lSeason = importLegacyCommentIntoSeasonMap(local, deepClone(local.memberSeasonComments || {}));
   var rSeason = importLegacyCommentIntoSeasonMap(remote, deepClone(remote.memberSeasonComments || {}));
   out.memberSeasonComments = mergeMemberSeasonComments(lSeason, rSeason);
@@ -4197,6 +4200,10 @@ function normalizeRosterMember(raw) {
   var m = raw || {};
   var sn = parseInt(m.stripes, 10);
   var group = m.group || "";
+  var deletedReviewIds = Array.isArray(m.deletedReviewIds) ? m.deletedReviewIds.filter(function(x) { return x; }).map(String) : [];
+  var delSet = {};
+  deletedReviewIds.forEach(function(id) { delSet[id] = true; });
+  var reviews = (Array.isArray(m.reviews) ? m.reviews.map(normalizeReviewEntry) : []).filter(function(r) { return r && !delSet[String(r.id)]; });
   return {
     id: m.id || ("r-" + Date.now() + "-" + Math.floor(Math.random() * 1000)),
     name: m.name || "館員",
@@ -4216,7 +4223,8 @@ function normalizeRosterMember(raw) {
     memberSeasonComments: m.memberSeasonComments && typeof m.memberSeasonComments === "object" ? deepClone(m.memberSeasonComments) : {},
     memberCommentDraft: m.memberCommentDraft || "",
     memberCommentDraftMeta: m.memberCommentDraftMeta && typeof m.memberCommentDraftMeta === "object" ? m.memberCommentDraftMeta : null,
-    reviews: Array.isArray(m.reviews) ? m.reviews.map(normalizeReviewEntry) : [],
+    reviews: reviews,
+    deletedReviewIds: deletedReviewIds,
     awards: Array.isArray(m.awards) ? m.awards.map(normalizeAwardEntry) : [],
     archivedAt: Math.max(0, parseInt(m.archivedAt, 10) || 0),
     archivedReason: m.archivedReason || "",
@@ -6079,6 +6087,8 @@ function deleteStripeReview(rosterId, reviewId) {
   }
   if (!confirm(confirmText)) return;
   m.reviews = m.reviews.filter(function(r) { return r.id !== reviewId; });
+  if (!Array.isArray(m.deletedReviewIds)) m.deletedReviewIds = [];
+  if (m.deletedReviewIds.indexOf(reviewId) < 0) m.deletedReviewIds.push(reviewId);
   if (isMessageEntry(review)) {
     var pk = review.periodKey || getCurrentPeriodKey();
     var memoText = stripSeasonHeaderFromComment(review.memo || "");
