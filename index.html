@@ -5901,14 +5901,17 @@ function autoGenStripeMemo() {
   var def = getStripeLevelDef(targetLevel);
   if (!def) return;
   var checks = collectStripeReviewChecks(def, m, targetLevel);
-  var memo = buildAutoStripeMemo(def, checks, m, targetLevel);
-  if (!memo) { showToast("先に各項目を ○ / × で判定してください", { type: "warn" }); return; }
+  var autoPart = buildAutoStripeMemo(def, checks, m, targetLevel);
+  var extraEl = document.getElementById("stripeReviewExtra");
+  var extra = extraEl ? extraEl.value.trim() : "";
+  var memo = [autoPart, extra].filter(Boolean).join(" ／ ");
+  if (!memo) { showToast("各項目を ○ / × で判定するか、自由記入を入力してください", { type: "warn" }); return; }
   var memoEl = document.getElementById("stripeReviewMemo");
   if (!memoEl) return;
   var cur = memoEl.value.trim();
-  if (cur && cur !== memo && !confirm("審査メモを○×から自動生成した内容で置き換えますか？\n（現在の入力は上書きされます）")) return;
+  if (cur && cur !== memo && !confirm("審査メモを自動生成した内容で置き換えますか？\n（現在の入力は上書きされます）")) return;
   memoEl.value = memo;
-  showToast("○×から審査メモを自動生成しました ✓", { type: "ok" });
+  showToast("審査メモを自動生成しました ✓", { type: "ok" });
 }
 
 function renderStripeReviewModal(member, targetLevel) {
@@ -5953,8 +5956,9 @@ function renderStripeReviewModal(member, targetLevel) {
     '<p style="font-size:.66rem;color:var(--muted);margin:0 0 8px">各項目を ○ / × で判定してください。授与式以外でも随時記録できます（保留は履歴に残ります）</p>' +
     groupsHtml +
     '<div class="form-row"><label>審査メモ</label><input id="stripeReviewMemo" value="' + esc(memoPrefill) + '" placeholder="短評・次回課題など（マイ進捗コメント下書きに反映）"></div>' +
-    '<button type="button" class="btn btn-ghost btn-sm btn-block" style="margin:-4px 0 4px" data-action="autoGenStripeMemo">🪄 ○×から審査メモを自動生成</button>' +
-    '<p style="font-size:.62rem;color:var(--muted);margin:0 0 6px;line-height:1.45">現在入力した ○×可否をもとに、良い点と課題を審査メモ欄に自動でまとめます（生成後に手直し可）。</p>' +
+    '<div class="form-row"><label>メモに追加（自由記入）</label><input id="stripeReviewExtra" value="" placeholder="○×に加えて伝えたいこと（任意）"></div>' +
+    '<button type="button" class="btn btn-ghost btn-sm btn-block" style="margin:-4px 0 4px" data-action="autoGenStripeMemo">🪄 ○×＋自由記入から審査メモを自動生成</button>' +
+    '<p style="font-size:.62rem;color:var(--muted);margin:0 0 6px;line-height:1.45">○×可否から「良い点・課題」を作成し、「自由記入」の内容を末尾に追記して審査メモ欄にまとめます（生成後に手直し可）。</p>' +
     '<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">' +
     '<button type="button" class="btn btn-primary btn-block" data-action="submitStripeReview" data-result="pass">✓ 合格（ストライプ授与）</button>' +
     '<button type="button" class="btn btn-ghost btn-block" data-action="submitStripeReview" data-result="hold">保留として記録</button></div>' +
