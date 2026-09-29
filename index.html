@@ -5979,21 +5979,30 @@ function autoGenStripeMemo() {
   var def = getStripeLevelDef(targetLevel);
   if (!def) return;
   var checks = collectStripeReviewChecks(def, m, targetLevel);
-  var autoPart = buildAutoStripeMemo(def, checks, m, targetLevel);
-  var extraEl = document.getElementById("stripeReviewExtra");
-  var extra = extraEl ? extraEl.value.trim() : "";
-  var memo = autoPart;
-  if (extra) {
-    var extraSentence = /[。.!！?？]$/.test(extra) ? extra : extra + "。";
-    memo = memo ? memo + extraSentence : extraSentence;
-  }
-  if (!memo) { showToast("各項目を ○ / × で判定するか、自由記入を入力してください", { type: "warn" }); return; }
+  var memo = buildAutoStripeMemo(def, checks, m, targetLevel);
+  if (!memo) { showToast("先に各項目を ○ / × で判定してください", { type: "warn" }); return; }
   var memoEl = document.getElementById("stripeReviewMemo");
   if (!memoEl) return;
   var cur = memoEl.value.trim();
-  if (cur && cur !== memo && !confirm("審査メモを自動生成した内容で置き換えますか？\n（現在の入力は上書きされます）")) return;
+  if (cur && cur !== memo && !confirm("審査メモを○×から生成した内容で置き換えますか？\n（現在の入力は上書きされます。自由記入を残したい場合は「追記」を使ってください）")) return;
   memoEl.value = memo;
-  showToast("審査メモを自動生成しました ✓", { type: "ok" });
+  showToast("○×から審査メモを生成しました ✓", { type: "ok" });
+}
+
+// 自由記入を「現在の審査メモの末尾」に追記する（上書きしない）。
+function appendStripeMemoExtra() {
+  if (!stripeReviewMemberId || isMemberMode || isReadonly()) return;
+  var extraEl = document.getElementById("stripeReviewExtra");
+  var memoEl = document.getElementById("stripeReviewMemo");
+  if (!extraEl || !memoEl) return;
+  var extra = extraEl.value.trim();
+  if (!extra) { showToast("追記する内容を入力してください", { type: "warn" }); return; }
+  var e = /[。.!！?？]$/.test(extra) ? extra : extra + "。";
+  var cur = memoEl.value.trim();
+  if (cur && !/[。.!！?？\s]$/.test(cur)) cur += " ";
+  memoEl.value = cur ? (cur + e) : e;
+  extraEl.value = "";
+  showToast("審査メモに追記しました ✓", { type: "ok" });
 }
 
 function renderStripeReviewModal(member, targetLevel) {
@@ -6038,9 +6047,10 @@ function renderStripeReviewModal(member, targetLevel) {
     '<p style="font-size:.66rem;color:var(--muted);margin:0 0 8px">各項目を ○ / × で判定してください。授与式以外でも随時記録できます（保留は履歴に残ります）</p>' +
     groupsHtml +
     '<div class="form-row"><label>審査メモ</label><input id="stripeReviewMemo" value="' + esc(memoPrefill) + '" placeholder="短評・次回課題など（マイ進捗コメント下書きに反映）"></div>' +
-    '<div class="form-row"><label>メモに追加（自由記入）</label><input id="stripeReviewExtra" value="" placeholder="○×に加えて伝えたいこと（任意）"></div>' +
-    '<button type="button" class="btn btn-ghost btn-sm btn-block" style="margin:-4px 0 4px" data-action="autoGenStripeMemo">🪄 ○×＋自由記入から審査メモを自動生成</button>' +
-    '<p style="font-size:.62rem;color:var(--muted);margin:0 0 6px;line-height:1.45">○×可否から良い点・課題を自然な文章にまとめ、「自由記入」の内容を末尾に続けて審査メモ欄に反映します（生成後に手直し可）。</p>' +
+    '<button type="button" class="btn btn-ghost btn-sm btn-block" style="margin:-4px 0 4px" data-action="autoGenStripeMemo">🪄 ○×から審査メモを生成（上書き）</button>' +
+    '<div class="form-row"><label>メモに追記（自由記入）</label><input id="stripeReviewExtra" value="" placeholder="審査メモに付け足す内容（任意）"></div>' +
+    '<button type="button" class="btn btn-ghost btn-sm btn-block" style="margin:-4px 0 4px" data-action="appendStripeMemoExtra">＋ 自由記入を審査メモに追記</button>' +
+    '<p style="font-size:.62rem;color:var(--muted);margin:0 0 6px;line-height:1.45">「🪄生成」は○×から良い点・課題を自然な文章にまとめて審査メモを作り直します（上書き）。「＋追記」は現在の審査メモを消さずに、自由記入を末尾へ付け足します。</p>' +
     '<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">' +
     '<button type="button" class="btn btn-primary btn-block" data-action="submitStripeReview" data-result="pass">✓ 合格（ストライプ授与）</button>' +
     '<button type="button" class="btn btn-ghost btn-block" data-action="submitStripeReview" data-result="hold">保留として記録</button></div>' +
@@ -10031,6 +10041,7 @@ function handleAppTap(e) {
   else if (action === "closeStripeReview") closeStripeReview();
   else if (action === "submitStripeReview") submitStripeReview(target.getAttribute("data-result"));
   else if (action === "autoGenStripeMemo") autoGenStripeMemo();
+  else if (action === "appendStripeMemoExtra") appendStripeMemoExtra();
   else if (action === "removeRosterMember") removeRosterMember(target.getAttribute("data-roster-id"));
   else if (action === "archiveRosterMember") archiveRosterMember(target.getAttribute("data-roster-id"), "退会");
   else if (action === "restoreRosterMember") restoreRosterMember(target.getAttribute("data-roster-id"));
