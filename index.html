@@ -8170,11 +8170,61 @@ function getJ1J2PlayoffParticipants() {
   return out;
 }
 
+// 入れ替え戦（J1⇄J2）の結果から、次リーグの昇降格プランを算出する（stateは変更しない）。
+// ルール: 4人総当たりの上位2名→J1・下位2名→J2。未実施/未入力・参加者不足は据え置き（空プラン）。
+function computePlayoffPromotionPlan() {
+  ensurePlayoffs();
+  var bucket = state.playoffs.j1_j2 || { results: {} };
+  if (!bucket.results || !Object.keys(bucket.results).length) return [];
+  var participants = getJ1J2PlayoffParticipants();
+  if (participants.length < 4) return [];
+  var virtual = makePlayoffLeague("playoff", participants, bucket.results);
+  var sorted = computeStats(virtual).sorted;
+  if (sorted.length < 4) return [];
+  var j1 = getLeague("j1"), j2 = getLeague("j2");
+  if (!j1 || !j2) return [];
+  function currentLeagueOf(id) {
+    var i;
+    for (i = 0; i < j1.players.length; i++) if (j1.players[i].id === id) return "j1";
+    for (i = 0; i < j2.players.length; i++) if (j2.players[i].id === id) return "j2";
+    return null;
+  }
+  var plan = [], i, pid, target, cur;
+  for (i = 0; i < sorted.length; i++) {
+    pid = sorted[i].id;
+    target = i < 2 ? "j1" : "j2";
+    cur = currentLeagueOf(pid);
+    if (cur && cur !== target) plan.push({ id: pid, name: sorted[i].name, from: cur, to: target });
+  }
+  return plan;
+}
+
+// 昇降格プランを state.leagues に適用（j1/j2 間で選手を移動）。
+function applyPlayoffPromotionPlan(plan) {
+  if (!plan || !plan.length) return 0;
+  var leagueMap = { j1: getLeague("j1"), j2: getLeague("j2") };
+  if (!leagueMap.j1 || !leagueMap.j2) return 0;
+  var applied = 0;
+  plan.forEach(function(mv) {
+    var from = leagueMap[mv.from], to = leagueMap[mv.to], i, pl;
+    if (!from || !to) return;
+    for (i = 0; i < from.players.length; i++) {
+      if (from.players[i].id === mv.id) {
+        pl = from.players.splice(i, 1)[0];
+        to.players.push(pl);
+        applied++;
+        break;
+      }
+    }
+  });
+  return applied;
+}
+
 function renderPlayoffPage() {
   ensurePlayoffs();
   var ctx = getActiveContext();
   var html = '<div class="print-title">🥋 米倉道場 Jリーグ 入れ替え戦 ｜ ' + esc(ctx.seasonLabel) + '</div>';
-  html += '<p class="playoff-note">入れ替え戦は適宜実施します。参加は <b>J2 1位・2位</b> と <b>J1 6位・7位</b> の4名です。<br>J1・J2の順位表から4名が自動で参加し、<b>4人総当たり（全6試合）</b>の星取表で結果を記録します。</p>';
+  html += '<p class="playoff-note">入れ替え戦は適宜実施します。参加は <b>J2 1位・2位</b> と <b>J1 6位・7位</b> の4名です。<br>J1・J2の順位表から4名が自動で参加し、<b>4人総当たり（全6試合）</b>の星取表で結果を記録します。<br>この結果は各リーグの順位表・星取表には即時反映しません。<b>上位2名がJ1・下位2名がJ2</b>として、<b>次のリーグ（シーズンのアーカイブ実行時）</b>に所属へ反映されます（未実施なら据え置き）。</p>';
   html += renderPlayoffBlock(
     "j1_j2",
     "J1 ⇄ J2 入れ替え戦（4人総当たり）",
@@ -8773,7 +8823,13 @@ function archiveCurrentSeason() {
   var label = formatSeasonLabel(state.fiscalYear, state.seasonKey);
   var next = getNextSeason(state.fiscalYear, state.seasonKey);
   var nextLabel = formatSeasonLabel(next.fiscalYear, next.seasonKey);
-  if (!confirm(label + " の星取表・順位をアーカイブしますか？\n\n・全リーグの対戦結果はリセットされます\n・選手名・参加設定は保持されます\n・次シーズン: " + nextLabel)) return;
+  var promotionPlan = computePlayoffPromotionPlan();
+  var promoText = promotionPlan.length
+    ? "\n\n【入れ替え戦の反映（次リーグ）】\n" + promotionPlan.map(function(mv) {
+        return "・" + mv.name + "：" + mv.from.toUpperCase() + " → " + mv.to.toUpperCase();
+      }).join("\n")
+    : "\n\n【入れ替え戦の反映】なし（未実施・据え置き）";
+  if (!confirm(label + " の星取表・順位をアーカイブしますか？\n\n・全リーグの対戦結果はリセットされます\n・選手名・参加設定は保持されます\n・次シーズン: " + nextLabel + promoText)) return;
   var entry = {
     id: state.seasonId + "-" + Date.now(),
     seasonId: state.seasonId,
@@ -8782,6 +8838,7 @@ function archiveCurrentSeason() {
     label: label,
     archivedAt: Date.now(),
     leagues: deepClone(state.leagues),
+    playoffs: deepClone(state.playoffs || {}),
     pointRule: deepClone(state.pointRule),
     specialAwards: deepClone(state.specialAwards || {}),
     seasonSpecialAwards: deepClone(state.seasonSpecialAwards || []),
@@ -8795,6 +8852,7 @@ function archiveCurrentSeason() {
   };
   if (!state.archives) state.archives = [];
   state.archives.unshift(entry);
+  var promotedCount = applyPlayoffPromotionPlan(promotionPlan);
   state.leagues.forEach(function(l) { l.results = {}; });
   state.playoffs = { j1_j2: { results: {} } };
   state.specialAwards = {};
@@ -8812,7 +8870,7 @@ function archiveCurrentSeason() {
   viewingArchiveId = null;
   saveState();
   render();
-  showToast("アーカイブ保存 ✓ → " + nextLabel);
+  showToast("アーカイブ保存 ✓ → " + nextLabel + (promotedCount ? "（入れ替え " + promotedCount + "名を次リーグへ反映）" : ""));
 }
 
 function viewArchive(id) {
