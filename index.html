@@ -3253,6 +3253,18 @@ function mergeRosterMember(local, remote) {
   return out;
 }
 
+function playerInAnyLeague(target, id, rosterId) {
+  var leagues = (target && target.leagues) || [];
+  for (var i = 0; i < leagues.length; i++) {
+    var pls = leagues[i].players || [];
+    for (var j = 0; j < pls.length; j++) {
+      if (id && pls[j].id === id) return true;
+      if (rosterId && pls[j].rosterId && pls[j].rosterId === rosterId) return true;
+    }
+  }
+  return false;
+}
+
 function mergeLeaguesInto(target, source) {
   if (!source || !source.leagues) return;
   if (!target.leagues) target.leagues = [];
@@ -3272,6 +3284,8 @@ function mergeLeaguesInto(target, source) {
         if (tl.players[j].id === sp.id) { tp = tl.players[j]; break; }
       }
       if (!tp) {
+        // 既に他リーグに同一選手（id または rosterId）がいる場合は再追加しない（リーグ間の重複防止）
+        if (playerInAnyLeague(target, sp.id, sp.rosterId)) return;
         if (!tl.players) tl.players = [];
         tl.players.push(deepClone(sp));
         return;
@@ -3348,6 +3362,48 @@ function dropArchivesMatchingLiveSeason(s) {
 // 春＝プレリーグのみ、夏以降＝J1/J2/J3のみにリーグ構成を揃える。
 function leaguesForSeasonKey(seasonKey) {
   return seasonKey === "spring" ? ["pre"] : ["j1", "j2", "j3"];
+}
+
+function playedCountInLeague(league, playerId) {
+  var c = 0, res = (league && league.results) || {}, k;
+  for (k in res) {
+    if (!Object.prototype.hasOwnProperty.call(res, k)) continue;
+    if (k.split("|").indexOf(playerId) >= 0) c++;
+  }
+  return c;
+}
+
+// 同一選手がリーグ間・リーグ内で重複した場合、対戦実績（試合数）が多いコピーを残して他を除去する。
+// クラウド保存時の旧マージ不具合で発生した重複（同一選手が複数リーグに/同一rosterIdが二重）を掃除する。
+function dedupeLeaguePlayers(s) {
+  if (!s || !Array.isArray(s.leagues)) return s;
+  function dedupBy(keyFn) {
+    var groups = {};
+    s.leagues.forEach(function(l) {
+      (l.players || []).forEach(function(p) {
+        var key = keyFn(p);
+        if (!key) return;
+        (groups[key] = groups[key] || []).push({ l: l, p: p });
+      });
+    });
+    Object.keys(groups).forEach(function(key) {
+      var arr = groups[key];
+      if (arr.length < 2) return;
+      var keeper = arr[0], keeperScore = playedCountInLeague(arr[0].l, arr[0].p.id);
+      for (var i = 1; i < arr.length; i++) {
+        var sc = playedCountInLeague(arr[i].l, arr[i].p.id);
+        if (sc > keeperScore) { keeper = arr[i]; keeperScore = sc; }
+      }
+      arr.forEach(function(o) {
+        if (o === keeper) return;
+        var idx = o.l.players.indexOf(o.p);
+        if (idx >= 0) o.l.players.splice(idx, 1);
+      });
+    });
+  }
+  dedupBy(function(p) { return p.id ? "id:" + p.id : null; });
+  dedupBy(function(p) { return p.rosterId ? "ros:" + p.rosterId : null; });
+  return s;
 }
 
 function enforceSeasonLeagueShape(s) {
@@ -3698,6 +3754,7 @@ function normalizeState(raw) {
   detachArchivedFromLeagues(s);
   ensureSposuruSettings(s);
   dropArchivesMatchingLiveSeason(s);
+  dedupeLeaguePlayers(s);
   enforceSeasonLeagueShape(s);
   s.version = 4;
   return s;
