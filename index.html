@@ -3088,8 +3088,8 @@ function getActiveContext() {
     if (arch) {
       return {
         leagues: arch.leagues,
-        pointRule: arch.pointRule,
-        seasonLabel: arch.label + "（アーカイブ）",
+        pointRule: arch.pointRule || state.pointRule || { ippon: 4, yusei: 3, draw: 2, lose: 1 },
+        seasonLabel: archiveSeasonLabel(arch) + "（アーカイブ）",
         seasonSlug: arch.seasonId || (arch.fiscalYear + "-" + arch.seasonKey),
         readonly: true,
         archivedAt: arch.archivedAt,
@@ -3861,30 +3861,26 @@ function newestArchiveEntry(s) {
   return best;
 }
 
-// 直近アーカイブの「次シーズン」より現行が遅れている場合、空（またはアーカイブ結果の混入）なら進める。
-// 会員ページはクラウドを読むだけのため、夏アーカイブ後に seasonKey が夏へ戻った状態でも秋を表示できるようにする。
+function archiveSeasonLabel(arch) {
+  if (!arch) return "";
+  if (arch.fiscalYear && arch.seasonKey && seasonKeyOrder(arch.seasonKey) >= 0) {
+    return formatSeasonLabel(arch.fiscalYear, arch.seasonKey);
+  }
+  return arch.label || "";
+}
+
+// 直近アーカイブの「次シーズン」より現行が遅れている場合は進める。
+// 例: 夏をアーカイブ済みなら現行は秋。星取の正はアーカイブ側とし、現行の対戦結果はクリアする。
 function healLiveSeasonAfterArchives(s) {
   if (!s) return s;
   var newest = newestArchiveEntry(s);
   if (!newest) return s;
   var next = getNextSeason(newest.fiscalYear, newest.seasonKey);
   if (seasonAdvanceScore(s.fiscalYear, s.seasonKey) >= seasonAdvanceScore(next.fiscalYear, next.seasonKey)) return s;
-  var liveSig = leagueResultsSignature(s.leagues);
-  var archSig = leagueResultsSignature(newest.leagues);
-  var empty = !hasAnyResultsSignature(liveSig);
-  var echo = hasAnyResultsSignature(liveSig) && hasAnyResultsSignature(archSig) &&
-    JSON.stringify(liveSig) === JSON.stringify(archSig);
-  if (!empty && !echo) return s;
-  if (echo) {
-    (s.leagues || []).forEach(function(l) { if (l) l.results = {}; });
-    var livePo = playoffResultsSignature(s.playoffs);
-    var archPo = playoffResultsSignature(newest.playoffs);
-    if (hasAnyResultsSignature(livePo) && JSON.stringify(livePo) === JSON.stringify(archPo)) {
-      Object.keys(s.playoffs || {}).forEach(function(key) {
-        if (s.playoffs[key]) s.playoffs[key].results = {};
-      });
-    }
-  }
+  (s.leagues || []).forEach(function(l) { if (l) l.results = {}; });
+  Object.keys(s.playoffs || {}).forEach(function(key) {
+    if (s.playoffs[key]) s.playoffs[key].results = {};
+  });
   s.fiscalYear = next.fiscalYear;
   s.seasonKey = next.seasonKey;
   s.season = next.fiscalYear;
@@ -9389,7 +9385,7 @@ function renderSeasonSettings() {
     var when = a.archivedAt ? new Date(a.archivedAt).toLocaleDateString("ja-JP") : "";
     return `<div class="archive-item">
       <div>
-        <div>${esc(a.label || formatSeasonLabel(a.fiscalYear, a.seasonKey))}</div>
+        <div>${esc(archiveSeasonLabel(a))}</div>
         <div class="archive-item-meta">${esc(when)} 保存</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
@@ -9588,7 +9584,7 @@ function renderArchiveStandingsBanner() {
   return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;' +
     'background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);' +
     'border-radius:10px;padding:8px 12px;margin-bottom:10px">' +
-    '<span style="font-size:.78rem;color:var(--muted)">📊 ' + esc(a.label) + ' 最終順位表（閲覧）</span>' +
+    '<span style="font-size:.78rem;color:var(--muted)">📊 ' + esc(archiveSeasonLabel(a)) + ' 最終順位表（閲覧）</span>' +
     '<button type="button" class="btn btn-ghost btn-sm" data-action="viewArchive" data-archive-id="' + esc(a.id) + '">見る</button>' +
     '</div>';
 }
@@ -9807,7 +9803,7 @@ function restoreArchiveAsLive(id) {
   if (isReadonly()) { showToast("アーカイブ閲覧中は操作できません。先に「現在シーズンに戻る」を押してください"); return; }
   var arch = findArchive(id);
   if (!arch) { showToast("アーカイブが見つかりません"); return; }
-  var archLabel = arch.label || formatSeasonLabel(arch.fiscalYear, arch.seasonKey);
+  var archLabel = archiveSeasonLabel(arch);
   var curLabel = formatSeasonLabel(state.fiscalYear, state.seasonKey);
   var msg = archLabel + " を現行シーズンに戻しますか？\n\n" +
     "・星取表・入れ替え戦・表彰はアーカイブ時点の内容に戻ります\n" +
