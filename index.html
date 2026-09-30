@@ -3692,10 +3692,47 @@ function mergeRosterInto(target, source) {
   applyDeletedRosterIds(target);
 }
 
+function ensureDeletedArchiveIds(s) {
+  if (!s) return [];
+  if (!Array.isArray(s.deletedArchiveIds)) s.deletedArchiveIds = [];
+  return s.deletedArchiveIds;
+}
+
+function markArchiveDeleted(s, archiveId) {
+  if (!s || !archiveId) return;
+  var list = ensureDeletedArchiveIds(s);
+  var id = String(archiveId);
+  if (list.indexOf(id) < 0) list.push(id);
+}
+
+function mergeDeletedArchiveIdsInto(target, source) {
+  var map = {};
+  ensureDeletedArchiveIds(target).concat(ensureDeletedArchiveIds(source)).forEach(function(id) {
+    if (id) map[String(id)] = true;
+  });
+  target.deletedArchiveIds = Object.keys(map);
+  return target.deletedArchiveIds;
+}
+
+function applyDeletedArchiveIds(s) {
+  if (!s) return s;
+  var del = {};
+  ensureDeletedArchiveIds(s).forEach(function(id) { del[String(id)] = true; });
+  if (!Object.keys(del).length) return s;
+  s.archives = (s.archives || []).filter(function(a) {
+    return !(a && a.id && del[String(a.id)]);
+  });
+  return s;
+}
+
 function mergeArchivesInto(target, source) {
   if (!source || !source.archives) return;
   if (!target.archives) target.archives = [];
+  mergeDeletedArchiveIdsInto(target, source);
+  var deleted = {};
+  ensureDeletedArchiveIds(target).forEach(function(id) { deleted[String(id)] = true; });
   source.archives.forEach(function(sa) {
+    if (!sa || (sa.id && deleted[String(sa.id)])) return;
     var found = false;
     for (var i = 0; i < target.archives.length; i++) {
       if (target.archives[i].id === sa.id) {
@@ -3706,6 +3743,7 @@ function mergeArchivesInto(target, source) {
     }
     if (!found) target.archives.unshift(deepClone(sa));
   });
+  applyDeletedArchiveIds(target);
 }
 
 // 現行シーズンと同一年度・シーズンのアーカイブを除去する（端末の古いキャッシュで重複復活するのを防ぐ）。
@@ -4076,8 +4114,10 @@ function mergeCloudStates(local, remote) {
     mergePlayoffsInto(primary, secondary, { mergeResults: sameSeason });
   }
   mergeRosterInto(primary, secondary);
+  mergeDeletedArchiveIdsInto(primary, secondary);
   mergeArchivesInto(primary, secondary);
   mergeSposuruSettingsInto(primary, secondary);
+  applyDeletedArchiveIds(primary);
   dropArchivesMatchingLiveSeason(primary);
   primary.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0, Date.now());
   return normalizeState(primary);
@@ -4120,8 +4160,10 @@ function mergeCloudStatesRemoteFirst(local, remote) {
     else mergeLeaguesInto(merged, local, { mergeResults: false });
   }
   mergeRosterInto(merged, local);
+  mergeDeletedArchiveIdsInto(merged, local);
   mergeArchivesInto(merged, local);
   mergeSposuruSettingsInto(merged, local);
+  applyDeletedArchiveIds(merged);
   dropArchivesMatchingLiveSeason(merged);
   merged.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0, Date.now());
   return normalizeState(merged);
@@ -4446,9 +4488,12 @@ function normalizeState(raw) {
   if (!s.monthlyMvpLocked || typeof s.monthlyMvpLocked !== "object") s.monthlyMvpLocked = {};
   if (!Array.isArray(s.awardConfirmations)) s.awardConfirmations = [];
   if (!Array.isArray(s.roster)) s.roster = [];
+  if (!Array.isArray(s.archives)) s.archives = [];
   ensureDeletedRosterIds(s);
+  ensureDeletedArchiveIds(s);
   if (!s.deletedRosterBackup || typeof s.deletedRosterBackup !== "object") s.deletedRosterBackup = {};
   applyDeletedRosterIds(s);
+  applyDeletedArchiveIds(s);
   ensureRosterLinks(s);
   applyRosterArchiveDefaults(s);
   detachArchivedFromLeagues(s);
@@ -9859,13 +9904,20 @@ function exitArchiveView() {
 }
 
 function deleteArchive(id) {
+  if (isMemberMode) { showToast("会員ページでは操作できません"); return; }
   if (isReadonly() && viewingArchiveId === id) exitArchiveView();
-  if (!confirm("このアーカイブを削除しますか？")) return;
+  if (!id) { showToast("アーカイブが見つかりません"); return; }
+  var arch = findArchive(id);
+  if (!arch) { showToast("アーカイブが見つかりません"); return; }
+  var label = archiveSeasonLabel(arch);
+  if (!confirm(label + " を削除しますか？\n（同期しても復活しません）")) return;
+  markArchiveDeleted(state, id);
   state.archives = (state.archives || []).filter(function(a) { return a.id !== id; });
+  applyDeletedArchiveIds(state);
   if (viewingArchiveId === id) viewingArchiveId = null;
-  saveState();
+  saveState(true);
   render();
-  showToast("アーカイブを削除しました");
+  showToast("アーカイブを削除しました ✓");
 }
 
 function liveSeasonHasMatchResults(s) {
