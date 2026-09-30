@@ -6113,6 +6113,83 @@ function isSposuruReplaceAllChecked() {
   return !!(el && el.checked);
 }
 
+/* 公開スナップショット（data/attendance-snapshot.json）をクラウド台帳へ反映。
+   GitHub Pages 上の最新スポスル出席を、管理画面の起動同期時に data リポジトリへ押し込む。 */
+async function fetchAttendanceSnapshot() {
+  var url = "data/attendance-snapshot.json?t=" + Date.now();
+  try {
+    var res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+function applyAttendanceSnapshotToState(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.members) || !snapshot.members.length) return 0;
+  var snapAt = Date.parse(snapshot.exportedAt) || 0;
+  var byNorm = {};
+  snapshot.members.forEach(function(row) {
+    if (!row || !row.sposuruName) return;
+    byNorm[normalizeSposuruName(row.sposuruName)] = Math.max(0, parseInt(row.attendanceCount, 10) || 0);
+  });
+  var updated = 0;
+  getRosterList().forEach(function(m) {
+    if (!m || isArchivedRosterMember(m)) return;
+    if (!isSposuruAttendanceGroup(m.group) && inferMemberTrack(m.group, m.track) !== "junior") return;
+    var key = normalizeSposuruName(m.sposuruName || m.name);
+    if (!Object.prototype.hasOwnProperty.call(byNorm, key)) return;
+    var n = byNorm[key];
+    var prev = m.attendanceCount || 0;
+    var prevAt = m.attendanceUpdatedAt || 0;
+    // スナップショット日時が新しい、または回数が違うときだけ更新（古い端末キャッシュで上書きしない）
+    if (snapAt && prevAt && prevAt > snapAt && prev === n) return;
+    if (prev !== n || !prevAt || (snapAt && prevAt < snapAt)) {
+      m.attendanceCount = n;
+      m.attendanceUpdatedAt = snapAt || Date.now();
+      updated++;
+    }
+  });
+  var cfg = ensureSposuruSettings();
+  if (snapshot.importedSessions && typeof snapshot.importedSessions === "object") {
+    cfg.importedSessions = Object.assign({}, cfg.importedSessions || {}, snapshot.importedSessions);
+  }
+  snapshot.members.forEach(function(row) {
+    if (!row || !row.sposuruName) return;
+    var bKey = sposuruBaselineKey(row.sposuruName);
+    var n = Math.max(0, parseInt(row.attendanceCount, 10) || 0);
+    cfg.importBaselines[bKey] = Math.max(cfg.importBaselines[bKey] || 0, n);
+  });
+  if (updated > 0 || !cfg.attendanceSnapshotAt || (snapAt && cfg.attendanceSnapshotAt < snapAt)) {
+    cfg.attendanceSnapshotAt = snapAt || Date.now();
+    cfg.lastSyncAt = Date.now();
+    cfg.lastImportCutoffDate = snapshot.cutoffDate || cfg.lastImportCutoffDate || "";
+    cfg.lastSyncSummary = "スポスル出席スナップショット反映" +
+      (updated ? "（" + updated + "名）" : "") +
+      (snapshot.cutoffDate ? " ／ 基準日 " + snapshot.cutoffDate : "");
+  }
+  return updated;
+}
+
+async function syncAttendanceSnapshotAfterCloudPull() {
+  if (isMemberMode || isReadonly()) return 0;
+  var snapshot = await fetchAttendanceSnapshot();
+  if (!snapshot) return 0;
+  var n = applyAttendanceSnapshotToState(snapshot);
+  if (n > 0) {
+    state.updatedAt = Date.now();
+    saveLocal();
+    try {
+      await cloudPush();
+      showToast("スポスル出席を最新化しました（" + n + "名）✓", { type: "ok", duration: 4000 });
+    } catch (e) {
+      showToast("出席スナップショットは反映済み。クラウド保存に失敗したので再読込してください", { type: "warn", duration: 5000 });
+    }
+  }
+  return n;
+}
+
 function resetRosterAttendanceAll() {
   if (isMemberMode || isReadonly()) return;
   if (!confirm("全館員の出席数とスポスル取込履歴を0に初期化しますか？\n（翌月から差分取込をやり直せます）")) return;
@@ -10803,6 +10880,8 @@ async function initCloud() {
     } else {
       await cloudPush();
     }
+    // Pages 上のスポスル出席スナップショットを台帳へ反映し、クラウドへ保存
+    try { await syncAttendanceSnapshotAfterCloudPull(); } catch (snapErr) {}
     // 削除マーカーが残っている場合、履歴から自動復旧を一度試みる
     var needsRecovery = ensureDeletedRosterIds(state).length > 0 || !!(state.deletedRosterBackup && Object.keys(state.deletedRosterBackup).length);
     if (needsRecovery && !reviewedHistoryRecoveryTried) {
