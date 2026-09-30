@@ -3088,6 +3088,7 @@ function getActiveContext() {
     if (arch) {
       return {
         leagues: arch.leagues,
+        playoffs: arch.playoffs || { j1_j2: { results: {} } },
         pointRule: arch.pointRule || state.pointRule || { ippon: 4, yusei: 3, draw: 2, lose: 1 },
         seasonLabel: archiveSeasonLabel(arch) + "（アーカイブ）",
         seasonSlug: arch.seasonId || (arch.fiscalYear + "-" + arch.seasonKey),
@@ -3108,6 +3109,7 @@ function getActiveContext() {
   }
   return {
     leagues: state.leagues,
+    playoffs: state.playoffs || { j1_j2: { results: {} } },
     pointRule: state.pointRule,
     seasonLabel: formatSeasonLabel(state.fiscalYear, state.seasonKey),
     seasonSlug: state.seasonId,
@@ -9108,6 +9110,23 @@ function ensurePlayoffs() {
   if (state.playoffs.pre_j1) delete state.playoffs.pre_j1;
 }
 
+// アーカイブ閲覧中はアーカイブ内の入れ替え戦を参照する（現行の state.playoffs を見ない）。
+function getActivePlayoffs() {
+  var ctx = getActiveContext();
+  var playoffs = (ctx && ctx.playoffs) || state.playoffs || {};
+  if (!playoffs.j1_j2 || typeof playoffs.j1_j2 !== "object") playoffs.j1_j2 = { results: {} };
+  if (!playoffs.j1_j2.results || typeof playoffs.j1_j2.results !== "object") playoffs.j1_j2.results = {};
+  if (!Array.isArray(playoffs.j1_j2.matches)) playoffs.j1_j2.matches = [];
+  return playoffs;
+}
+
+function getActivePlayoffBucket(key) {
+  var playoffs = getActivePlayoffs();
+  if (!playoffs[key] || typeof playoffs[key] !== "object") playoffs[key] = { results: {} };
+  if (!playoffs[key].results || typeof playoffs[key].results !== "object") playoffs[key].results = {};
+  return playoffs[key];
+}
+
 function findPlayerGlobal(id) {
   var leagues = getActiveContext().leagues || [];
   for (var i = 0; i < leagues.length; i++) {
@@ -9158,6 +9177,22 @@ function getJ1J2PlayoffParticipants() {
   j1s.slice(5, 7).forEach(function(p) {
     out.push(Object.assign({}, p, { playoffSide: "J1下位" }));
   });
+  // アーカイブ閲覧時: 保存済み入れ替え戦結果に含まれる選手を必ず表示する
+  if (getActiveContext().readonly) {
+    var bucket = getActivePlayoffBucket("j1_j2");
+    var ids = {};
+    Object.keys(bucket.results || {}).forEach(function(k) {
+      k.split("|").forEach(function(id) { if (id) ids[id] = true; });
+    });
+    Object.keys(ids).forEach(function(id) {
+      if (out.some(function(p) { return p.id === id; })) return;
+      var p = findPlayerGlobal(id);
+      var side = "";
+      if ((j1.players || []).some(function(x) { return x.id === id; })) side = "J1";
+      else if ((j2.players || []).some(function(x) { return x.id === id; })) side = "J2";
+      out.push(Object.assign({}, p, { playoffSide: side || "入れ替え戦" }));
+    });
+  }
   return out;
 }
 
@@ -9165,6 +9200,7 @@ function getJ1J2PlayoffParticipants() {
 // ルール: 4人総当たりの上位2名→J1・下位2名→J2。未実施/未入力・参加者不足は据え置き（空プラン）。
 function computePlayoffPromotionPlan() {
   ensurePlayoffs();
+  // 昇降格は現行シーズン操作なので state.playoffs を使う（アーカイブ閲覧中の表示とは分離）
   var bucket = state.playoffs.j1_j2 || { results: {} };
   if (!bucket.results || !Object.keys(bucket.results).length) return [];
   var participants = getJ1J2PlayoffParticipants();
@@ -9215,13 +9251,19 @@ function renderPlayoffPage() {
   ensurePlayoffs();
   var ctx = getActiveContext();
   var html = '<div class="print-title">🥋 米倉道場 Jリーグ 入れ替え戦 ｜ ' + esc(ctx.seasonLabel) + '</div>';
-  html += '<p class="playoff-note">入れ替え戦は適宜実施します。参加は <b>J2 1位・2位</b> と <b>J1 6位・7位</b> の4名です。<br>J1・J2の順位表から4名が自動で参加し、<b>4人総当たり（全6試合）</b>の星取表で結果を記録します。<br>この結果は各リーグの順位表・星取表には即時反映しません。<b>上位2名がJ1・下位2名がJ2</b>として、<b>次のリーグ（シーズンのアーカイブ実行時）</b>に所属へ反映されます（未実施なら据え置き）。</p>';
+  if (ctx.readonly) {
+    html += '<p class="playoff-note">アーカイブ閲覧中です。このシーズンに記録された入れ替え戦結果を表示しています（編集不可）。</p>';
+  } else {
+    html += '<p class="playoff-note">入れ替え戦は適宜実施します。参加は <b>J2 1位・2位</b> と <b>J1 6位・7位</b> の4名です。<br>J1・J2の順位表から4名が自動で参加し、<b>4人総当たり（全6試合）</b>の星取表で結果を記録します。<br>この結果は各リーグの順位表・星取表には即時反映しません。<b>上位2名がJ1・下位2名がJ2</b>として、<b>次のリーグ（シーズンのアーカイブ実行時）</b>に所属へ反映されます（未実施なら据え置き）。</p>';
+  }
   html += renderPlayoffBlock(
     "j1_j2",
     "J1 ⇄ J2 入れ替え戦（4人総当たり）",
     "J1 6位・7位と J2 1位・2位が自動で参加します。星取表の空マスをタップして一本／優勢／引き分けを入力してください。",
     getJ1J2PlayoffParticipants(),
-    "J1・J2の順位が確定すると、J1 6位・7位と J2 1位・2位の4名が自動で参加します。"
+    ctx.readonly
+      ? "このアーカイブには入れ替え戦の記録がありません。"
+      : "J1・J2の順位が確定すると、J1 6位・7位と J2 1位・2位の4名が自動で参加します。"
   );
   return html;
 }
@@ -9233,8 +9275,8 @@ function renderPlayoffBlock(key, title, subtitle, participants, emptyMsg) {
       '<p class="playoff-empty">' + esc(emptyMsg) + '</p></div>';
   }
   ensurePlayoffs();
-  var bucket = state.playoffs[key];
-  var virtual = makePlayoffLeague(title, participants, bucket.results);
+  var bucket = getActivePlayoffBucket(key);
+  var virtual = makePlayoffLeague(title, participants, bucket.results || {});
   var sorted = computeStats(virtual).sorted;
   var partHtml = '<div class="playoff-participants">' + participants.map(function(p) {
     var tag = p.playoffSide ? '<span class="playoff-side-tag">' + esc(p.playoffSide) + '</span>' : '';
@@ -9961,7 +10003,7 @@ function openCellModal(idA, idB, playoffKey) {
     ensurePlayoffs();
     pA = findPlayerGlobal(idA);
     pB = findPlayerGlobal(idB);
-    existing = getPlayoffResult(state.playoffs[playoffKey], idA, idB);
+    existing = getPlayoffResult(getActivePlayoffBucket(playoffKey), idA, idB);
   } else {
     const league = getLeague(currentLeagueId);
     pA = league.players.find(p => p.id === idA);
