@@ -3889,22 +3889,6 @@ function archiveHasMatchResults(arch) {
 }
 
 // 対戦結果があるアーカイブのうち、最も進んだシーズンを返す（空の誤アーカイブは無視）。
-function newestCompletedArchive(s) {
-  if (!s || !Array.isArray(s.archives)) return null;
-  var best = null;
-  var bestScore = -1;
-  s.archives.forEach(function(a) {
-    if (!a || !a.seasonKey || seasonKeyOrder(a.seasonKey) < 0) return;
-    if (!archiveHasMatchResults(a)) return;
-    var score = seasonAdvanceScore(a.fiscalYear, a.seasonKey);
-    if (score > bestScore || (score === bestScore && (!best || (a.archivedAt || 0) > (best.archivedAt || 0)))) {
-      best = a;
-      bestScore = score;
-    }
-  });
-  return best;
-}
-
 function applyArchiveToLiveState(s, arch) {
   if (!s || !arch) return s;
   s.leagues = deepClone(arch.leagues || []);
@@ -3943,12 +3927,6 @@ function dropArchivesForSeason(s, fiscalYear, seasonKey) {
   });
 }
 
-function hasPinnedLiveSeason(s) {
-  return !!(s && s.liveSeasonOverride &&
-    s.liveSeasonOverride.fiscalYear === s.fiscalYear &&
-    s.liveSeasonOverride.seasonKey === s.seasonKey);
-}
-
 function pinLiveSeason(s, fiscalYear, seasonKey, fromArchiveId) {
   if (!s) return;
   s.liveSeasonOverride = {
@@ -3963,35 +3941,26 @@ function clearPinnedLiveSeason(s) {
   if (s) delete s.liveSeasonOverride;
 }
 
-// シーズン正規化:
-// - 現行と同一の完了アーカイブ → 結果を現行へ戻し、重複アーカイブを外す
-// - ピン無しで現行が空のまま完了アーカイブより先に進んでいる → 完了アーカイブを現行へ戻す（夏へ復帰）
-// - アーカイブ→次シーズン操作後は liveSeasonOverride でピンし、自動復帰しない
+// シーズン正規化（自動で夏へ戻したり秋へ進めたりしない）。
+// - 現行シーズンの完了アーカイブが残っていて現行にも結果がある → 重複アーカイブを除去
+// - 現行が空なのに同一シーズンの完了アーカイブだけある → 次シーズンへ進める（締め忘れ修復）
+// 夏終了後はマスターの「アーカイブ → 次シーズンへ」で秋へ進む（ピンで維持）。
 function healLiveSeasonAfterArchives(s) {
   if (!s) return s;
 
   var sameSeasonArch = findArchiveForSeason(s, s.fiscalYear, s.seasonKey);
-  if (sameSeasonArch && archiveHasMatchResults(sameSeasonArch)) {
-    if (!liveHasMatchResults(s)) applyArchiveToLiveState(s, sameSeasonArch);
-    else dropArchivesForSeason(s, s.fiscalYear, s.seasonKey);
-    clearPinnedLiveSeason(s);
+  if (!sameSeasonArch || !archiveHasMatchResults(sameSeasonArch)) return s;
+
+  if (liveHasMatchResults(s)) {
+    dropArchivesForSeason(s, s.fiscalYear, s.seasonKey);
     return s;
   }
 
-  var completed = newestCompletedArchive(s);
-  if (!completed) return s;
-
-  var completedScore = seasonAdvanceScore(completed.fiscalYear, completed.seasonKey);
-  var liveScore = seasonAdvanceScore(s.fiscalYear, s.seasonKey);
-  if (liveScore > completedScore && !liveHasMatchResults(s) && !hasPinnedLiveSeason(s)) {
-    applyArchiveToLiveState(s, completed);
-    s.archives = (s.archives || []).filter(function(a) {
-      if (!a || !a.seasonKey) return false;
-      if (archiveHasMatchResults(a)) return true;
-      return seasonAdvanceScore(a.fiscalYear, a.seasonKey) <= completedScore;
-    });
-    clearPinnedLiveSeason(s);
-  }
+  // 同一シーズンをアーカイブ済みだが現行キーがまだ残っている → 次シーズンへ
+  var next = getNextSeason(s.fiscalYear, s.seasonKey);
+  clearLiveMatchResults(s);
+  setLiveSeasonIdentity(s, next.fiscalYear, next.seasonKey);
+  pinLiveSeason(s, next.fiscalYear, next.seasonKey, sameSeasonArch.seasonId || sameSeasonArch.id);
   return s;
 }
 
@@ -9497,7 +9466,7 @@ function renderSeasonSettings() {
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
         <button type="button" class="btn btn-ghost btn-sm" data-action="viewArchive" data-archive-id="${esc(a.id)}">見る</button>
-        <button type="button" class="btn btn-secondary btn-sm" data-action="restoreArchive" data-archive-id="${esc(a.id)}">現行に戻す</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="restoreArchive" data-archive-id="${esc(a.id)}">現行に戻す</button>
         <button type="button" class="btn btn-danger btn-sm" data-action="deleteArchive" data-archive-id="${esc(a.id)}">削除</button>
       </div>
     </div>`;
@@ -9510,7 +9479,7 @@ function renderSeasonSettings() {
     <div style="font-size:.78rem;color:var(--accent2);font-weight:700;margin-bottom:10px">現在: ${esc(formatSeasonLabel(state.fiscalYear, state.seasonKey))}</div>
     <button type="button" class="btn btn-primary btn-block" style="margin-bottom:8px" data-action="applySeason">シーズン設定を保存</button>
     <button type="button" class="btn btn-ghost btn-block" data-action="archiveSeason">📦 現在シーズンをアーカイブ → 次シーズンへ</button>
-    <p style="font-size:.66rem;color:var(--muted);margin-top:8px;line-height:1.45">アーカイブすると星取表・順位を保存し、全リーグの対戦結果をリセットして次シーズンに進みます（選手名・参加設定は保持）。誤って進めた場合は、下の一覧から「現行に戻す」でアーカイブ前のシーズンに戻せます。</p>
+    <p style="font-size:.66rem;color:var(--muted);margin-top:8px;line-height:1.45">夏終了時は「アーカイブ → 次シーズンへ」で夏を保存し、秋シーズン（空の星取表）へ進みます。選手名・参加設定は保持されます。誤って進めた場合は、下の一覧から「現行に戻す」でアーカイブ前のシーズンに戻せます。</p>
   </div>
   <div class="card">
     <div class="card-title">アーカイブ一覧（${archives.length}件）</div>
