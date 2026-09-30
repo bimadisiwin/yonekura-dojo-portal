@@ -3029,6 +3029,32 @@ function getNextSeason(fiscalYear, seasonKey) {
   return { fiscalYear: String(y + 1), seasonKey: "spring" };
 }
 
+function getPreviousSeason(fiscalYear, seasonKey) {
+  var y = parseInt(fiscalYear, 10) || new Date().getFullYear();
+  if (seasonKey === "summer") return { fiscalYear: String(y), seasonKey: "spring" };
+  if (seasonKey === "autumn") return { fiscalYear: String(y), seasonKey: "summer" };
+  if (seasonKey === "winter") return { fiscalYear: String(y), seasonKey: "autumn" };
+  return { fiscalYear: String(y - 1), seasonKey: "winter" };
+}
+
+function seasonKeyOrder(seasonKey) {
+  for (var i = 0; i < SEASON_DEFS.length; i++) {
+    if (SEASON_DEFS[i].key === seasonKey) return i;
+  }
+  return -1;
+}
+
+// 年度×季節の進行度。数値が大きいほど新しいシーズン。
+function seasonAdvanceScore(fiscalYear, seasonKey) {
+  var y = parseInt(fiscalYear, 10) || 0;
+  var o = seasonKeyOrder(seasonKey);
+  return y * 10 + (o < 0 ? 0 : o);
+}
+
+function sameLiveSeason(a, b) {
+  return !!(a && b && a.fiscalYear === b.fiscalYear && a.seasonKey === b.seasonKey);
+}
+
 function findArchive(id) {
   if (!state.archives) return null;
   for (var i = 0; i < state.archives.length; i++) {
@@ -3293,7 +3319,9 @@ function playerInAnyLeague(target, id, rosterId) {
   return false;
 }
 
-function mergeLeaguesInto(target, source) {
+function mergeLeaguesInto(target, source, opts) {
+  opts = opts || {};
+  var mergeResults = opts.mergeResults !== false;
   if (!source || !source.leagues) return;
   if (!target.leagues) target.leagues = [];
   source.leagues.forEach(function(sl) {
@@ -3302,10 +3330,12 @@ function mergeLeaguesInto(target, source) {
       if (target.leagues[i].id === sl.id) { tl = target.leagues[i]; break; }
     }
     if (!tl) {
-      target.leagues.push(deepClone(sl));
+      var cloned = deepClone(sl);
+      if (!mergeResults) cloned.results = {};
+      target.leagues.push(cloned);
       return;
     }
-    tl.results = mergeMatchResults(tl.results, sl.results);
+    if (mergeResults) tl.results = mergeMatchResults(tl.results, sl.results);
     (sl.players || []).forEach(function(sp) {
       var tp = null;
       for (var j = 0; j < (tl.players || []).length; j++) {
@@ -3326,7 +3356,9 @@ function mergeLeaguesInto(target, source) {
   });
 }
 
-function mergePlayoffsInto(target, source) {
+function mergePlayoffsInto(target, source, opts) {
+  opts = opts || {};
+  if (opts.mergeResults === false) return;
   if (!source || !source.playoffs) return;
   if (!target.playoffs) target.playoffs = {};
   ["j1_j2"].forEach(function(key) {
@@ -3685,6 +3717,108 @@ function dropArchivesMatchingLiveSeason(s) {
   return s;
 }
 
+function findArchiveForSeason(s, fiscalYear, seasonKey) {
+  if (!s || !Array.isArray(s.archives)) return null;
+  var best = null;
+  s.archives.forEach(function(a) {
+    if (!a || a.fiscalYear !== fiscalYear || a.seasonKey !== seasonKey) return;
+    if (!best || (a.archivedAt || 0) > (best.archivedAt || 0)) best = a;
+  });
+  return best;
+}
+
+// 古いシーズン側の現行データを、進んだ側のアーカイブへ取り込む（未保存なら作成）。
+function ensureOlderSeasonArchived(target, older) {
+  if (!target || !older) return;
+  if (sameLiveSeason(target, older)) return;
+  if (seasonAdvanceScore(older.fiscalYear, older.seasonKey) >= seasonAdvanceScore(target.fiscalYear, target.seasonKey)) return;
+  if (!target.archives) target.archives = [];
+  if (findArchiveForSeason(target, older.fiscalYear, older.seasonKey)) return;
+  var fromOlderArch = findArchiveForSeason(older, older.fiscalYear, older.seasonKey);
+  if (fromOlderArch) {
+    target.archives.unshift(deepClone(fromOlderArch));
+    return;
+  }
+  target.archives.unshift({
+    id: (older.seasonId || (older.fiscalYear + "-" + older.seasonKey)) + "-merge-" + Date.now(),
+    seasonId: older.seasonId || (older.fiscalYear + "-" + older.seasonKey),
+    fiscalYear: older.fiscalYear,
+    seasonKey: older.seasonKey,
+    label: formatSeasonLabel(older.fiscalYear, older.seasonKey),
+    archivedAt: older.updatedAt || Date.now(),
+    leagues: deepClone(older.leagues || []),
+    playoffs: deepClone(older.playoffs || {}),
+    pointRule: deepClone(older.pointRule || { ippon: 4, yusei: 3, draw: 2, lose: 1 }),
+    specialAwards: deepClone(older.specialAwards || {}),
+    seasonSpecialAwards: deepClone(older.seasonSpecialAwards || []),
+    seasonMvpOverride: deepClone(older.seasonMvpOverride || {}),
+    monthlyMvpOverride: deepClone(older.monthlyMvpOverride || {}),
+    annualBestAward: deepClone(older.annualBestAward || { playerId: "" }),
+    annualSpecialAwards: deepClone(older.annualSpecialAwards || []),
+    monthlyMvpLocked: deepClone(older.monthlyMvpLocked || {}),
+    awardConfirmations: deepClone(older.awardConfirmations || []),
+    roster: deepClone(older.roster || [])
+  });
+}
+
+function leagueResultsSignature(leagues) {
+  var sig = {};
+  (leagues || []).forEach(function(l) {
+    if (!l || !l.id) return;
+    var res = l.results || {};
+    var keys = Object.keys(res).sort();
+    if (!keys.length) return;
+    sig[l.id] = {};
+    keys.forEach(function(k) {
+      var r = res[k] || {};
+      sig[l.id][k] = { r: r.r || "", w: r.w || "" };
+    });
+  });
+  return sig;
+}
+
+function playoffResultsSignature(playoffs) {
+  var sig = {};
+  var po = playoffs || {};
+  Object.keys(po).forEach(function(key) {
+    var res = (po[key] && po[key].results) || {};
+    var keys = Object.keys(res).sort();
+    if (!keys.length) return;
+    sig[key] = {};
+    keys.forEach(function(k) {
+      var r = res[k] || {};
+      sig[key][k] = { r: r.r || "", w: r.w || "" };
+    });
+  });
+  return sig;
+}
+
+function hasAnyResultsSignature(sig) {
+  return !!(sig && Object.keys(sig).length);
+}
+
+// アーカイブ済み前シーズンの星取が、同期マージで新シーズンへ丸ごと戻った状態を掃除する。
+function clearLiveResultsCopiedFromPriorArchive(s) {
+  if (!s) return s;
+  var prev = getPreviousSeason(s.fiscalYear, s.seasonKey);
+  var arch = findArchiveForSeason(s, prev.fiscalYear, prev.seasonKey);
+  if (!arch) return s;
+  var liveSig = leagueResultsSignature(s.leagues);
+  if (!hasAnyResultsSignature(liveSig)) return s;
+  var archSig = leagueResultsSignature(arch.leagues);
+  if (!hasAnyResultsSignature(archSig)) return s;
+  if (JSON.stringify(liveSig) !== JSON.stringify(archSig)) return s;
+  (s.leagues || []).forEach(function(l) { if (l) l.results = {}; });
+  var livePo = playoffResultsSignature(s.playoffs);
+  var archPo = playoffResultsSignature(arch.playoffs);
+  if (hasAnyResultsSignature(livePo) && JSON.stringify(livePo) === JSON.stringify(archPo)) {
+    Object.keys(s.playoffs || {}).forEach(function(key) {
+      if (s.playoffs[key]) s.playoffs[key].results = {};
+    });
+  }
+  return s;
+}
+
 // 春＝プレリーグのみ、夏以降＝J1/J2/J3のみにリーグ構成を揃える。
 function leaguesForSeasonKey(seasonKey) {
   return seasonKey === "spring" ? ["pre"] : ["j1", "j2", "j3"];
@@ -3776,17 +3910,32 @@ function mergeSposuruSettingsInto(target, source) {
 function mergeCloudStates(local, remote) {
   local = normalizeState(local || {});
   remote = normalizeState(remote || {});
-  var localNewer = (local.updatedAt || 0) >= (remote.updatedAt || 0);
-  var merged = deepClone(localNewer ? local : remote);
-  var secondary = localNewer ? remote : local;
-  mergeLeaguesInto(merged, secondary);
-  mergePlayoffsInto(merged, secondary);
-  mergeRosterInto(merged, secondary);
-  mergeArchivesInto(merged, secondary);
-  mergeSposuruSettingsInto(merged, secondary);
-  dropArchivesMatchingLiveSeason(merged);
-  merged.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0, Date.now());
-  return normalizeState(merged);
+  var sameSeason = sameLiveSeason(local, remote);
+  var localScore = seasonAdvanceScore(local.fiscalYear, local.seasonKey);
+  var remoteScore = seasonAdvanceScore(remote.fiscalYear, remote.seasonKey);
+  var primary;
+  var secondary;
+  if (!sameSeason && localScore !== remoteScore) {
+    // 進んだシーズンを正とする（旧シーズンの星取を新シーズンへ混ぜない）
+    primary = deepClone(localScore > remoteScore ? local : remote);
+    secondary = localScore > remoteScore ? remote : local;
+    ensureOlderSeasonArchived(primary, secondary);
+    mergeLeaguesInto(primary, secondary, { mergeResults: false });
+    mergePlayoffsInto(primary, secondary, { mergeResults: false });
+  } else {
+    var localNewer = (local.updatedAt || 0) >= (remote.updatedAt || 0);
+    primary = deepClone(localNewer ? local : remote);
+    secondary = localNewer ? remote : local;
+    if (!sameSeason) ensureOlderSeasonArchived(primary, secondary);
+    mergeLeaguesInto(primary, secondary, { mergeResults: sameSeason });
+    mergePlayoffsInto(primary, secondary, { mergeResults: sameSeason });
+  }
+  mergeRosterInto(primary, secondary);
+  mergeArchivesInto(primary, secondary);
+  mergeSposuruSettingsInto(primary, secondary);
+  dropArchivesMatchingLiveSeason(primary);
+  primary.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0, Date.now());
+  return normalizeState(primary);
 }
 
 function mergeResultsFromInto(base, source) {
@@ -3805,13 +3954,26 @@ function mergeResultsFromInto(base, source) {
   }
 }
 
-// 起動時用: リーグ構成・シーズンはクラウド(remote)を正とし、対戦結果・名簿・アーカイブのみ統合する。
-// 端末に残った古いキャッシュでリーグ構成が復活・重複するのを防ぐ。
+// 起動時用: 同一シーズンならクラウドのリーグ構成を正とし、対戦結果・名簿・アーカイブを統合する。
+// シーズンが進んでいる側を優先し、旧シーズンの星取が新シーズンへ混ざるのを防ぐ。
 function mergeCloudStatesRemoteFirst(local, remote) {
   local = normalizeState(local || {});
   remote = normalizeState(remote || {});
-  var merged = deepClone(remote);
-  mergeResultsFromInto(merged, local);
+  var sameSeason = sameLiveSeason(local, remote);
+  var localScore = seasonAdvanceScore(local.fiscalYear, local.seasonKey);
+  var remoteScore = seasonAdvanceScore(remote.fiscalYear, remote.seasonKey);
+  var merged;
+  if (!sameSeason && localScore > remoteScore) {
+    // 端末が進んでいる（アーカイブ→次シーズン済み、クラウド未反映）場合は端末を正とする
+    merged = deepClone(local);
+    ensureOlderSeasonArchived(merged, remote);
+    mergeLeaguesInto(merged, remote, { mergeResults: false });
+  } else {
+    merged = deepClone(remote);
+    if (!sameSeason) ensureOlderSeasonArchived(merged, local);
+    if (sameSeason) mergeResultsFromInto(merged, local);
+    else mergeLeaguesInto(merged, local, { mergeResults: false });
+  }
   mergeRosterInto(merged, local);
   mergeArchivesInto(merged, local);
   mergeSposuruSettingsInto(merged, local);
@@ -4146,6 +4308,7 @@ function normalizeState(raw) {
   detachArchivedFromLeagues(s);
   ensureSposuruSettings(s);
   dropArchivesMatchingLiveSeason(s);
+  clearLiveResultsCopiedFromPriorArchive(s);
   dedupeRosterMembers(s);
   applyDeletedRosterIds(s);
   dedupeLeaguePlayers(s);
