@@ -3088,7 +3088,7 @@ function getActiveContext() {
     if (arch) {
       return {
         leagues: arch.leagues,
-        pointRule: arch.pointRule,
+        pointRule: arch.pointRule || state.pointRule || { ippon: 4, yusei: 3, draw: 2, lose: 1 },
         seasonLabel: archiveSeasonLabel(arch) + "（アーカイブ）",
         seasonSlug: arch.seasonId || (arch.fiscalYear + "-" + arch.seasonKey),
         readonly: true,
