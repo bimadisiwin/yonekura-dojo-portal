@@ -3352,11 +3352,31 @@ function ensureDeletedRosterIds(s) {
   return s.deletedRosterIds;
 }
 
-function markRosterDeleted(s, rosterId) {
+function clearRosterDeleted(s, rosterId) {
+  if (!s || !rosterId) return;
+  var id = String(rosterId);
+  s.deletedRosterIds = ensureDeletedRosterIds(s).filter(function(x) { return x !== id; });
+  if (s.deletedRosterBackup && s.deletedRosterBackup[id]) delete s.deletedRosterBackup[id];
+}
+
+function markRosterDeleted(s, rosterId, memberSnapshot) {
   if (!s || !rosterId) return;
   var list = ensureDeletedRosterIds(s);
   var id = String(rosterId);
   if (list.indexOf(id) < 0) list.push(id);
+  // 審査履歴付きはバックアップを残し、誤削除時に復元できるようにする
+  if (memberSnapshot && memberHasStripeReviews(memberSnapshot)) {
+    if (!s.deletedRosterBackup || typeof s.deletedRosterBackup !== "object") s.deletedRosterBackup = {};
+    s.deletedRosterBackup[id] = deepClone(memberSnapshot);
+  }
+}
+
+function memberHasStripeReviews(m) {
+  if (!m || !Array.isArray(m.reviews)) return false;
+  for (var i = 0; i < m.reviews.length; i++) {
+    if (isStripeReviewEntry(m.reviews[i])) return true;
+  }
+  return false;
 }
 
 function mergeDeletedRosterIdsInto(target, source) {
@@ -3364,27 +3384,97 @@ function mergeDeletedRosterIdsInto(target, source) {
   ensureDeletedRosterIds(target).concat(ensureDeletedRosterIds(source)).forEach(function(id) {
     if (id) map[String(id)] = true;
   });
+  // バックアップも統合（新しい方を優先）
+  if (!target.deletedRosterBackup || typeof target.deletedRosterBackup !== "object") target.deletedRosterBackup = {};
+  var sb = (source && source.deletedRosterBackup && typeof source.deletedRosterBackup === "object") ? source.deletedRosterBackup : {};
+  Object.keys(sb).forEach(function(id) {
+    if (!target.deletedRosterBackup[id]) target.deletedRosterBackup[id] = deepClone(sb[id]);
+  });
   target.deletedRosterIds = Object.keys(map);
   return target.deletedRosterIds;
 }
 
+function restoreReviewedRosterFromBackup(s) {
+  if (!s) return s;
+  if (!Array.isArray(s.roster)) s.roster = [];
+  var byId = {};
+  s.roster.forEach(function(m) { if (m && m.id) byId[String(m.id)] = true; });
+
+  function tryRestore(id, snap) {
+    if (!snap || !memberHasStripeReviews(snap)) return;
+    clearRosterDeleted(s, id);
+    if (byId[id]) return;
+    var restored = normalizeRosterMember(deepClone(snap));
+    restored.id = id;
+    // 削除マーカー由来の復活なので在籍に戻す
+    restored.archivedAt = 0;
+    restored.archivedReason = "";
+    s.roster.push(restored);
+    byId[id] = true;
+  }
+
+  if (s.deletedRosterBackup && typeof s.deletedRosterBackup === "object") {
+    Object.keys(s.deletedRosterBackup).forEach(function(id) {
+      tryRestore(id, s.deletedRosterBackup[id]);
+    });
+  }
+
+  // シーズンアーカイブに残っていれば、削除済みでも審査履歴付きは復元
+  var delIds = ensureDeletedRosterIds(s);
+  if (delIds.length && Array.isArray(s.archives)) {
+    delIds.slice().forEach(function(id) {
+      if (byId[String(id)]) return;
+      for (var ai = 0; ai < s.archives.length; ai++) {
+        var archRoster = (s.archives[ai] && s.archives[ai].roster) || [];
+        for (var ri = 0; ri < archRoster.length; ri++) {
+          if (archRoster[ri] && String(archRoster[ri].id) === String(id) && memberHasStripeReviews(archRoster[ri])) {
+            tryRestore(id, archRoster[ri]);
+            return;
+          }
+        }
+      }
+    });
+  }
+  return s;
+}
+
 function applyDeletedRosterIds(s) {
   if (!s) return s;
+  restoreReviewedRosterFromBackup(s);
   var del = {};
   ensureDeletedRosterIds(s).forEach(function(id) { del[String(id)] = true; });
   if (!Object.keys(del).length) return s;
-  s.roster = (s.roster || []).filter(function(m) { return m && !del[String(m.id)]; });
+  s.roster = (s.roster || []).filter(function(m) {
+    if (!m) return false;
+    if (!del[String(m.id)]) return true;
+    // ストライプ審査がある館員は削除マーカーより優先して残す
+    if (memberHasStripeReviews(m)) {
+      clearRosterDeleted(s, m.id);
+      return true;
+    }
+    return false;
+  });
   (s.leagues || []).forEach(function(league) {
     if (!league || !Array.isArray(league.players)) return;
     var removeIds = [];
     league.players.forEach(function(p) {
-      if (p && p.rosterId && del[String(p.rosterId)]) removeIds.push(p.id);
+      if (p && p.rosterId && del[String(p.rosterId)] && !findRosterMemberInState(s, p.rosterId)) removeIds.push(p.id);
     });
     if (!removeIds.length) return;
-    league.players = league.players.filter(function(p) { return !(p && p.rosterId && del[String(p.rosterId)]); });
+    league.players = league.players.filter(function(p) {
+      return !(p && p.rosterId && del[String(p.rosterId)] && !findRosterMemberInState(s, p.rosterId));
+    });
     removeIds.forEach(function(playerId) { purgeLeaguePlayerResults(league, playerId); });
   });
   return s;
+}
+
+function findRosterMemberInState(s, rosterId) {
+  if (!s || !rosterId || !Array.isArray(s.roster)) return null;
+  for (var i = 0; i < s.roster.length; i++) {
+    if (s.roster[i] && s.roster[i].id === rosterId) return s.roster[i];
+  }
+  return null;
 }
 
 function rosterDedupeScore(m, s) {
@@ -3437,7 +3527,7 @@ function dedupeRosterMembers(s) {
           if (p && p.rosterId === m.id) p.rosterId = keeper.id;
         });
       });
-      markRosterDeleted(s, m.id);
+      markRosterDeleted(s, m.id, m);
       var dropIdx = s.roster.indexOf(m);
       if (dropIdx >= 0) s.roster.splice(dropIdx, 1);
     });
@@ -3451,7 +3541,16 @@ function mergeRosterInto(target, source) {
   var deleted = {};
   mergeDeletedRosterIdsInto(target, source).forEach(function(id) { deleted[String(id)] = true; });
   (source.roster || []).forEach(function(sm) {
-    if (!sm || !sm.id || deleted[String(sm.id)]) return;
+    if (!sm || !sm.id) return;
+    if (deleted[String(sm.id)]) {
+      // ストライプ審査がある館員は削除マーカーより優先して復活させる
+      if (memberHasStripeReviews(sm)) {
+        clearRosterDeleted(target, sm.id);
+        delete deleted[String(sm.id)];
+      } else {
+        return;
+      }
+    }
     var tm = null;
     var idx = -1;
     for (var i = 0; i < target.roster.length; i++) {
@@ -3882,6 +3981,7 @@ function normalizeState(raw) {
   if (!Array.isArray(s.awardConfirmations)) s.awardConfirmations = [];
   if (!Array.isArray(s.roster)) s.roster = [];
   ensureDeletedRosterIds(s);
+  if (!s.deletedRosterBackup || typeof s.deletedRosterBackup !== "object") s.deletedRosterBackup = {};
   applyDeletedRosterIds(s);
   ensureRosterLinks(s);
   applyRosterArchiveDefaults(s);
@@ -5209,9 +5309,13 @@ function removeRosterMember(rosterId) {
   if (isMemberMode || isReadonly()) return;
   var m = findRosterMember(rosterId);
   if (!m) return;
+  if (memberHasStripeReviews(m)) {
+    showToast("ストライプ審査履歴があるため削除できません。退会する場合は「アーカイブ」を使ってください。", { type: "warn", duration: 4000 });
+    return;
+  }
   if (!confirm(m.name + " を館員台帳から削除しますか？\n（全リーグからも除外され、関連する対戦結果も削除されます）")) return;
   state.roster = (state.roster || []).filter(function(x) { return x.id !== rosterId; });
-  markRosterDeleted(state, rosterId);
+  markRosterDeleted(state, rosterId, m);
   detachRosterFromLeagues(rosterId);
   if (feedbackRosterId === rosterId) feedbackRosterId = "";
   saveState();
@@ -9305,8 +9409,16 @@ function removePlayer(id) {
   if (league.players.length <= 2) { showToast("最低2名必要"); return; }
   var p = league.players.find(function(x) { return x.id === id; });
   if (!p) return;
-  if (!confirm("この選手を削除しますか？関連する対戦結果も消えます。" + (p.rosterId ? "\n\n館員台帳に登録がある場合、他リーグにいなければ台帳からも削除されます。" : ""))) return;
   var rosterId = p.rosterId || "";
+  var rosterMember = rosterId ? findRosterMember(rosterId) : null;
+  var keepRosterForReviews = !!(rosterMember && memberHasStripeReviews(rosterMember));
+  var confirmExtra = "";
+  if (rosterId) {
+    confirmExtra = keepRosterForReviews
+      ? "\n\n※ ストライプ審査履歴があるため、館員台帳（🎗ストライプ）には残します。"
+      : "\n\n館員台帳に登録がある場合、他リーグにいなければ台帳からも削除されます。";
+  }
+  if (!confirm("この選手をリーグから外しますか？関連する対戦結果も消えます。" + confirmExtra)) return;
   league.players = league.players.filter(function(x) { return x.id !== id; });
   purgeLeaguePlayerResults(league, id);
   if (rosterId) {
@@ -9314,13 +9426,20 @@ function removePlayer(id) {
     state.leagues.forEach(function(lg) {
       if (lg.players.some(function(x) { return x.rosterId === rosterId; })) stillInLeague = true;
     });
-    if (!stillInLeague) {
+    if (!stillInLeague && !keepRosterForReviews) {
+      var snap = findRosterMember(rosterId);
       state.roster = (state.roster || []).filter(function(x) { return x.id !== rosterId; });
-      markRosterDeleted(state, rosterId);
+      markRosterDeleted(state, rosterId, snap);
+      showToast("選手を削除しました ✓");
+    } else if (!stillInLeague && keepRosterForReviews) {
+      showToast("リーグから外しました（審査履歴があるため台帳は残しています）✓", { type: "ok", duration: 3000 });
+    } else {
+      showToast("選手をリーグから外しました ✓");
     }
+  } else {
+    showToast("選手を削除しました ✓");
   }
   saveState(); render();
-  showToast("選手を削除しました ✓");
 }
 
 function resetLeague() {
