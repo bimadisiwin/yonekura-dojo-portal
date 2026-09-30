@@ -4285,6 +4285,8 @@ function mergeSposuruSettingsInto(target, source) {
     td.lastSyncSummary = sd.lastSyncSummary;
     td.lastImportCutoffDate = sd.lastImportCutoffDate || td.lastImportCutoffDate || "";
   }
+  // 反映済みスナップショット日時は新しい方を残す（毎回「最新化」トーストが出るのを防ぐ）
+  td.attendanceSnapshotAt = Math.max(td.attendanceSnapshotAt || 0, sd.attendanceSnapshotAt || 0);
   // 旧キーが残っていれば掃除
   delete target.sposuruSettings;
 }
@@ -6705,13 +6707,23 @@ function applyAttendanceSnapshotToState(snapshot) {
     var n = byNorm[key];
     var prev = m.attendanceCount || 0;
     var prevAt = m.attendanceUpdatedAt || 0;
-    // スナップショット日時が新しい、または回数が違うときだけ更新（古い端末キャッシュで上書きしない）
+    // 端末側がスナップショットより新しく同数なら触らない
     if (snapAt && prevAt && prevAt > snapAt && prev === n) return;
-    if (prev !== n || !prevAt || (snapAt && prevAt < snapAt)) {
-      m.attendanceCount = n;
-      m.attendanceUpdatedAt = snapAt || Date.now();
-      updated++;
+    // 回数同じ → タイムスタンプだけ揃えて「更新人数」には数えない（毎回トースト防止）
+    if (prev === n) {
+      if (snapAt && prevAt < snapAt) m.attendanceUpdatedAt = snapAt;
+      return;
     }
+    // スナップショットの方が少ない場合は下げない。
+    // merge は max 採用のため下げると直後に戻り、起動のたびに「最新化」扱いになる。
+    if (n < prev) {
+      if (snapAt && prevAt < snapAt) m.attendanceUpdatedAt = snapAt;
+      return;
+    }
+    // 回数増加のみ反映
+    m.attendanceCount = n;
+    m.attendanceUpdatedAt = snapAt || Date.now();
+    updated++;
   });
   var cfg = ensureSposuruSettings();
   if (snapshot.importedSessions && typeof snapshot.importedSessions === "object") {
@@ -6723,12 +6735,12 @@ function applyAttendanceSnapshotToState(snapshot) {
     var n = Math.max(0, parseInt(row.attendanceCount, 10) || 0);
     cfg.importBaselines[bKey] = Math.max(cfg.importBaselines[bKey] || 0, n);
   });
-  if (updated > 0 || !cfg.attendanceSnapshotAt || (snapAt && cfg.attendanceSnapshotAt < snapAt)) {
-    cfg.attendanceSnapshotAt = snapAt || Date.now();
+  // 同じスナップショットは一度処理したら再適用しないための印
+  if (snapAt) cfg.attendanceSnapshotAt = Math.max(cfg.attendanceSnapshotAt || 0, snapAt);
+  if (updated > 0) {
     cfg.lastSyncAt = Date.now();
     cfg.lastImportCutoffDate = snapshot.cutoffDate || cfg.lastImportCutoffDate || "";
-    cfg.lastSyncSummary = "スポスル出席スナップショット反映" +
-      (updated ? "（" + updated + "名）" : "") +
+    cfg.lastSyncSummary = "スポスル出席スナップショット反映（" + updated + "名）" +
       (snapshot.cutoffDate ? " ／ 基準日 " + snapshot.cutoffDate : "");
   }
   return updated;
@@ -6738,7 +6750,16 @@ async function syncAttendanceSnapshotAfterCloudPull() {
   if (isMemberMode || isReadonly()) return 0;
   var snapshot = await fetchAttendanceSnapshot();
   if (!snapshot) return 0;
+  var snapAt = Date.parse(snapshot.exportedAt) || 0;
+  var cfg = ensureSposuruSettings();
+  // 同一スナップショットを反映済みなら何もしない（起動のたびにトーストしない）
+  if (snapAt && (cfg.attendanceSnapshotAt || 0) >= snapAt) return 0;
   var n = applyAttendanceSnapshotToState(snapshot);
+  // 更新0件でも「このスナップショットは処理済み」と刻む
+  if (snapAt && (cfg.attendanceSnapshotAt || 0) < snapAt) {
+    cfg.attendanceSnapshotAt = snapAt;
+    saveLocal();
+  }
   if (n > 0) {
     state.updatedAt = Date.now();
     saveLocal();
