@@ -3819,6 +3819,79 @@ function clearLiveResultsCopiedFromPriorArchive(s) {
   return s;
 }
 
+function parseSeasonIdParts(seasonId) {
+  if (!seasonId || typeof seasonId !== "string") return null;
+  var dash = seasonId.indexOf("-");
+  if (dash <= 0) return null;
+  var fy = seasonId.slice(0, dash);
+  var sk = seasonId.slice(dash + 1);
+  if (!fy || seasonKeyOrder(sk) < 0) return null;
+  return { fiscalYear: fy, seasonKey: sk };
+}
+
+// seasonId / seasonKey / fiscalYear の食い違いを、進んでいる側に揃える。
+function reconcileSeasonIdentity(s) {
+  if (!s) return s;
+  var fromId = parseSeasonIdParts(s.seasonId);
+  if (fromId) {
+    if (!s.seasonKey || seasonKeyOrder(s.seasonKey) < 0) {
+      s.seasonKey = fromId.seasonKey;
+      if (!s.fiscalYear) s.fiscalYear = fromId.fiscalYear;
+    } else if (!sameLiveSeason(s, fromId)) {
+      if (seasonAdvanceScore(fromId.fiscalYear, fromId.seasonKey) > seasonAdvanceScore(s.fiscalYear, s.seasonKey)) {
+        s.fiscalYear = fromId.fiscalYear;
+        s.seasonKey = fromId.seasonKey;
+      }
+    }
+  }
+  if (!s.fiscalYear) s.fiscalYear = s.season || String(new Date().getFullYear());
+  if (!s.seasonKey || seasonKeyOrder(s.seasonKey) < 0) s.seasonKey = detectSeasonKey(new Date());
+  s.season = s.fiscalYear;
+  s.seasonId = s.fiscalYear + "-" + s.seasonKey;
+  return s;
+}
+
+function newestArchiveEntry(s) {
+  if (!s || !Array.isArray(s.archives) || !s.archives.length) return null;
+  var best = null;
+  s.archives.forEach(function(a) {
+    if (!a || !a.seasonKey || seasonKeyOrder(a.seasonKey) < 0) return;
+    if (!best || (a.archivedAt || 0) > (best.archivedAt || 0)) best = a;
+  });
+  return best;
+}
+
+// 直近アーカイブの「次シーズン」より現行が遅れている場合、空（またはアーカイブ結果の混入）なら進める。
+// 会員ページはクラウドを読むだけのため、夏アーカイブ後に seasonKey が夏へ戻った状態でも秋を表示できるようにする。
+function healLiveSeasonAfterArchives(s) {
+  if (!s) return s;
+  var newest = newestArchiveEntry(s);
+  if (!newest) return s;
+  var next = getNextSeason(newest.fiscalYear, newest.seasonKey);
+  if (seasonAdvanceScore(s.fiscalYear, s.seasonKey) >= seasonAdvanceScore(next.fiscalYear, next.seasonKey)) return s;
+  var liveSig = leagueResultsSignature(s.leagues);
+  var archSig = leagueResultsSignature(newest.leagues);
+  var empty = !hasAnyResultsSignature(liveSig);
+  var echo = hasAnyResultsSignature(liveSig) && hasAnyResultsSignature(archSig) &&
+    JSON.stringify(liveSig) === JSON.stringify(archSig);
+  if (!empty && !echo) return s;
+  if (echo) {
+    (s.leagues || []).forEach(function(l) { if (l) l.results = {}; });
+    var livePo = playoffResultsSignature(s.playoffs);
+    var archPo = playoffResultsSignature(newest.playoffs);
+    if (hasAnyResultsSignature(livePo) && JSON.stringify(livePo) === JSON.stringify(archPo)) {
+      Object.keys(s.playoffs || {}).forEach(function(key) {
+        if (s.playoffs[key]) s.playoffs[key].results = {};
+      });
+    }
+  }
+  s.fiscalYear = next.fiscalYear;
+  s.seasonKey = next.seasonKey;
+  s.season = next.fiscalYear;
+  s.seasonId = next.fiscalYear + "-" + next.seasonKey;
+  return s;
+}
+
 // 春＝プレリーグのみ、夏以降＝J1/J2/J3のみにリーグ構成を揃える。
 function leaguesForSeasonKey(seasonKey) {
   return seasonKey === "spring" ? ["pre"] : ["j1", "j2", "j3"];
@@ -4271,6 +4344,7 @@ function normalizeState(raw) {
   if (!s.fiscalYear) s.fiscalYear = s.season;
   if (!s.seasonKey) s.seasonKey = detectSeasonKey(new Date());
   if (!s.seasonId) s.seasonId = s.fiscalYear + "-" + s.seasonKey;
+  reconcileSeasonIdentity(s);
   s.season = s.fiscalYear;
   if (!s.playoffs || typeof s.playoffs !== "object") s.playoffs = {};
   if (!s.playoffs.j1_j2 || typeof s.playoffs.j1_j2 !== "object") s.playoffs.j1_j2 = { results: {} };
@@ -4307,8 +4381,10 @@ function normalizeState(raw) {
   applyRosterArchiveDefaults(s);
   detachArchivedFromLeagues(s);
   ensureSposuruSettings(s);
-  dropArchivesMatchingLiveSeason(s);
+  // アーカイブを消す前にシーズン進行を修復（会員ページはクラウド読込のみのため）
+  healLiveSeasonAfterArchives(s);
   clearLiveResultsCopiedFromPriorArchive(s);
+  dropArchivesMatchingLiveSeason(s);
   dedupeRosterMembers(s);
   applyDeletedRosterIds(s);
   dedupeLeaguePlayers(s);
@@ -9316,8 +9392,9 @@ function renderSeasonSettings() {
         <div>${esc(a.label || formatSeasonLabel(a.fiscalYear, a.seasonKey))}</div>
         <div class="archive-item-meta">${esc(when)} 保存</div>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
         <button type="button" class="btn btn-ghost btn-sm" data-action="viewArchive" data-archive-id="${esc(a.id)}">見る</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-action="restoreArchive" data-archive-id="${esc(a.id)}">現行に戻す</button>
         <button type="button" class="btn btn-danger btn-sm" data-action="deleteArchive" data-archive-id="${esc(a.id)}">削除</button>
       </div>
     </div>`;
@@ -9330,7 +9407,7 @@ function renderSeasonSettings() {
     <div style="font-size:.78rem;color:var(--accent2);font-weight:700;margin-bottom:10px">現在: ${esc(formatSeasonLabel(state.fiscalYear, state.seasonKey))}</div>
     <button type="button" class="btn btn-primary btn-block" style="margin-bottom:8px" data-action="applySeason">シーズン設定を保存</button>
     <button type="button" class="btn btn-ghost btn-block" data-action="archiveSeason">📦 現在シーズンをアーカイブ → 次シーズンへ</button>
-    <p style="font-size:.66rem;color:var(--muted);margin-top:8px;line-height:1.45">アーカイブすると星取表・順位を保存し、全リーグの対戦結果をリセットして次シーズンに進みます（選手名・参加設定は保持）。</p>
+    <p style="font-size:.66rem;color:var(--muted);margin-top:8px;line-height:1.45">アーカイブすると星取表・順位を保存し、全リーグの対戦結果をリセットして次シーズンに進みます（選手名・参加設定は保持）。誤って進めた場合は、下の一覧から「現行に戻す」でアーカイブ前のシーズンに戻せます。</p>
   </div>
   <div class="card">
     <div class="card-title">アーカイブ一覧（${archives.length}件）</div>
@@ -9716,6 +9793,62 @@ function deleteArchive(id) {
   saveState();
   render();
   showToast("アーカイブを削除しました");
+}
+
+function liveSeasonHasMatchResults(s) {
+  if (!s) return false;
+  return hasAnyResultsSignature(leagueResultsSignature(s.leagues)) ||
+    hasAnyResultsSignature(playoffResultsSignature(s.playoffs));
+}
+
+// アーカイブを現行シーズンとして復元する（誤って次シーズンへ進めたときの取り消し）。
+function restoreArchiveAsLive(id) {
+  if (isMemberMode) { showToast("会員ページでは操作できません"); return; }
+  if (isReadonly()) { showToast("アーカイブ閲覧中は操作できません。先に「現在シーズンに戻る」を押してください"); return; }
+  var arch = findArchive(id);
+  if (!arch) { showToast("アーカイブが見つかりません"); return; }
+  var archLabel = arch.label || formatSeasonLabel(arch.fiscalYear, arch.seasonKey);
+  var curLabel = formatSeasonLabel(state.fiscalYear, state.seasonKey);
+  var msg = archLabel + " を現行シーズンに戻しますか？\n\n" +
+    "・星取表・入れ替え戦・表彰はアーカイブ時点の内容に戻ります\n" +
+    "・館員台帳（出席・ストライプ等）はいまの内容を保持します\n" +
+    "・現在の " + curLabel + " の星取は破棄されます";
+  if (!confirm(msg)) return;
+  if (!sameLiveSeason(state, arch) && liveSeasonHasMatchResults(state)) {
+    if (!confirm("現在の " + curLabel + " には対戦結果があります。破棄して復元してよいですか？")) return;
+  }
+
+  state.leagues = deepClone(arch.leagues || []);
+  state.playoffs = deepClone(arch.playoffs || { j1_j2: { results: {} } });
+  if (arch.pointRule) state.pointRule = deepClone(arch.pointRule);
+  state.specialAwards = deepClone(arch.specialAwards || {});
+  state.seasonSpecialAwards = Array.isArray(arch.seasonSpecialAwards)
+    ? deepClone(arch.seasonSpecialAwards)
+    : getDefaultSeasonSpecialSlots();
+  state.seasonMvpOverride = deepClone(arch.seasonMvpOverride || {});
+  state.monthlyMvpOverride = deepClone(arch.monthlyMvpOverride || {});
+  state.annualBestAward = deepClone(arch.annualBestAward || { playerId: "" });
+  state.annualSpecialAwards = Array.isArray(arch.annualSpecialAwards)
+    ? deepClone(arch.annualSpecialAwards)
+    : getDefaultAnnualSpecialSlots();
+  state.monthlyMvpLocked = deepClone(arch.monthlyMvpLocked || {});
+  state.awardConfirmations = deepClone(arch.awardConfirmations || []);
+  state.fiscalYear = arch.fiscalYear;
+  state.seasonKey = arch.seasonKey;
+  state.season = arch.fiscalYear;
+  state.seasonId = arch.seasonId || (arch.fiscalYear + "-" + arch.seasonKey);
+
+  // 復元したシーズンのアーカイブは除去（残すと自動で次シーズンへ進んでしまう）
+  state.archives = (state.archives || []).filter(function(a) {
+    return a && a.id !== id && !(a.fiscalYear === arch.fiscalYear && a.seasonKey === arch.seasonKey);
+  });
+
+  viewingArchiveId = null;
+  currentLeagueId = state.leagues[0] ? state.leagues[0].id : null;
+  state = normalizeState(state);
+  saveState();
+  render();
+  showToast(archLabel + " を現行シーズンに戻しました ✓");
 }
 
 function openCellModal(idA, idB, playoffKey) {
@@ -10799,6 +10932,7 @@ function handleAppTap(e) {
   else if (action === "dismissToast") hideToast();
   else if (action === "exitArchive") exitArchiveView();
   else if (action === "viewArchive") viewArchive(target.getAttribute("data-archive-id"));
+  else if (action === "restoreArchive") restoreArchiveAsLive(target.getAttribute("data-archive-id"));
   else if (action === "deleteArchive") deleteArchive(target.getAttribute("data-archive-id"));
   else if (action === "pickSeasonKey") pickSeasonKey(target.getAttribute("data-season-key"));
   else if (action === "closePlayerModal") closePlayerModal();
