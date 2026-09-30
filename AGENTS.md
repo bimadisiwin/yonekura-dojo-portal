@@ -25,3 +25,6 @@ None exist. There is nothing to lint, test, or build. "Verifying" a change means
 
 ### Recording a match result (the core flow)
 In the 星取表 grid, click an empty cell for two players, then pick a result (一本勝 / 優勢勝 / 引分 / クリア). Standings recalculate immediately and a "更新しました ✓" toast appears.
+
+### 勤務表アプリ（kinmuhyo）
+The nursery work schedule app lives in a **separate repository** (`kinmuhyo-app`). The `kinmuhyo/` folder here is only a migration redirect page. Source export: branch `cursor/kinmuhyo-standalone-45a3`. Setup: `kinmuhyo/SETUP.md`.
