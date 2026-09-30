@@ -10509,7 +10509,8 @@ function findTapTarget(start) {
       n.id === "cellModal" ||
       n.id === "playerModal" ||
       n.id === "memberLoginModal" ||
-      n.id === "reviewHistoryModal"
+      n.id === "reviewHistoryModal" ||
+      n.id === "stripeReviewModal"
     )) return n;
     n = n.parentNode;
   }
@@ -10537,6 +10538,7 @@ function handleAppTap(e) {
   if (target.id === "playerModal" && e.target === target) { closePlayerModal(); return; }
   if (target.id === "memberLoginModal" && e.target === target) { closeMemberLoginModal(); return; }
   if (target.id === "reviewHistoryModal" && e.target === target) { closeReviewHistoryModal(); return; }
+  if (target.id === "stripeReviewModal" && e.target === target) { closeStripeReview(); return; }
   var playerId = target.getAttribute("data-player-id");
   if (playerId) { openPlayerHistory(playerId); return; }
   var view = target.getAttribute("data-view");
