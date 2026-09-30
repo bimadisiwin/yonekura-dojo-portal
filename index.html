@@ -2615,6 +2615,9 @@ function getPeriodKeyForDate(date) {
 }
 
 function getCurrentPeriodKey() {
+  if (typeof state === "undefined" || !state) {
+    return "";
+  }
   if (isReadonly()) {
     var ctx = getActiveContext();
     return ctx.seasonSlug || "";
@@ -3035,6 +3038,25 @@ function findArchive(id) {
 }
 
 function getActiveContext() {
+  if (typeof state === "undefined" || !state) {
+    return {
+      leagues: [],
+      pointRule: { ippon: 4, yusei: 3, draw: 2, lose: 1 },
+      seasonLabel: "",
+      seasonSlug: "",
+      readonly: false,
+      archivedAt: null,
+      specialAwards: {},
+      seasonSpecialAwards: [],
+      seasonMvpOverride: {},
+      monthlyMvpOverride: {},
+      annualBestAward: { playerId: "" },
+      annualSpecialAwards: [],
+      monthlyMvpLocked: {},
+      awardConfirmations: [],
+      roster: []
+    };
+  }
   if (viewingArchiveId) {
     var arch = findArchive(viewingArchiveId);
     if (arch) {
@@ -3078,6 +3100,7 @@ function getActiveContext() {
 }
 
 function isReadonly() {
+  if (typeof state === "undefined" || !state) return false;
   return getActiveContext().readonly;
 }
 
