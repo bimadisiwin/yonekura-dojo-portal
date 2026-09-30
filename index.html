@@ -4072,19 +4072,85 @@ function newestCompletedArchive(s) {
   return best;
 }
 
+function archiveResultsEchoSignature(a) {
+  return JSON.stringify({
+    leagues: leagueResultsSignature(a && a.leagues),
+    playoffs: playoffResultsSignature(a && a.playoffs)
+  });
+}
+
+// 直前シーズンと星取が同一の「誤前進アーカイブ」（例: 夏の直後に作られた秋コピー）を落とす。
+function dropEchoForwardArchives(s) {
+  if (!s || !Array.isArray(s.archives) || s.archives.length < 2) return s;
+  var completed = [];
+  s.archives.forEach(function(a) {
+    if (!a || !a.seasonKey || seasonKeyOrder(a.seasonKey) < 0) return;
+    if (!archiveHasMatchResults(a)) return;
+    completed.push(a);
+  });
+  completed.sort(function(a, b) {
+    var ds = seasonAdvanceScore(a.fiscalYear, a.seasonKey) - seasonAdvanceScore(b.fiscalYear, b.seasonKey);
+    if (ds !== 0) return ds;
+    return (a.archivedAt || 0) - (b.archivedAt || 0);
+  });
+  var drop = [];
+  var i, j, newer, older, nSig, oSig;
+  for (i = 0; i < completed.length; i++) {
+    newer = completed[i];
+    nSig = archiveResultsEchoSignature(newer);
+    if (nSig === '{"leagues":{},"playoffs":{}}') continue;
+    for (j = 0; j < i; j++) {
+      older = completed[j];
+      if (seasonAdvanceScore(newer.fiscalYear, newer.seasonKey) <= seasonAdvanceScore(older.fiscalYear, older.seasonKey)) continue;
+      oSig = archiveResultsEchoSignature(older);
+      if (nSig === oSig) {
+        drop.push(newer);
+        break;
+      }
+    }
+  }
+  if (!drop.length) return s;
+  s.archives = s.archives.filter(function(a) {
+    if (!a) return false;
+    for (i = 0; i < drop.length; i++) {
+      if (a === drop[i]) {
+        if (a.id) markArchiveDeleted(s, a.id);
+        return false;
+      }
+      if (a.id && drop[i].id && a.id === drop[i].id) {
+        markArchiveDeleted(s, a.id);
+        return false;
+      }
+      if (a.fiscalYear === drop[i].fiscalYear && a.seasonKey === drop[i].seasonKey &&
+          (a.archivedAt || 0) === (drop[i].archivedAt || 0)) {
+        if (a.id) markArchiveDeleted(s, a.id);
+        return false;
+      }
+    }
+    return true;
+  });
+  return s;
+}
+
 // 空のまま冬などへ進みすぎた現行を、完了アーカイブの「次シーズン」へ戻す。
-// 会員ページ（WordPress /data）は GitHub 直読みでないことがあり、古い冬データが残る対策。
+// 会員ページ（WordPress /data）は GitHub 直読みでないことがあり、古い冬／誤秋アーカイブが残る対策。
 function healUnjustifiedSeasonAdvance(s) {
   if (!s) return s;
-  if (hasPinnedLiveSeason(s)) return s;
+  dropEchoForwardArchives(s);
   var completed = newestCompletedArchive(s);
   if (!completed) return s;
   var expected = getNextSeason(completed.fiscalYear, completed.seasonKey);
   var liveScore = seasonAdvanceScore(s.fiscalYear, s.seasonKey);
   var expectedScore = seasonAdvanceScore(expected.fiscalYear, expected.seasonKey);
+  var liveHasLeague = hasAnyResultsSignature(leagueResultsSignature(s.leagues));
+  // 空のまま expected より先へピン固定されている場合はピンを外して修復する
+  if (hasPinnedLiveSeason(s) && liveScore > expectedScore && !liveHasLeague) {
+    clearPinnedLiveSeason(s);
+  }
+  if (hasPinnedLiveSeason(s)) return s;
   if (liveScore <= expectedScore) return s;
   // リーグ星取があるなら本当に進んだ可能性があるので戻さない
-  if (hasAnyResultsSignature(leagueResultsSignature(s.leagues))) return s;
+  if (liveHasLeague) return s;
   clearLiveMatchResults(s);
   setLiveSeasonIdentity(s, expected.fiscalYear, expected.seasonKey);
   pinLiveSeason(s, expected.fiscalYear, expected.seasonKey, completed.seasonId || completed.id);
@@ -4094,7 +4160,45 @@ function healUnjustifiedSeasonAdvance(s) {
     if (archiveHasMatchResults(a)) return true;
     return seasonAdvanceScore(a.fiscalYear, a.seasonKey) <= seasonAdvanceScore(completed.fiscalYear, completed.seasonKey);
   });
+  dropArchivesMatchingLiveSeason(s);
   return s;
+}
+
+// 会員APIが夏アーカイブ欠落の古い冬データを返すときの公開スナップショット判定。
+function memberSeasonNeedsSnapshot(s) {
+  if (!s) return true;
+  var hasSummer = false;
+  (s.archives || []).forEach(function(a) {
+    if (a && String(a.fiscalYear) === "2026" && a.seasonKey === "summer" && archiveHasMatchResults(a)) {
+      hasSummer = true;
+    }
+  });
+  if (s.seasonKey === "autumn" && hasSummer) return false;
+  if (!hasSummer) return true;
+  if (!liveHasMatchResults(s) && (s.seasonKey === "winter" || s.seasonKey === "summer")) return true;
+  return false;
+}
+
+function resolveMemberSeasonSnapshotUrl() {
+  try {
+    return new URL("data/live-season.json", window.location.href).toString();
+  } catch (e) {
+    return "data/live-season.json";
+  }
+}
+
+async function applyMemberSeasonSnapshotIfNeeded(s) {
+  if (!memberSeasonNeedsSnapshot(s)) return s;
+  try {
+    var url = resolveMemberSeasonSnapshotUrl();
+    var res = await fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "_t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return s;
+    var snap = await res.json();
+    if (!snap || typeof snap !== "object") return s;
+    return mergeCloudStatesRemoteFirst(s, snap);
+  } catch (e) {
+    return s;
+  }
 }
 
 // 春＝プレリーグのみ、夏以降＝J1/J2/J3のみにリーグ構成を揃える。
@@ -4181,6 +4285,8 @@ function mergeSposuruSettingsInto(target, source) {
     td.lastSyncSummary = sd.lastSyncSummary;
     td.lastImportCutoffDate = sd.lastImportCutoffDate || td.lastImportCutoffDate || "";
   }
+  // 反映済みスナップショット日時は新しい方を残す（毎回「最新化」トーストが出るのを防ぐ）
+  td.attendanceSnapshotAt = Math.max(td.attendanceSnapshotAt || 0, sd.attendanceSnapshotAt || 0);
   // 旧キーが残っていれば掃除
   delete target.sposuruSettings;
 }
@@ -4310,13 +4416,28 @@ async function ghGetSha() {
   return (await res.json()).sha;
 }
 
+async function cloudFetchJsonByMeta(meta, refLabel) {
+  if (!meta) return null;
+  if (meta.content && meta.encoding === "base64") {
+    return JSON.parse(b64Decode(meta.content));
+  }
+  // 1MB超のファイルは Contents API の content が空（encoding: none）になる。
+  // raw Accept で api.github.com から直接本文を取る（download_url は CORS で失敗しうる）。
+  var rawUrl = ghApiUrl() + "?ref=" + encodeURIComponent(refLabel || ghCfg.branch) + "&t=" + Date.now();
+  var raw = await fetch(rawUrl, {
+    headers: { "Authorization": "Bearer " + ghCfg.token, "Accept": "application/vnd.github.raw+json" }
+  });
+  if (!raw.ok) throw new Error("GET raw " + raw.status + (refLabel ? " @" + refLabel : ""));
+  return await raw.json();
+}
+
 async function cloudPull() {
   const res = await fetch(ghApiUrl() + "?ref=" + encodeURIComponent(ghCfg.branch) + "&t=" + Date.now(), { headers: ghHeaders() });
   if (res.status === 404) { ghSha = null; return null; }
   if (!res.ok) throw new Error("GET " + res.status);
   const j = await res.json();
   ghSha = j.sha;
-  return JSON.parse(b64Decode(j.content));
+  return cloudFetchJsonByMeta(j, ghCfg.branch);
 }
 
 async function cloudPullAtRef(ref) {
@@ -4324,7 +4445,7 @@ async function cloudPullAtRef(ref) {
   if (res.status === 404) return null;
   if (!res.ok) throw new Error("GET " + res.status + " @" + ref);
   const j = await res.json();
-  return JSON.parse(b64Decode(j.content));
+  return cloudFetchJsonByMeta(j, ref);
 }
 
 async function listCloudFileCommits(limit) {
@@ -6586,13 +6707,23 @@ function applyAttendanceSnapshotToState(snapshot) {
     var n = byNorm[key];
     var prev = m.attendanceCount || 0;
     var prevAt = m.attendanceUpdatedAt || 0;
-    // スナップショット日時が新しい、または回数が違うときだけ更新（古い端末キャッシュで上書きしない）
+    // 端末側がスナップショットより新しく同数なら触らない
     if (snapAt && prevAt && prevAt > snapAt && prev === n) return;
-    if (prev !== n || !prevAt || (snapAt && prevAt < snapAt)) {
-      m.attendanceCount = n;
-      m.attendanceUpdatedAt = snapAt || Date.now();
-      updated++;
+    // 回数同じ → タイムスタンプだけ揃えて「更新人数」には数えない（毎回トースト防止）
+    if (prev === n) {
+      if (snapAt && prevAt < snapAt) m.attendanceUpdatedAt = snapAt;
+      return;
     }
+    // スナップショットの方が少ない場合は下げない。
+    // merge は max 採用のため下げると直後に戻り、起動のたびに「最新化」扱いになる。
+    if (n < prev) {
+      if (snapAt && prevAt < snapAt) m.attendanceUpdatedAt = snapAt;
+      return;
+    }
+    // 回数増加のみ反映
+    m.attendanceCount = n;
+    m.attendanceUpdatedAt = snapAt || Date.now();
+    updated++;
   });
   var cfg = ensureSposuruSettings();
   if (snapshot.importedSessions && typeof snapshot.importedSessions === "object") {
@@ -6604,12 +6735,12 @@ function applyAttendanceSnapshotToState(snapshot) {
     var n = Math.max(0, parseInt(row.attendanceCount, 10) || 0);
     cfg.importBaselines[bKey] = Math.max(cfg.importBaselines[bKey] || 0, n);
   });
-  if (updated > 0 || !cfg.attendanceSnapshotAt || (snapAt && cfg.attendanceSnapshotAt < snapAt)) {
-    cfg.attendanceSnapshotAt = snapAt || Date.now();
+  // 同じスナップショットは一度処理したら再適用しないための印
+  if (snapAt) cfg.attendanceSnapshotAt = Math.max(cfg.attendanceSnapshotAt || 0, snapAt);
+  if (updated > 0) {
     cfg.lastSyncAt = Date.now();
     cfg.lastImportCutoffDate = snapshot.cutoffDate || cfg.lastImportCutoffDate || "";
-    cfg.lastSyncSummary = "スポスル出席スナップショット反映" +
-      (updated ? "（" + updated + "名）" : "") +
+    cfg.lastSyncSummary = "スポスル出席スナップショット反映（" + updated + "名）" +
       (snapshot.cutoffDate ? " ／ 基準日 " + snapshot.cutoffDate : "");
   }
   return updated;
@@ -6619,7 +6750,16 @@ async function syncAttendanceSnapshotAfterCloudPull() {
   if (isMemberMode || isReadonly()) return 0;
   var snapshot = await fetchAttendanceSnapshot();
   if (!snapshot) return 0;
+  var snapAt = Date.parse(snapshot.exportedAt) || 0;
+  var cfg = ensureSposuruSettings();
+  // 同一スナップショットを反映済みなら何もしない（起動のたびにトーストしない）
+  if (snapAt && (cfg.attendanceSnapshotAt || 0) >= snapAt) return 0;
   var n = applyAttendanceSnapshotToState(snapshot);
+  // 更新0件でも「このスナップショットは処理済み」と刻む
+  if (snapAt && (cfg.attendanceSnapshotAt || 0) < snapAt) {
+    cfg.attendanceSnapshotAt = snapAt;
+    saveLocal();
+  }
   if (n > 0) {
     state.updatedAt = Date.now();
     saveLocal();
@@ -11333,6 +11473,8 @@ async function initMemberCloud(opts) {
     var cfg = getMemberApiConfig();
     var payload = await memberApiFetch("/data?token=" + encodeURIComponent(cfg.accessToken) + "&_t=" + Date.now());
     state = normalizeState(payload.data || {});
+    // WordPress /data が古い冬（夏アーカイブ欠落）のとき、公開スナップショットで秋＋夏へ補完
+    state = await applyMemberSeasonSnapshotIfNeeded(state);
     viewingArchiveId = null;
     if (!getLeague(currentLeagueId)) currentLeagueId = state.leagues[0] ? state.leagues[0].id : null;
     // 会員データ(/data)は roster が空のため、ログイン中の本人は保存済みセッションIDで判定する
