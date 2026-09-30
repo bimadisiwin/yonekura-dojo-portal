@@ -3749,11 +3749,15 @@ function enforceSeasonLeagueShape(s) {
 }
 
 function mergeSposuruSettingsInto(target, source) {
-  if (!source || !source.sposuruSettings) return;
+  // 実データのキーは state.sposuru（旧名 sposuruSettings も後方互換で読む）
+  if (!source) return;
+  var sdRaw = source.sposuru || source.sposuruSettings;
+  if (!sdRaw || typeof sdRaw !== "object") return;
   ensureSposuruSettings(target);
+  if (!source.sposuru) source.sposuru = sdRaw;
   ensureSposuruSettings(source);
-  var td = target.sposuruSettings;
-  var sd = source.sposuruSettings;
+  var td = target.sposuru;
+  var sd = source.sposuru;
   td.importedSessions = Object.assign({}, sd.importedSessions || {}, td.importedSessions || {});
   var baselines = Object.assign({}, sd.importBaselines || {});
   Object.keys(td.importBaselines || {}).forEach(function(k) {
@@ -3763,8 +3767,10 @@ function mergeSposuruSettingsInto(target, source) {
   if ((sd.lastSyncAt || 0) > (td.lastSyncAt || 0)) {
     td.lastSyncAt = sd.lastSyncAt;
     td.lastSyncSummary = sd.lastSyncSummary;
-    td.lastImportCutoffDate = sd.lastImportCutoffDate;
+    td.lastImportCutoffDate = sd.lastImportCutoffDate || td.lastImportCutoffDate || "";
   }
+  // 旧キーが残っていれば掃除
+  delete target.sposuruSettings;
 }
 
 function mergeCloudStates(local, remote) {
@@ -5971,11 +5977,26 @@ function flushRosterInputsFromDom() {
   }
 }
 
+function clearRosterAttendanceForSposuruReplace() {
+  getRosterList().forEach(function(m) {
+    if (!m) return;
+    // 出席加算対象（小学生・未就学）のみクリア。中高生の台帳情報は残す
+    if (!isSposuruAttendanceGroup(m.group) && inferMemberTrack(m.group, m.track) !== "junior") return;
+    m.attendanceCount = 0;
+    m.attendanceUpdatedAt = 0;
+  });
+  var cfg = ensureSposuruSettings();
+  cfg.importBaselines = {};
+  cfg.importedSessions = {};
+  cfg.lastImportAlert = null;
+}
+
 async function applySposuruCsvText(text, silent, options) {
   if (isMemberMode || isReadonly()) return null;
   options = options || {};
   flushRosterInputsFromDom();
   var cutoffDate = options.importCutoffDate !== undefined ? options.importCutoffDate : getTodayDateStr();
+  var replaceAll = !!options.replaceAll;
   var parsed = parseSposuruCsv(text, { importCutoffDate: cutoffDate });
   if (!parsed.sessions.length && !parsed.rows.length) {
     var emptyMsg = "取込できる行がありません（CSVの列名・文字コード・対象グループを確認）";
@@ -5989,6 +6010,9 @@ async function applySposuruCsvText(text, silent, options) {
     if (!silent) showToast(emptyMsg, { persistent: true, type: "error" });
     render();
     return null;
+  }
+  if (replaceAll) {
+    clearRosterAttendanceForSposuruReplace();
   }
   var cfg = ensureSposuruSettings();
   var baselines = cfg.importBaselines;
@@ -6054,6 +6078,7 @@ async function applySposuruCsvText(text, silent, options) {
   cfg.importBaselines = baselines;
   cfg.importedSessions = importedSessions;
   var parts = [];
+  if (replaceAll) parts.push("全置換");
   if (updated > 0) parts.push(updated + "名更新（+" + addedSessions + "回）");
   if (created > 0) parts.push("新規" + created + "名");
   if (skippedDup > 0) parts.push("重複スキップ" + skippedDup + (parsed.format === "session" ? "件" : "名"));
@@ -6073,14 +6098,19 @@ async function applySposuruCsvText(text, silent, options) {
     setSposuruImportAlert(summary, "warn");
   }
   cfg.lastSyncSummary = summary;
-  if (changed) saveState();
+  if (changed || replaceAll) saveState();
   else saveLocal();
   if (!silent) {
     if (updated > 0 || created > 0) showToast("スポスル出席を取込しました（" + summary + "）", { type: "ok", duration: 3500 });
     else showToast(summary, { persistent: true, type: skippedDup > 0 ? "warn" : "error" });
   }
   render();
-  return { updated: updated, created: created, addedSessions: addedSessions, skippedDup: skippedDup };
+  return { updated: updated, created: created, addedSessions: addedSessions, skippedDup: skippedDup, replaceAll: replaceAll };
+}
+
+function isSposuruReplaceAllChecked() {
+  var el = document.getElementById("sposuruReplaceAll");
+  return !!(el && el.checked);
 }
 
 function resetRosterAttendanceAll() {
@@ -6106,7 +6136,9 @@ function resetRosterAttendanceAll() {
 function pasteSposuruCsv() {
   var ta = document.getElementById("sposuruPasteArea");
   if (!ta || !ta.value.trim()) { showToast("CSVを貼り付けてください"); return; }
-  applySposuruCsvText(ta.value, false);
+  var replaceAll = isSposuruReplaceAllChecked();
+  if (replaceAll && !confirm("スポスルCSVの内容で出席数を全置換しますか？\n小学生・未就学の出席数と取込履歴をいったん0にしてから再取込します。")) return;
+  applySposuruCsvText(ta.value, false, { replaceAll: replaceAll });
 }
 
 function isSposuruCsvFile(file) {
@@ -6143,9 +6175,11 @@ function handleSposuruFiles(fileList) {
     showToast("CSVファイル（.csv）をドロップしてください");
     return;
   }
+  var replaceAll = isSposuruReplaceAllChecked();
+  if (replaceAll && !confirm("スポスルCSVの内容で出席数を全置換しますか？\n小学生・未就学の出席数と取込履歴をいったん0にしてから再取込します。")) return;
   readSposuruFileAsText(file, function(text) {
     if (!text.trim()) { showToast("ファイルが空です"); return; }
-    applySposuruCsvText(text, false, { filename: file.name });
+    applySposuruCsvText(text, false, { filename: file.name, replaceAll: replaceAll });
     var ta = document.getElementById("sposuruPasteArea");
     if (ta) ta.value = text.length > 4000 ? text.slice(0, 4000) + "\n…" : text;
   });
@@ -6207,8 +6241,11 @@ function renderSposuruSyncCard() {
   return '<div class="card">' +
     '<div class="card-title">スポスル連携（出席自動取込）</div>' +
     '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' +
-    "スポスルCSVをドロップで取込（随時更新）。<b>「小学生」「未就学」「中学生」「高校生以上」</b>を館員台帳に反映。<b>出席加算</b>は「小学生」「未就学」× タイトル「柔道クラス」のみ。<b>出欠予定日が取込日（今日）以前</b>の分だけ加算します。</p>" +
+    "スポスル「スケジュール・出欠 → 出欠確認・登録」から出したCSVをドロップで取込（随時更新）。<b>「小学生」「未就学」「中学生」「高校生以上」</b>を館員台帳に反映。<b>出席加算</b>は「小学生」「未就学」× タイトル「柔道クラス」のみ。<b>出欠予定日が取込日（今日）以前</b>の分だけ加算します。最新に揃えるときは「全置換」にチェックしてください。</p>" +
     alertHtml +
+    '<label style="display:flex;align-items:flex-start;gap:8px;font-size:.72rem;margin:0 0 10px;line-height:1.45;cursor:pointer">' +
+    '<input type="checkbox" id="sposuruReplaceAll" style="margin-top:2px">' +
+    "<span><b>出席数をCSVで全置換</b>（小学生・未就学の出席と取込履歴をいったん消してから、CSVどおりに再計算。スポスル最新の出欠一覧を取り込むとき）</span></label>" +
     '<div id="sposuruDropzone" class="sposuru-dropzone" role="button" tabindex="0" aria-label="スポスルCSVをドロップ">' +
     '<input type="file" id="sposuruFileInput" accept=".csv,.txt,text/csv" hidden>' +
     '<div class="sposuru-dropzone-icon">📂</div>' +
