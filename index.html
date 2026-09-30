@@ -3869,22 +3869,108 @@ function archiveSeasonLabel(arch) {
   return arch.label || "";
 }
 
-// 直近アーカイブの「次シーズン」より現行が遅れている場合は進める。
-// 例: 夏をアーカイブ済みなら現行は秋。星取の正はアーカイブ側とし、現行の対戦結果はクリアする。
-function healLiveSeasonAfterArchives(s) {
-  if (!s) return s;
-  var newest = newestArchiveEntry(s);
-  if (!newest) return s;
-  var next = getNextSeason(newest.fiscalYear, newest.seasonKey);
-  if (seasonAdvanceScore(s.fiscalYear, s.seasonKey) >= seasonAdvanceScore(next.fiscalYear, next.seasonKey)) return s;
+function clearLiveMatchResults(s) {
+  if (!s) return;
   (s.leagues || []).forEach(function(l) { if (l) l.results = {}; });
   Object.keys(s.playoffs || {}).forEach(function(key) {
     if (s.playoffs[key]) s.playoffs[key].results = {};
   });
-  s.fiscalYear = next.fiscalYear;
-  s.seasonKey = next.seasonKey;
-  s.season = next.fiscalYear;
-  s.seasonId = next.fiscalYear + "-" + next.seasonKey;
+}
+
+function setLiveSeasonIdentity(s, fiscalYear, seasonKey) {
+  s.fiscalYear = fiscalYear;
+  s.seasonKey = seasonKey;
+  s.season = fiscalYear;
+  s.seasonId = fiscalYear + "-" + seasonKey;
+}
+
+function archiveHasMatchResults(arch) {
+  return !!(arch && hasAnyResultsSignature(leagueResultsSignature(arch.leagues)));
+}
+
+// 対戦結果があるアーカイブのうち、最も進んだシーズンを返す（空の誤アーカイブは無視）。
+function newestCompletedArchive(s) {
+  if (!s || !Array.isArray(s.archives)) return null;
+  var best = null;
+  var bestScore = -1;
+  s.archives.forEach(function(a) {
+    if (!a || !a.seasonKey || seasonKeyOrder(a.seasonKey) < 0) return;
+    if (!archiveHasMatchResults(a)) return;
+    var score = seasonAdvanceScore(a.fiscalYear, a.seasonKey);
+    if (score > bestScore || (score === bestScore && (!best || (a.archivedAt || 0) > (best.archivedAt || 0)))) {
+      best = a;
+      bestScore = score;
+    }
+  });
+  return best;
+}
+
+function applyArchiveToLiveState(s, arch) {
+  if (!s || !arch) return s;
+  s.leagues = deepClone(arch.leagues || []);
+  s.playoffs = deepClone(arch.playoffs || { j1_j2: { results: {} } });
+  if (arch.pointRule) s.pointRule = deepClone(arch.pointRule);
+  s.specialAwards = deepClone(arch.specialAwards || {});
+  s.seasonSpecialAwards = Array.isArray(arch.seasonSpecialAwards)
+    ? deepClone(arch.seasonSpecialAwards)
+    : (typeof getDefaultSeasonSpecialSlots === "function" ? getDefaultSeasonSpecialSlots() : []);
+  s.seasonMvpOverride = deepClone(arch.seasonMvpOverride || {});
+  s.monthlyMvpOverride = deepClone(arch.monthlyMvpOverride || {});
+  s.annualBestAward = deepClone(arch.annualBestAward || { playerId: "" });
+  s.annualSpecialAwards = Array.isArray(arch.annualSpecialAwards)
+    ? deepClone(arch.annualSpecialAwards)
+    : (typeof getDefaultAnnualSpecialSlots === "function" ? getDefaultAnnualSpecialSlots() : []);
+  s.monthlyMvpLocked = deepClone(arch.monthlyMvpLocked || {});
+  s.awardConfirmations = deepClone(arch.awardConfirmations || []);
+  setLiveSeasonIdentity(s, arch.fiscalYear, arch.seasonKey);
+  s.archives = (s.archives || []).filter(function(a) {
+    return a && a.id !== arch.id && !(a.fiscalYear === arch.fiscalYear && a.seasonKey === arch.seasonKey);
+  });
+  return s;
+}
+
+// 完了済みアーカイブの「次」が現行。遅れは進め、空のまま進みすぎたら戻す。
+// 例: 夏(結果あり)アーカイブ → 現行は秋。空の秋アーカイブで冬へ進んでいたら秋へ戻す。
+function healLiveSeasonAfterArchives(s) {
+  if (!s) return s;
+  var completed = newestCompletedArchive(s);
+  if (completed) {
+    var expected = getNextSeason(completed.fiscalYear, completed.seasonKey);
+    var liveScore = seasonAdvanceScore(s.fiscalYear, s.seasonKey);
+    var expectedScore = seasonAdvanceScore(expected.fiscalYear, expected.seasonKey);
+    if (liveScore < expectedScore) {
+      clearLiveMatchResults(s);
+      setLiveSeasonIdentity(s, expected.fiscalYear, expected.seasonKey);
+      return s;
+    }
+    if (liveScore > expectedScore) {
+      var liveHas = hasAnyResultsSignature(leagueResultsSignature(s.leagues)) ||
+        hasAnyResultsSignature(playoffResultsSignature(s.playoffs));
+      if (!liveHas) {
+        var expectedArch = findArchiveForSeason(s, expected.fiscalYear, expected.seasonKey);
+        if (expectedArch) applyArchiveToLiveState(s, expectedArch);
+        else {
+          clearLiveMatchResults(s);
+          setLiveSeasonIdentity(s, expected.fiscalYear, expected.seasonKey);
+        }
+        // 期待シーズンより先の「空アーカイブ」は除去
+        s.archives = (s.archives || []).filter(function(a) {
+          if (!a || !a.seasonKey) return false;
+          if (archiveHasMatchResults(a)) return true;
+          return seasonAdvanceScore(a.fiscalYear, a.seasonKey) <= seasonAdvanceScore(completed.fiscalYear, completed.seasonKey);
+        });
+      }
+      return s;
+    }
+    return s;
+  }
+
+  // 結果付きアーカイブが無い場合: 現行シーズン自身がアーカイブされているときだけ1つ進める
+  var liveArch = findArchiveForSeason(s, s.fiscalYear, s.seasonKey);
+  if (!liveArch) return s;
+  var next = getNextSeason(s.fiscalYear, s.seasonKey);
+  clearLiveMatchResults(s);
+  setLiveSeasonIdentity(s, next.fiscalYear, next.seasonKey);
   return s;
 }
 
