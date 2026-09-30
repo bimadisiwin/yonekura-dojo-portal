@@ -3819,6 +3819,79 @@ function clearLiveResultsCopiedFromPriorArchive(s) {
   return s;
 }
 
+function parseSeasonIdParts(seasonId) {
+  if (!seasonId || typeof seasonId !== "string") return null;
+  var dash = seasonId.indexOf("-");
+  if (dash <= 0) return null;
+  var fy = seasonId.slice(0, dash);
+  var sk = seasonId.slice(dash + 1);
+  if (!fy || seasonKeyOrder(sk) < 0) return null;
+  return { fiscalYear: fy, seasonKey: sk };
+}
+
+// seasonId / seasonKey / fiscalYear の食い違いを、進んでいる側に揃える。
+function reconcileSeasonIdentity(s) {
+  if (!s) return s;
+  var fromId = parseSeasonIdParts(s.seasonId);
+  if (fromId) {
+    if (!s.seasonKey || seasonKeyOrder(s.seasonKey) < 0) {
+      s.seasonKey = fromId.seasonKey;
+      if (!s.fiscalYear) s.fiscalYear = fromId.fiscalYear;
+    } else if (!sameLiveSeason(s, fromId)) {
+      if (seasonAdvanceScore(fromId.fiscalYear, fromId.seasonKey) > seasonAdvanceScore(s.fiscalYear, s.seasonKey)) {
+        s.fiscalYear = fromId.fiscalYear;
+        s.seasonKey = fromId.seasonKey;
+      }
+    }
+  }
+  if (!s.fiscalYear) s.fiscalYear = s.season || String(new Date().getFullYear());
+  if (!s.seasonKey || seasonKeyOrder(s.seasonKey) < 0) s.seasonKey = detectSeasonKey(new Date());
+  s.season = s.fiscalYear;
+  s.seasonId = s.fiscalYear + "-" + s.seasonKey;
+  return s;
+}
+
+function newestArchiveEntry(s) {
+  if (!s || !Array.isArray(s.archives) || !s.archives.length) return null;
+  var best = null;
+  s.archives.forEach(function(a) {
+    if (!a || !a.seasonKey || seasonKeyOrder(a.seasonKey) < 0) return;
+    if (!best || (a.archivedAt || 0) > (best.archivedAt || 0)) best = a;
+  });
+  return best;
+}
+
+// 直近アーカイブの「次シーズン」より現行が遅れている場合、空（またはアーカイブ結果の混入）なら進める。
+// 会員ページはクラウドを読むだけのため、夏アーカイブ後に seasonKey が夏へ戻った状態でも秋を表示できるようにする。
+function healLiveSeasonAfterArchives(s) {
+  if (!s) return s;
+  var newest = newestArchiveEntry(s);
+  if (!newest) return s;
+  var next = getNextSeason(newest.fiscalYear, newest.seasonKey);
+  if (seasonAdvanceScore(s.fiscalYear, s.seasonKey) >= seasonAdvanceScore(next.fiscalYear, next.seasonKey)) return s;
+  var liveSig = leagueResultsSignature(s.leagues);
+  var archSig = leagueResultsSignature(newest.leagues);
+  var empty = !hasAnyResultsSignature(liveSig);
+  var echo = hasAnyResultsSignature(liveSig) && hasAnyResultsSignature(archSig) &&
+    JSON.stringify(liveSig) === JSON.stringify(archSig);
+  if (!empty && !echo) return s;
+  if (echo) {
+    (s.leagues || []).forEach(function(l) { if (l) l.results = {}; });
+    var livePo = playoffResultsSignature(s.playoffs);
+    var archPo = playoffResultsSignature(newest.playoffs);
+    if (hasAnyResultsSignature(livePo) && JSON.stringify(livePo) === JSON.stringify(archPo)) {
+      Object.keys(s.playoffs || {}).forEach(function(key) {
+        if (s.playoffs[key]) s.playoffs[key].results = {};
+      });
+    }
+  }
+  s.fiscalYear = next.fiscalYear;
+  s.seasonKey = next.seasonKey;
+  s.season = next.fiscalYear;
+  s.seasonId = next.fiscalYear + "-" + next.seasonKey;
+  return s;
+}
+
 // 春＝プレリーグのみ、夏以降＝J1/J2/J3のみにリーグ構成を揃える。
 function leaguesForSeasonKey(seasonKey) {
   return seasonKey === "spring" ? ["pre"] : ["j1", "j2", "j3"];
@@ -4271,6 +4344,7 @@ function normalizeState(raw) {
   if (!s.fiscalYear) s.fiscalYear = s.season;
   if (!s.seasonKey) s.seasonKey = detectSeasonKey(new Date());
   if (!s.seasonId) s.seasonId = s.fiscalYear + "-" + s.seasonKey;
+  reconcileSeasonIdentity(s);
   s.season = s.fiscalYear;
   if (!s.playoffs || typeof s.playoffs !== "object") s.playoffs = {};
   if (!s.playoffs.j1_j2 || typeof s.playoffs.j1_j2 !== "object") s.playoffs.j1_j2 = { results: {} };
@@ -4307,8 +4381,10 @@ function normalizeState(raw) {
   applyRosterArchiveDefaults(s);
   detachArchivedFromLeagues(s);
   ensureSposuruSettings(s);
-  dropArchivesMatchingLiveSeason(s);
+  // アーカイブを消す前にシーズン進行を修復（会員ページはクラウド読込のみのため）
+  healLiveSeasonAfterArchives(s);
   clearLiveResultsCopiedFromPriorArchive(s);
+  dropArchivesMatchingLiveSeason(s);
   dedupeRosterMembers(s);
   applyDeletedRosterIds(s);
   dedupeLeaguePlayers(s);
