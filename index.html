@@ -2426,6 +2426,11 @@ function submitMemberLogin() {
     body: JSON.stringify({ token: cfg.accessToken, login: raw })
   }).then(function(data) {
     mergeMemberIntoState(data.member);
+    var m = findRosterMember(data.rosterId);
+    return overlayMemberAttendanceFromSnapshot(m).then(function() {
+      return data;
+    }).catch(function() { return data; });
+  }).then(function(data) {
     activateMyRoster(data.rosterId);
     closeMemberLoginModal();
     if (input) input.value = "";
@@ -6677,50 +6682,84 @@ function isSposuruReplaceAllChecked() {
   return !!(el && el.checked);
 }
 
-/* 公開スナップショット（data/attendance-snapshot.json）をクラウド台帳へ反映。
-   GitHub Pages 上の最新スポスル出席を、管理画面の起動同期時に data リポジトリへ押し込む。 */
+/* 公開スナップショット（data/attendance-snapshot.json）を台帳／会員表示へ反映。
+   非公開 data リポジトリへ書けなくても、Pages 上の最新スポスル出席をすぐ表示できるようにする。 */
+var _attendanceSnapshotCache = null;
+var _attendanceSnapshotCacheAt = 0;
+
 async function fetchAttendanceSnapshot() {
+  if (_attendanceSnapshotCache && (Date.now() - _attendanceSnapshotCacheAt) < 60000) {
+    return _attendanceSnapshotCache;
+  }
   var url = "data/attendance-snapshot.json?t=" + Date.now();
   try {
     var res = await fetch(url, { cache: "no-store" });
     if (!res.ok) return null;
-    return await res.json();
+    _attendanceSnapshotCache = await res.json();
+    _attendanceSnapshotCacheAt = Date.now();
+    return _attendanceSnapshotCache;
   } catch (e) {
     return null;
   }
 }
 
-function applyAttendanceSnapshotToState(snapshot) {
-  if (!snapshot || !Array.isArray(snapshot.members) || !snapshot.members.length) return 0;
+function findSnapshotRowForMember(member, snapshot) {
+  if (!member || !snapshot || !Array.isArray(snapshot.members)) return null;
+  var i, row, matched;
+  for (i = 0; i < snapshot.members.length; i++) {
+    row = snapshot.members[i];
+    if (!row || !row.sposuruName) continue;
+    matched = findRosterForSposuruName(row.sposuruName);
+    if (matched && matched.id === member.id) return row;
+  }
+  // 会員セッション単体（台帳未ロード）向けの直接照合
+  var nMemS = normalizeSposuruName(member.sposuruName);
+  var nMemN = normalizeSposuruName(member.name);
+  for (i = 0; i < snapshot.members.length; i++) {
+    row = snapshot.members[i];
+    if (!row || !row.sposuruName) continue;
+    var nSnap = normalizeSposuruName(row.sposuruName);
+    if (nMemS && (nMemS === nSnap || nSnap.indexOf(nMemS) >= 0 || nMemS.indexOf(nSnap) >= 0)) return row;
+    if (nMemN && (nMemN === nSnap || nSnap.indexOf(nMemN) >= 0)) return row;
+  }
+  return null;
+}
+
+function applyAttendanceSnapshotToState(snapshot, opts) {
+  opts = opts || {};
+  if (!snapshot || !Array.isArray(snapshot.members) || !snapshot.members.length) return { updated: 0, created: 0 };
   var snapAt = Date.parse(snapshot.exportedAt) || 0;
-  var byNorm = {};
+  var updated = 0, created = 0;
   snapshot.members.forEach(function(row) {
     if (!row || !row.sposuruName) return;
-    byNorm[normalizeSposuruName(row.sposuruName)] = Math.max(0, parseInt(row.attendanceCount, 10) || 0);
-  });
-  var updated = 0;
-  getRosterList().forEach(function(m) {
-    if (!m || isArchivedRosterMember(m)) return;
-    if (!isSposuruAttendanceGroup(m.group) && inferMemberTrack(m.group, m.track) !== "junior") return;
-    var key = normalizeSposuruName(m.sposuruName || m.name);
-    if (!Object.prototype.hasOwnProperty.call(byNorm, key)) return;
-    var n = byNorm[key];
+    var n = Math.max(0, parseInt(row.attendanceCount, 10) || 0);
+    var found = findRosterForSposuruName(row.sposuruName);
+    var m;
+    if (!found && opts.createMissing && row.group && isSposuruAttendanceGroup(row.group)) {
+      found = findOrCreateRosterForSposuruName(row.sposuruName, row.group || "小学生").member;
+      created++;
+    }
+    if (!found) return;
+    m = found;
+    if (row.group && !m.group) {
+      m.group = row.group;
+      m.track = inferMemberTrack(m.group, m.track);
+    }
+    if (!m.sposuruName) m.sposuruName = row.sposuruName;
     var prev = m.attendanceCount || 0;
     var prevAt = m.attendanceUpdatedAt || 0;
     // 端末側がスナップショットより新しく同数なら触らない
-    if (snapAt && prevAt && prevAt > snapAt && prev === n) return;
+    if (!opts.force && snapAt && prevAt && prevAt > snapAt && prev === n) return;
     // 回数同じ → タイムスタンプだけ揃えて「更新人数」には数えない（毎回トースト防止）
     if (prev === n) {
       if (snapAt && prevAt < snapAt) m.attendanceUpdatedAt = snapAt;
       return;
     }
-    // スナップショットの方が少ない場合は下げない。
-    // merge は max 採用のため下げると直後に戻り、起動のたびに「最新化」扱いになる。
-    if (n < prev) {
+    // 手動強制以外は回数を下げない（merge の max と食い違って毎回最新化扱いになるのを防ぐ）
+    if (!opts.force && n < prev) {
       if (snapAt && prevAt < snapAt) m.attendanceUpdatedAt = snapAt;
       return;
     }
-    // 回数増加のみ反映
     m.attendanceCount = n;
     m.attendanceUpdatedAt = snapAt || Date.now();
     updated++;
@@ -6735,27 +6774,49 @@ function applyAttendanceSnapshotToState(snapshot) {
     var n = Math.max(0, parseInt(row.attendanceCount, 10) || 0);
     cfg.importBaselines[bKey] = Math.max(cfg.importBaselines[bKey] || 0, n);
   });
-  // 同じスナップショットは一度処理したら再適用しないための印
   if (snapAt) cfg.attendanceSnapshotAt = Math.max(cfg.attendanceSnapshotAt || 0, snapAt);
-  if (updated > 0) {
+  if (updated > 0 || created > 0) {
     cfg.lastSyncAt = Date.now();
     cfg.lastImportCutoffDate = snapshot.cutoffDate || cfg.lastImportCutoffDate || "";
-    cfg.lastSyncSummary = "スポスル出席スナップショット反映（" + updated + "名）" +
+    cfg.lastSyncSummary = "スポスル出席スナップショット反映（更新" + updated + "名" +
+      (created ? "／新規" + created + "名" : "") + "）" +
       (snapshot.cutoffDate ? " ／ 基準日 " + snapshot.cutoffDate : "");
   }
-  return updated;
+  return { updated: updated, created: created };
 }
 
-async function syncAttendanceSnapshotAfterCloudPull() {
+async function overlayMemberAttendanceFromSnapshot(member) {
+  if (!member) return false;
+  var snapshot = await fetchAttendanceSnapshot();
+  if (!snapshot) return false;
+  var row = findSnapshotRowForMember(member, snapshot);
+  if (!row) return false;
+  var n = Math.max(0, parseInt(row.attendanceCount, 10) || 0);
+  var snapAt = Date.parse(snapshot.exportedAt) || Date.now();
+  if ((member.attendanceCount || 0) === n && member.attendanceUpdatedAt) return false;
+  // 会員表示は最新スナップショットを優先（減少も反映）
+  member.attendanceCount = n;
+  member.attendanceUpdatedAt = snapAt;
+  return true;
+}
+
+async function syncAttendanceSnapshotAfterCloudPull(opts) {
+  opts = opts || {};
   if (isMemberMode || isReadonly()) return 0;
   var snapshot = await fetchAttendanceSnapshot();
-  if (!snapshot) return 0;
+  if (!snapshot) {
+    if (opts.manual) showToast("出席スナップショットを取得できませんでした", { type: "error" });
+    return 0;
+  }
   var snapAt = Date.parse(snapshot.exportedAt) || 0;
   var cfg = ensureSposuruSettings();
-  // 同一スナップショットを反映済みなら何もしない（起動のたびにトーストしない）
-  if (snapAt && (cfg.attendanceSnapshotAt || 0) >= snapAt) return 0;
-  var n = applyAttendanceSnapshotToState(snapshot);
-  // 更新0件でも「このスナップショットは処理済み」と刻む
+  // 自動起動時は同一スナップショット再適用をスキップ（毎回トースト防止）
+  if (!opts.manual && !opts.force && snapAt && (cfg.attendanceSnapshotAt || 0) >= snapAt) return 0;
+  var result = applyAttendanceSnapshotToState(snapshot, {
+    force: !!opts.force,
+    createMissing: !!opts.createMissing
+  });
+  var n = (result.updated || 0) + (result.created || 0);
   if (snapAt && (cfg.attendanceSnapshotAt || 0) < snapAt) {
     cfg.attendanceSnapshotAt = snapAt;
     saveLocal();
@@ -6763,14 +6824,37 @@ async function syncAttendanceSnapshotAfterCloudPull() {
   if (n > 0) {
     state.updatedAt = Date.now();
     saveLocal();
-    try {
-      await cloudPush();
-      showToast("スポスル出席を最新化しました（" + n + "名）✓", { type: "ok", duration: 4000 });
-    } catch (e) {
-      showToast("出席スナップショットは反映済み。クラウド保存に失敗したので再読込してください", { type: "warn", duration: 5000 });
+    render();
+    if (ghReady()) {
+      try {
+        await cloudPush();
+        showToast("スポスル出席を最新化しました（更新" + (result.updated || 0) + "名" +
+          (result.created ? "／新規" + result.created + "名" : "") + "）✓", { type: "ok", duration: 4500 });
+      } catch (e) {
+        showToast("出席は画面に反映済み。クラウド保存に失敗したので同期設定を確認してください", { type: "warn", duration: 5000 });
+      }
+    } else if (opts.manual) {
+      showToast("出席は画面に反映済み。クラウドへ保存するには📋マスターで GitHub トークンを設定してください", { type: "warn", duration: 5500 });
     }
+  } else if (opts.manual) {
+    showToast("出席スナップショットは最新です（変更なし）", { type: "ok", duration: 2500 });
   }
   return n;
+}
+
+async function applyAttendanceSnapshotNow() {
+  if (isMemberMode || isReadonly()) return;
+  if (!getRosterList().length && !ghReady()) {
+    showToast("先にクラウド同期（GitHubトークン）を設定して台帳を読み込んでください", { type: "warn", duration: 5000 });
+    return;
+  }
+  if (ghReady() && !getRosterList().length) {
+    try {
+      var remote = await cloudPull();
+      if (remote) applyMergedCloudState(mergeCloudStatesRemoteFirst(state, remote));
+    } catch (e) {}
+  }
+  await syncAttendanceSnapshotAfterCloudPull({ manual: true, force: true, createMissing: true });
 }
 
 function resetRosterAttendanceAll() {
@@ -6914,6 +6998,7 @@ function renderSposuruSyncCard() {
     '<div class="form-row"><label>CSV貼り付け（任意）</label>' +
     '<textarea id="sposuruPasteArea" rows="3" placeholder="出欠一覧CSVを貼り付け" style="width:100%;font-size:.72rem;padding:8px;border:1px solid var(--line);border-radius:8px;font-family:inherit"></textarea></div>' +
     '<button type="button" class="btn btn-ghost btn-sm btn-block" data-action="pasteSposuruCsv">貼り付けCSVを取込</button>' +
+    '<button type="button" class="btn btn-primary btn-sm btn-block" style="margin-top:6px" data-action="applyAttendanceSnapshotNow">スポスル出席スナップショットを今すぐ反映</button>' +
     '<button type="button" class="btn btn-ghost btn-sm btn-block" style="margin-top:6px" data-action="resetRosterAttendanceAll">出席数・取込履歴を初期化</button>' +
     '<div class="sposuru-sync-status">最終取込: ' + esc(last) +
     (cfg.lastImportCutoffDate ? "（基準日 " + esc(cfg.lastImportCutoffDate) + "）" : "") +
@@ -11296,6 +11381,7 @@ function handleAppTap(e) {
   else if (action === "adjustAttendance") adjustRosterAttendance(target.getAttribute("data-roster-id"), parseInt(target.getAttribute("data-delta"), 10) || 1);
   else if (action === "setMarubatsu") setMarubatsu(target.getAttribute("data-mb-cat"), target.getAttribute("data-mb-idx"), target.getAttribute("data-mb-val"));
   else if (action === "pasteSposuruCsv") pasteSposuruCsv();
+  else if (action === "applyAttendanceSnapshotNow") applyAttendanceSnapshotNow();
   else if (action === "resetRosterAttendanceAll") resetRosterAttendanceAll();
   else if (action === "dismissSposuruAlert") clearSposuruImportAlert();
   else if (action === "dismissToast") hideToast();
@@ -11484,6 +11570,10 @@ async function initMemberCloud(opts) {
         var sess = await memberApiFetch("/member-session?token=" + encodeURIComponent(cfg.accessToken) +
           "&rosterId=" + encodeURIComponent(resolved) + "&_t=" + Date.now());
         mergeMemberIntoState(sess.member);
+        try {
+          var liveMember = findRosterMember(sess.rosterId);
+          if (liveMember) await overlayMemberAttendanceFromSnapshot(liveMember);
+        } catch (overlayErr) {}
         activateMyRoster(sess.rosterId);
       } catch (sessErr) {
         // 自動更新中の一時的なエラーではログアウトさせず、直前の表示を維持する
@@ -11550,8 +11640,10 @@ async function initCloud() {
     } else {
       await cloudPush();
     }
-    // Pages 上のスポスル出席スナップショットを台帳へ反映し、クラウドへ保存
-    try { await syncAttendanceSnapshotAfterCloudPull(); } catch (snapErr) {}
+    // Pages 上のスポスル出席スナップショットを台帳へ反映（同一スナップショットは再トーストしない）
+    try {
+      await syncAttendanceSnapshotAfterCloudPull({ createMissing: false });
+    } catch (snapErr) {}
     // 削除マーカーが残っている場合、履歴から自動復旧を一度試みる
     var needsRecovery = ensureDeletedRosterIds(state).length > 0 || !!(state.deletedRosterBackup && Object.keys(state.deletedRosterBackup).length);
     if (needsRecovery && !reviewedHistoryRecoveryTried) {
