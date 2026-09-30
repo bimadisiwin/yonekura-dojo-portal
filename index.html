@@ -3130,6 +3130,7 @@ let ghPushInFlight = null;
 let ghSyncState = "off";
 let ghLastMsg = "";
 let ghPullInFlight = null;
+let reviewedHistoryRecoveryTried = false;
 
 function loadGhCfg() {
   var cfg = Object.assign({}, GH_DEFAULTS, GH_FIXED_CFG);
@@ -3394,6 +3395,94 @@ function mergeDeletedRosterIdsInto(target, source) {
   return target.deletedRosterIds;
 }
 
+function liveRosterNameSet(s) {
+  var names = {};
+  (s.roster || []).forEach(function(m) {
+    if (!m || isArchivedRosterMember(m)) return;
+    var key = normalizeSposuruName(m.name);
+    if (key) names[key] = true;
+  });
+  return names;
+}
+
+function collectReviewedMembersFromSnapshot(snapshot) {
+  var out = [];
+  var seen = {};
+  function consider(m) {
+    if (!m || !m.id || !memberHasStripeReviews(m)) return;
+    var id = String(m.id);
+    if (seen[id]) return;
+    seen[id] = true;
+    out.push(m);
+  }
+  if (!snapshot) return out;
+  (snapshot.roster || []).forEach(consider);
+  (snapshot.archives || []).forEach(function(a) {
+    ((a && a.roster) || []).forEach(consider);
+  });
+  return out;
+}
+
+// スナップショット内の「審査履歴付き・現在台帳にいない館員」を復元する。
+// opts.mode:
+//   "deleted-ids" … deletedRosterIds に含まれる id のみ
+//   "deleted-or-missing" … 削除マーカーがある状態で、同名がいない審査付きも対象（手動復旧用）
+function importMissingReviewedMembers(target, snapshot, opts) {
+  opts = opts || {};
+  var mode = opts.mode || "deleted-ids";
+  if (!target || !snapshot) return 0;
+  if (!Array.isArray(target.roster)) target.roster = [];
+  var byId = {};
+  var byName = liveRosterNameSet(target);
+  target.roster.forEach(function(m) { if (m && m.id) byId[String(m.id)] = true; });
+  var delIds = {};
+  ensureDeletedRosterIds(target).forEach(function(id) { delIds[String(id)] = true; });
+  var delNames = {};
+  if (target.deletedRosterBackup && typeof target.deletedRosterBackup === "object") {
+    Object.keys(target.deletedRosterBackup).forEach(function(id) {
+      var b = target.deletedRosterBackup[id];
+      if (b && b.name) delNames[normalizeSposuruName(b.name)] = true;
+    });
+  }
+  var imported = 0;
+  collectReviewedMembersFromSnapshot(snapshot).forEach(function(m) {
+    var id = String(m.id);
+    var nameKey = normalizeSposuruName(m.name);
+    var wanted = false;
+    if (delIds[id] || (nameKey && delNames[nameKey])) wanted = true;
+    else if (mode === "deleted-or-missing" && Object.keys(delIds).length && nameKey && !byName[nameKey]) wanted = true;
+    if (!wanted) return;
+    if (byId[id]) {
+      clearRosterDeleted(target, id);
+      return;
+    }
+    // 同名の在籍者がいれば、審査履歴だけマージして削除マーカーを外す
+    if (nameKey && byName[nameKey]) {
+      clearRosterDeleted(target, id);
+      for (var i = 0; i < target.roster.length; i++) {
+        var cur = target.roster[i];
+        if (!cur || isArchivedRosterMember(cur)) continue;
+        if (normalizeSposuruName(cur.name) !== nameKey) continue;
+        target.roster[i] = mergeRosterMember(cur, m);
+        target.roster[i].id = cur.id;
+        imported++;
+        return;
+      }
+      return;
+    }
+    clearRosterDeleted(target, id);
+    var restored = normalizeRosterMember(deepClone(m));
+    restored.id = id;
+    restored.archivedAt = 0;
+    restored.archivedReason = "";
+    target.roster.push(restored);
+    byId[id] = true;
+    if (nameKey) byName[nameKey] = true;
+    imported++;
+  });
+  return imported;
+}
+
 function restoreReviewedRosterFromBackup(s) {
   if (!s) return s;
   if (!Array.isArray(s.roster)) s.roster = [];
@@ -3406,7 +3495,6 @@ function restoreReviewedRosterFromBackup(s) {
     if (byId[id]) return;
     var restored = normalizeRosterMember(deepClone(snap));
     restored.id = id;
-    // 削除マーカー由来の復活なので在籍に戻す
     restored.archivedAt = 0;
     restored.archivedReason = "";
     s.roster.push(restored);
@@ -3419,20 +3507,27 @@ function restoreReviewedRosterFromBackup(s) {
     });
   }
 
-  // シーズンアーカイブに残っていれば、削除済みでも審査履歴付きは復元
-  var delIds = ensureDeletedRosterIds(s);
-  if (delIds.length && Array.isArray(s.archives)) {
-    delIds.slice().forEach(function(id) {
-      if (byId[String(id)]) return;
-      for (var ai = 0; ai < s.archives.length; ai++) {
-        var archRoster = (s.archives[ai] && s.archives[ai].roster) || [];
-        for (var ri = 0; ri < archRoster.length; ri++) {
-          if (archRoster[ri] && String(archRoster[ri].id) === String(id) && memberHasStripeReviews(archRoster[ri])) {
-            tryRestore(id, archRoster[ri]);
-            return;
+  // アーカイブから id / 氏名 で審査履歴付きを復元
+  if (Array.isArray(s.archives)) {
+    var delSet = {};
+    ensureDeletedRosterIds(s).forEach(function(id) { delSet[String(id)] = true; });
+    var liveNames = liveRosterNameSet(s);
+    s.archives.forEach(function(a) {
+      ((a && a.roster) || []).forEach(function(m) {
+        if (!m || !memberHasStripeReviews(m)) return;
+        var id = String(m.id);
+        var nameKey = normalizeSposuruName(m.name);
+        if (byId[id]) { clearRosterDeleted(s, id); return; }
+        if (delSet[id] || (nameKey && !liveNames[nameKey])) {
+          if (nameKey && liveNames[nameKey]) {
+            // 同名が在籍中 → 履歴マージのみ
+            importMissingReviewedMembers(s, { roster: [m] });
+          } else {
+            tryRestore(id, m);
+            if (nameKey) liveNames[nameKey] = true;
           }
         }
-      }
+      });
     });
   }
   return s;
@@ -3781,6 +3876,63 @@ async function cloudPull() {
   const j = await res.json();
   ghSha = j.sha;
   return JSON.parse(b64Decode(j.content));
+}
+
+async function cloudPullAtRef(ref) {
+  const res = await fetch(ghApiUrl() + "?ref=" + encodeURIComponent(ref) + "&t=" + Date.now(), { headers: ghHeaders() });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("GET " + res.status + " @" + ref);
+  const j = await res.json();
+  return JSON.parse(b64Decode(j.content));
+}
+
+async function listCloudFileCommits(limit) {
+  limit = limit || 20;
+  var path = ghCfg.path;
+  var url = "https://api.github.com/repos/" + ghCfg.owner + "/" + ghCfg.repo +
+    "/commits?path=" + encodeURIComponent(path) +
+    "&sha=" + encodeURIComponent(ghCfg.branch) +
+    "&per_page=" + limit + "&t=" + Date.now();
+  var res = await fetch(url, { headers: ghHeaders() });
+  if (!res.ok) throw new Error("commits " + res.status);
+  var list = await res.json();
+  return Array.isArray(list) ? list : [];
+}
+
+// GitHub上の過去リビジョンから、消えた「審査履歴付き館員」を拾い戻す。
+async function recoverReviewedMembersFromGithubHistory(opts) {
+  opts = opts || {};
+  if (!ghReady()) throw new Error("クラウド同期が未設定です");
+  var commits = await listCloudFileCommits(opts.limit || 25);
+  var total = 0;
+  var names = {};
+  for (var i = 0; i < commits.length; i++) {
+    var sha = commits[i] && commits[i].sha;
+    if (!sha) continue;
+    var snap = null;
+    try { snap = await cloudPullAtRef(sha); } catch (e) { snap = null; }
+    if (!snap) continue;
+    var n = importMissingReviewedMembers(state, snap, { mode: opts.mode || "deleted-or-missing" });
+    if (n > 0) {
+      total += n;
+      collectReviewedMembersFromSnapshot(snap).forEach(function(m) {
+        if (m && m.name && state.roster.some(function(x) { return x && x.id === m.id; })) names[m.name] = true;
+      });
+    }
+  }
+  // ローカルアーカイブも再スキャン
+  total += importMissingReviewedMembers(state, state, { mode: opts.mode || "deleted-or-missing" });
+  if (total > 0) {
+    dedupeRosterMembers(state);
+    applyDeletedRosterIds(state);
+    state.updatedAt = Date.now();
+    saveLocal();
+    render();
+    if (!opts.skipPush) {
+      try { await cloudPush(); } catch (pushErr) {}
+    }
+  }
+  return { restored: total, names: Object.keys(names) };
 }
 
 async function cloudPush() {
@@ -8943,6 +9095,8 @@ function renderGhSettings() {
       <button type="button" class="btn btn-ghost" style="flex:1" data-action="manualPush">↑ 今すぐ保存</button>
       <button type="button" class="btn btn-ghost" style="flex:1" data-action="manualPull">↓ クラウドから読込</button>
     </div>
+    <button type="button" class="btn btn-secondary btn-block" style="margin-top:8px" data-action="recoverReviewedFromHistory">♻ 審査履歴付き館員を履歴から復旧</button>
+    <p style="font-size:.62rem;color:var(--muted);margin:6px 0 0;line-height:1.45">誤って消えた館員（ストライプ審査がある人）を、GitHubの過去データとシーズンアーカイブから戻します。</p>
     <div id="ghStatusLine" style="font-size:.72rem;color:var(--muted);margin-top:8px"></div>
   </div>`;
 }
@@ -9009,6 +9163,26 @@ async function manualPull() {
   } catch (e) {
     setSyncState("error", String(e.message || e));
     showToast("読み込みに失敗しました");
+  }
+}
+
+async function manualRecoverReviewedFromHistory() {
+  if (isMemberMode || isReadonly()) return;
+  if (!ghReady()) { showToast("先に同期設定を保存してください"); return; }
+  if (!confirm("GitHubの過去データとシーズンアーカイブを検索し、\nストライプ審査履歴があるのに台帳から消えている館員を復旧しますか？")) return;
+  setSyncState("syncing");
+  showToast("履歴を検索しています…", { duration: 2000 });
+  try {
+    var result = await recoverReviewedMembersFromGithubHistory({ limit: 30 });
+    setSyncState("synced", "復旧 " + formatConfirmDate(Date.now()));
+    if (result.restored > 0) {
+      showToast("審査履歴付き館員を " + result.restored + " 件復旧しました ✓\n" + (result.names || []).slice(0, 8).join("・"), { type: "ok", duration: 5000 });
+    } else {
+      showToast("復旧できる審査履歴付き館員が見つかりませんでした", { type: "warn", duration: 4000 });
+    }
+  } catch (e) {
+    setSyncState("error", String(e.message || e));
+    showToast("復旧に失敗しました: " + formatGhError(e.message || e), { type: "error", duration: 4500 });
   }
 }
 
@@ -10251,6 +10425,7 @@ function handleAppTap(e) {
   else if (action === "saveGhSettings") saveGhSettings();
   else if (action === "manualPush") manualPush();
   else if (action === "manualPull") manualPull();
+  else if (action === "recoverReviewedFromHistory") manualRecoverReviewedFromHistory();
   else if (action === "applySeason") applySeasonSettings();
   else if (action === "archiveSeason") archiveCurrentSeason();
   else if (action === "confirmAwards") confirmAwardsSnapshot();
@@ -10550,6 +10725,17 @@ async function initCloud() {
       }
     } else {
       await cloudPush();
+    }
+    // 削除マーカーが残っている場合、履歴から自動復旧を一度試みる
+    var needsRecovery = ensureDeletedRosterIds(state).length > 0 || !!(state.deletedRosterBackup && Object.keys(state.deletedRosterBackup).length);
+    if (needsRecovery && !reviewedHistoryRecoveryTried) {
+      reviewedHistoryRecoveryTried = true;
+      try {
+        var recovered = await recoverReviewedMembersFromGithubHistory({ limit: 20, skipPush: false });
+        if (recovered.restored > 0) {
+          showToast("消えていた審査履歴付き館員を " + recovered.restored + " 件自動復旧しました ✓", { type: "ok", duration: 4500 });
+        }
+      } catch (recErr) {}
     }
   } catch (e) {
     setSyncState("error", String(e.message || e));
