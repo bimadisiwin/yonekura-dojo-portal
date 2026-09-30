@@ -4056,6 +4056,47 @@ function healLiveSeasonAfterArchives(s) {
   return s;
 }
 
+function newestCompletedArchive(s) {
+  if (!s || !Array.isArray(s.archives)) return null;
+  var best = null;
+  var bestScore = -1;
+  s.archives.forEach(function(a) {
+    if (!a || !a.seasonKey || seasonKeyOrder(a.seasonKey) < 0) return;
+    if (!archiveHasMatchResults(a)) return;
+    var score = seasonAdvanceScore(a.fiscalYear, a.seasonKey);
+    if (score > bestScore || (score === bestScore && (!best || (a.archivedAt || 0) > (best.archivedAt || 0)))) {
+      best = a;
+      bestScore = score;
+    }
+  });
+  return best;
+}
+
+// 空のまま冬などへ進みすぎた現行を、完了アーカイブの「次シーズン」へ戻す。
+// 会員ページ（WordPress /data）は GitHub 直読みでないことがあり、古い冬データが残る対策。
+function healUnjustifiedSeasonAdvance(s) {
+  if (!s) return s;
+  if (hasPinnedLiveSeason(s)) return s;
+  var completed = newestCompletedArchive(s);
+  if (!completed) return s;
+  var expected = getNextSeason(completed.fiscalYear, completed.seasonKey);
+  var liveScore = seasonAdvanceScore(s.fiscalYear, s.seasonKey);
+  var expectedScore = seasonAdvanceScore(expected.fiscalYear, expected.seasonKey);
+  if (liveScore <= expectedScore) return s;
+  // リーグ星取があるなら本当に進んだ可能性があるので戻さない
+  if (hasAnyResultsSignature(leagueResultsSignature(s.leagues))) return s;
+  clearLiveMatchResults(s);
+  setLiveSeasonIdentity(s, expected.fiscalYear, expected.seasonKey);
+  pinLiveSeason(s, expected.fiscalYear, expected.seasonKey, completed.seasonId || completed.id);
+  // 空の先送りアーカイブ（誤って作られた秋/冬）を落とす
+  s.archives = (s.archives || []).filter(function(a) {
+    if (!a || !a.seasonKey) return false;
+    if (archiveHasMatchResults(a)) return true;
+    return seasonAdvanceScore(a.fiscalYear, a.seasonKey) <= seasonAdvanceScore(completed.fiscalYear, completed.seasonKey);
+  });
+  return s;
+}
+
 // 春＝プレリーグのみ、夏以降＝J1/J2/J3のみにリーグ構成を揃える。
 function leaguesForSeasonKey(seasonKey) {
   return seasonKey === "spring" ? ["pre"] : ["j1", "j2", "j3"];
@@ -4545,6 +4586,7 @@ function normalizeState(raw) {
   ensureSposuruSettings(s);
   // アーカイブを消す前にシーズン進行を修復（会員ページはクラウド読込のみのため）
   healLiveSeasonAfterArchives(s);
+  healUnjustifiedSeasonAdvance(s);
   clearLiveResultsCopiedFromPriorArchive(s);
   dropArchivesMatchingLiveSeason(s);
   dedupeRosterMembers(s);
