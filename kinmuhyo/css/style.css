@@ -196,33 +196,14 @@ body {
   flex-shrink: 0;
 }
 
-.shift-checkboxes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
+.modal-body input[type="time"] {
+  width: 100%;
+  margin-bottom: 0.25rem;
 }
 
-.shift-check {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8125rem;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-  background: var(--bg);
-}
-
-.shift-check:has(input:checked) {
-  border-color: var(--primary);
-  background: var(--primary-light);
-}
-
-.shift-check input {
-  width: auto;
-  margin: 0;
+#sf-available-preview {
+  color: var(--primary);
+  font-size: 0.75rem;
 }
 
 .shift-a { background: var(--shift-a); color: #1e40af; font-weight: 700; }

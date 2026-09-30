@@ -180,14 +180,13 @@
           <input type="checkbox" id="sf-license" checked> 保育士資格あり
         </label>
 
-        <label class="field-label">入れる時間帯</label>
-        <div class="shift-checkboxes">
-          <label class="shift-check"><input type="checkbox" id="sf-allow-A" checked> A 7-16</label>
-          <label class="shift-check"><input type="checkbox" id="sf-allow-B" checked> B 8-17</label>
-          <label class="shift-check"><input type="checkbox" id="sf-allow-C" checked> C 9-18</label>
-          <label class="shift-check"><input type="checkbox" id="sf-allow-D" checked> D 10-19</label>
-        </div>
-        <p class="field-hint">自動生成・手動入力で選べる勤務体系</p>
+        <label class="field-label">入れる時間帯（開始）</label>
+        <input type="time" id="sf-available-start" value="07:00" step="300">
+
+        <label class="field-label">入れる時間帯（終了）</label>
+        <input type="time" id="sf-available-end" value="19:00" step="300">
+
+        <p class="field-hint" id="sf-available-preview">勤務表の時間(A〜D)と重なる体系を自動で割当</p>
 
         <div id="sf-parttime-fields" style="display:none">
           <label class="field-label">パート勤務条件</label>

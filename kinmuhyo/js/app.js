@@ -4,7 +4,8 @@
   const C = window.KinmuhyoConstants;
   const S = window.KinmuhyoScheduler;
   const St = window.KinmuhyoStaffing;
-  const { STORAGE_KEY, SHIFT_TYPES, ROLES, EMPLOYMENT, PARTTIME_RULES, DOW, EARLY_SHIFTS, LATE_SHIFTS, WORK_SHIFTS, getAllowedShifts, createStaff, SEED_DATA } = C;
+  const { STORAGE_KEY, SHIFT_TYPES, ROLES, EMPLOYMENT, PARTTIME_RULES, DOW, EARLY_SHIFTS, LATE_SHIFTS,
+    getAllowedShifts, formatAvailableHours, migrateStaffAvailability, parseTimeToMinutes, createStaff, SEED_DATA } = C;
 
   let state = loadState();
   let modalContext = null;
@@ -114,30 +115,7 @@
   }
 
   function normalizeStaffList(staff) {
-    (staff || []).forEach(s => {
-      if (!s.allowedShifts?.length) {
-        s.allowedShifts = s.preferredShift ? [s.preferredShift] : WORK_SHIFTS.slice();
-      }
-    });
-  }
-
-  function formatAllowedShifts(staff) {
-    const allowed = getAllowedShifts(staff);
-    if (allowed.length === WORK_SHIFTS.length) return 'A〜D';
-    return allowed.join('/');
-  }
-
-  function readAllowedShiftsFromForm() {
-    return WORK_SHIFTS.filter(s =>
-      document.querySelector(`#sf-allow-${s}`)?.checked
-    );
-  }
-
-  function setAllowedShiftsOnForm(allowed) {
-    WORK_SHIFTS.forEach(s => {
-      const el = document.getElementById(`sf-allow-${s}`);
-      if (el) el.checked = allowed.includes(s);
-    });
+    (staff || []).forEach(s => migrateStaffAvailability(s));
   }
 
   function loadState() {
@@ -294,7 +272,7 @@
       li.innerHTML = `
         <div class="staff-item-info" data-action="edit-staff" data-id="${s.id}" style="cursor:pointer;flex:1">
           <div class="staff-item-name">${staffBadge(s)} ${escapeHtml(s.name)}</div>
-          <div class="staff-item-dept">${escapeHtml(ROLES[s.role]?.label || '')}${ptLabel ? ' · ' + ptLabel : ''} · ${formatAllowedShifts(s)}</div>
+          <div class="staff-item-dept">${escapeHtml(ROLES[s.role]?.label || '')}${ptLabel ? ' · ' + ptLabel : ''} · ${formatAvailableHours(s)}</div>
         </div>
         <div class="staff-item-actions">
           <button class="btn btn-danger btn-icon" data-action="delete-staff" data-id="${s.id}" title="削除">×</button>
@@ -435,7 +413,7 @@
     modalContext = { staffId, day };
     const allowed = getAllowedShifts(staff);
     document.getElementById('modal-title').textContent =
-      `${staff.name} — ${state.year}年${state.month}月${day}日（${formatAllowedShifts(staff)}）`;
+      `${staff.name} — ${state.year}年${state.month}月${day}日（入れる時間 ${formatAvailableHours(staff)}）`;
     const opts = document.getElementById('shift-options');
     opts.innerHTML = '';
     Object.entries(SHIFT_TYPES).forEach(([key, s]) => {
@@ -470,7 +448,9 @@
     document.getElementById('sf-role').value = staff?.role || 'nursery_teacher';
     document.getElementById('sf-license').checked = staff?.hasNurseryLicense ?? true;
     document.getElementById('sf-parttime').value = staff?.parttimeRule || 'monthly_10';
-    setAllowedShiftsOnForm(staff ? getAllowedShifts(staff) : WORK_SHIFTS.slice());
+    document.getElementById('sf-available-start').value = staff?.availableStart || '07:00';
+    document.getElementById('sf-available-end').value = staff?.availableEnd || '19:00';
+    updateAvailablePreview();
     const offs = staff ? (staff.preferredOff[monthKey(state.year, state.month)] || []) : [];
     document.getElementById('sf-preferred-off').value = offs.join(', ');
     toggleStaffParttimeFields();
@@ -480,6 +460,18 @@
   function closeStaffModal() {
     document.getElementById('staff-modal-overlay').classList.add('hidden');
     staffEditId = null;
+  }
+
+  function updateAvailablePreview() {
+    const el = document.getElementById('sf-available-preview');
+    if (!el) return;
+    const start = document.getElementById('sf-available-start').value;
+    const end = document.getElementById('sf-available-end').value;
+    if (!start || !end) { el.textContent = ''; return; }
+    const allowed = getAllowedShifts({ availableStart: start, availableEnd: end });
+    el.textContent = allowed.length
+      ? `割当可能な勤務: ${allowed.join(' / ')}`
+      : 'この時間帯では勤務体系(A〜D)と重なりません';
   }
 
   function toggleStaffParttimeFields() {
@@ -495,9 +487,16 @@
     const role = document.getElementById('sf-role').value;
     const hasNurseryLicense = document.getElementById('sf-license').checked;
     const parttimeRule = employmentType === 'parttime' ? document.getElementById('sf-parttime').value : null;
-    const allowedShifts = readAllowedShiftsFromForm();
-    if (!allowedShifts.length) { showToast('入れる時間帯を1つ以上選んでください'); return; }
-    const preferredShift = employmentType === 'parttime' ? allowedShifts[0] : null;
+    const availableStart = document.getElementById('sf-available-start').value;
+    const availableEnd = document.getElementById('sf-available-end').value;
+    if (!availableStart || !availableEnd) { showToast('入れる時間帯を入力してください'); return; }
+    if (parseTimeToMinutes(availableStart) >= parseTimeToMinutes(availableEnd)) {
+      showToast('終了時刻は開始時刻より後にしてください'); return;
+    }
+    const tempStaff = { availableStart, availableEnd };
+    const allowed = getAllowedShifts(tempStaff);
+    if (!allowed.length) { showToast('この時間帯では勤務体系(A〜D)と重なりません'); return; }
+    const preferredShift = employmentType === 'parttime' ? (allowed.includes('B') ? 'B' : allowed[0]) : null;
     const offRaw = document.getElementById('sf-preferred-off').value.trim();
     const offDays = offRaw ? offRaw.split(/[,、\s]+/).map(Number).filter(n => n >= 1 && n <= 31) : [];
     const mk = monthKey(state.year, state.month);
@@ -508,12 +507,12 @@
       Object.assign(staff, {
         name, employmentType, role, hasNurseryLicense,
         isChildcareWorker: ROLES[role]?.isChildcareWorker ?? true,
-        parttimeRule, preferredShift, allowedShifts,
+        parttimeRule, preferredShift, availableStart, availableEnd,
       });
       if (!staff.preferredOff) staff.preferredOff = {};
       staff.preferredOff[mk] = offDays;
     } else {
-      const s = createStaff({ name, employmentType, role, hasNurseryLicense, parttimeRule, preferredShift, allowedShifts, preferredOff: { [mk]: offDays } });
+      const s = createStaff({ name, employmentType, role, hasNurseryLicense, parttimeRule, preferredShift, availableStart, availableEnd, preferredOff: { [mk]: offDays } });
       state.staff.push(s);
     }
 
@@ -664,6 +663,8 @@
     document.getElementById('btn-reset').addEventListener('click', resetData);
     document.getElementById('btn-add-staff').addEventListener('click', () => openStaffModal(null));
     document.getElementById('sf-employment').addEventListener('change', toggleStaffParttimeFields);
+    document.getElementById('sf-available-start')?.addEventListener('input', updateAvailablePreview);
+    document.getElementById('sf-available-end')?.addEventListener('input', updateAvailablePreview);
     document.getElementById('staff-modal-save').addEventListener('click', saveStaffFromModal);
     document.getElementById('staff-modal-close').addEventListener('click', closeStaffModal);
     document.getElementById('staff-modal-overlay').addEventListener('click', e => {
