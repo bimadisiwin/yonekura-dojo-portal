@@ -6744,9 +6744,121 @@ function renderRosterLedgerCard() {
   return renderRosterLedgerJuniorCard() + renderRosterLedgerSeniorCard() + renderRosterLedgerStaffCard();
 }
 
+function formatMemberLoginPassphrase(m) {
+  if (!m) return "";
+  var name = (m.name || "").trim().replace(/\s+/g, "");
+  var md = normalizeBirthMd(m.birthMd);
+  if (!name || !md) return "";
+  return name + md;
+}
+
+function buildMemberLoginListRows() {
+  var rows = [];
+  sortRosterByName(getRosterList()).forEach(function(m) {
+    if (isStaffMember(m)) return;
+    var login = formatMemberLoginPassphrase(m);
+    rows.push({
+      name: (m.name || "").trim(),
+      group: m.group || "",
+      track: inferMemberTrack(m.group, m.track),
+      birthMd: normalizeBirthMd(m.birthMd),
+      login: login
+    });
+  });
+  return rows;
+}
+
+function buildMemberLoginListText() {
+  var rows = buildMemberLoginListRows();
+  var lines = ["# 会員ページ合言葉一覧（名前＋誕生日月日4桁）", "# 例：ゆうすけ0610", "# ページ: https://yonekura-dojo.com/member/", ""];
+  var ready = rows.filter(function(r) { return r.login; });
+  var missing = rows.filter(function(r) { return !r.login; });
+  lines.push("## 合言葉あり（" + ready.length + "名）");
+  ready.forEach(function(r) {
+    lines.push(r.login + "\t" + r.name + (r.group ? "（" + r.group + "）" : ""));
+  });
+  if (missing.length) {
+    lines.push("");
+    lines.push("## 誕生日未登録（合言葉なし・" + missing.length + "名）");
+    missing.forEach(function(r) {
+      lines.push("(未登録)\t" + r.name + (r.group ? "（" + r.group + "）" : ""));
+    });
+  }
+  return lines.join("\n");
+}
+
+function copyMemberLoginList() {
+  if (isMemberMode || isReadonly()) return;
+  flushRosterInputsFromDom();
+  var text = buildMemberLoginListText();
+  var readyCount = buildMemberLoginListRows().filter(function(r) { return r.login; }).length;
+  if (!readyCount) {
+    showToast("誕生日が登録された館員がいません。台帳に誕生日（月日4桁）を入れてください。", { type: "warn", duration: 4000 });
+    return;
+  }
+  function done() {
+    showToast("合言葉一覧をコピーしました（" + readyCount + "名）✓", { type: "ok" });
+    var ta = document.getElementById("memberLoginListText");
+    if (ta) ta.value = text;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(function() {
+      var ta = document.getElementById("memberLoginListText");
+      if (ta) {
+        ta.value = text;
+        ta.focus();
+        ta.select();
+        try { document.execCommand("copy"); done(); }
+        catch (e) { showToast("コピーに失敗しました。一覧を手動で選択してください", { type: "warn" }); }
+      }
+    });
+  } else {
+    var ta2 = document.getElementById("memberLoginListText");
+    if (ta2) {
+      ta2.value = text;
+      ta2.focus();
+      ta2.select();
+      try { document.execCommand("copy"); done(); }
+      catch (e) { showToast("コピーに失敗しました。一覧を手動で選択してください", { type: "warn" }); }
+    }
+  }
+}
+
+function renderMemberLoginListCard() {
+  var rows = buildMemberLoginListRows();
+  var ready = rows.filter(function(r) { return r.login; }).length;
+  var missing = rows.length - ready;
+  var text = buildMemberLoginListText();
+  var table = rows.map(function(r) {
+    return '<tr>' +
+      '<td style="padding:4px 6px;border-bottom:1px solid var(--line)">' + esc(r.name) + "</td>" +
+      '<td style="padding:4px 6px;border-bottom:1px solid var(--line);color:var(--muted)">' + esc(r.group || "—") + "</td>" +
+      '<td style="padding:4px 6px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace;font-weight:700">' +
+      (r.login ? esc(r.login) : '<span style="color:#b83232">誕生日未登録</span>') +
+      "</td></tr>";
+  }).join("");
+  return '<div class="card">' +
+    '<div class="card-title">🔑 会員ページ合言葉一覧</div>' +
+    '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' +
+    "https://yonekura-dojo.com/member/ の本人確認は <b>名前＋誕生日（月日4桁）</b> です（例：ゆうすけ0610）。指導者は対象外。" +
+    " 登録済 " + ready + "名" + (missing ? " ／ 未登録 " + missing + "名" : "") + "。</p>" +
+    '<div style="overflow:auto;max-height:280px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px">' +
+    '<table style="width:100%;border-collapse:collapse;font-size:.74rem">' +
+    '<thead><tr style="background:var(--bg);text-align:left">' +
+    '<th style="padding:6px;position:sticky;top:0;background:var(--bg)">名前</th>' +
+    '<th style="padding:6px;position:sticky;top:0;background:var(--bg)">区分</th>' +
+    '<th style="padding:6px;position:sticky;top:0;background:var(--bg)">合言葉</th>' +
+    "</tr></thead><tbody>" + (table || '<tr><td colspan="3" style="padding:8px;color:var(--muted)">館員がいません</td></tr>') +
+    "</tbody></table></div>" +
+    '<textarea id="memberLoginListText" readonly rows="6" style="width:100%;font-size:.68rem;line-height:1.45;padding:8px;border:1px solid var(--line);border-radius:8px;font-family:ui-monospace,monospace;resize:vertical">' +
+    esc(text) + "</textarea>" +
+    '<button type="button" class="btn btn-primary btn-block" style="margin-top:8px" data-action="copyMemberLoginList">📋 合言葉一覧をコピー</button>' +
+    "</div>";
+}
+
 function renderRosterLedgerSection() {
   if (isMemberMode) return "";
-  return renderSposuruSyncCard() + renderRosterLedgerCard() + renderRosterToLeagueCard();
+  return renderSposuruSyncCard() + renderMemberLoginListCard() + renderRosterLedgerCard() + renderRosterToLeagueCard();
 }
 
 function parseUrlViewParam() {
@@ -10476,6 +10588,7 @@ function handleAppTap(e) {
   else if (action === "addCustomAwardType") addCustomAwardType();
   else if (action === "deleteCustomAwardType") deleteCustomAwardType(target.getAttribute("data-type-key"));
   else if (action === "addRosterMember") addRosterMember(document.getElementById("newRosterName") ? document.getElementById("newRosterName").value : "");
+  else if (action === "copyMemberLoginList") copyMemberLoginList();
   else if (action === "addRosterToLeague") {
     var pick = document.getElementById("rosterLeaguePick");
     addRosterMemberToLeague(target.getAttribute("data-roster-id"), pick ? pick.value : currentLeagueId);
