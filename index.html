@@ -2904,7 +2904,7 @@ function applyMemberCommentDraft(m, draft, source) {
 }
 
 function canGenerateMemberCommentDraft(m) {
-  if (!m || isSeniorMember(m)) return false;
+  if (!m || !isStripeTargetMember(m)) return false;
   return !!generateMemberCommentDraft(m);
 }
 
@@ -2914,7 +2914,7 @@ function generateFallbackMemberCommentDraft(member) {
 }
 
 function suggestMemberCommentDraft(m) {
-  if (!m || isSeniorMember(m) || isArchivedRosterMember(m)) return "";
+  if (!m || !isStripeTargetMember(m) || isArchivedRosterMember(m)) return "";
   if (hasMemberCommentDraft(m)) return String(m.memberCommentDraft).trim();
   var fromReviews = generateMemberCommentDraft(m);
   if (fromReviews) return stripSeasonHeaderFromComment(fromReviews);
@@ -2930,7 +2930,7 @@ function feedbackCommentFieldValue(m) {
 function countBatchDraftTargets(list) {
   var n = 0;
   (list || []).forEach(function(m) {
-    if (isSeniorMember(m) || isArchivedRosterMember(m)) return;
+    if (!isStripeTargetMember(m)) return;
     if (getMemberSeasonComment(m)) return;
     n++;
   });
@@ -3000,7 +3000,7 @@ function batchDraftMemberComments() {
   var i, m, draft, source;
   for (i = 0; i < roster.length; i++) {
     m = roster[i];
-    if (isSeniorMember(m) || isArchivedRosterMember(m)) continue;
+    if (!isStripeTargetMember(m)) continue;
     if (getMemberSeasonComment(m)) continue;
     draft = generateMemberCommentDraft(m);
     source = "auto-draft";
@@ -5620,6 +5620,17 @@ function isSeniorMember(m) {
   return inferMemberTrack(m.group, m.track) === "senior";
 }
 
+function isStaffMember(m) {
+  if (!m) return false;
+  return inferMemberTrack(m.group, m.track) === "staff";
+}
+
+// ストライプ制度の対象（小学生・未就学）。中学生以上・指導者は対象外。
+function isStripeTargetMember(m) {
+  if (!m || isArchivedRosterMember(m)) return false;
+  return inferMemberTrack(m.group, m.track) === "junior";
+}
+
 function isSposuruRosterGroup(groupName) {
   return SPOSURU_ROSTER_GROUPS.indexOf((groupName || "").trim()) >= 0;
 }
@@ -6255,6 +6266,10 @@ function openStripeReview(rosterId) {
   if (isMemberMode || isReadonly()) return;
   var m = findRosterMember(rosterId);
   if (!m) return;
+  if (!isStripeTargetMember(m)) {
+    showToast("指導者・中学生以上はストライプ審査の対象外です", { type: "warn" });
+    return;
+  }
   stripeReviewMemberId = rosterId;
   var stripes = m.stripes || 0;
   var target = stripes >= STRIPE_MAX ? STRIPE_MAX : Math.min(STRIPE_MAX, stripes + 1);
@@ -6591,7 +6606,7 @@ function getRosterMembersNotInLeague(leagueId) {
     taken[normalizeSposuruName(p.name)] = true;
   });
   return getRosterList().filter(function(m) {
-    if (isSeniorMember(m)) return false;
+    if (!isStripeTargetMember(m)) return false;
     if (taken[m.id]) return false;
     if (taken[normalizeSposuruName(m.name)]) return false;
     return true;
@@ -6674,7 +6689,7 @@ function renderRosterLedgerMemberRow(m) {
 }
 
 function renderRosterLedgerJuniorCard() {
-  var roster = sortRosterByName(getRosterList().filter(function(m) { return !isSeniorMember(m); }));
+  var roster = sortRosterByName(getRosterList().filter(isStripeTargetMember));
   var rows = roster.map(renderRosterLedgerMemberRow).join("");
   return '<div class="card stripe-roster-card">' +
     '<div class="card-title">🎗 小学生・未就学（' + roster.length + "名）</div>" +
@@ -6684,6 +6699,31 @@ function renderRosterLedgerJuniorCard() {
     '<input id="newRosterName" placeholder="新規館員名" style="flex:1;min-width:140px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:.82rem">' +
     '<button type="button" class="btn btn-primary btn-sm" data-action="addRosterMember">＋ 追加</button></div>' +
     (rows || '<p style="font-size:.82rem;color:var(--muted);padding:8px">館員がいません</p>') +
+    "</div>";
+}
+
+function renderRosterLedgerStaffCard() {
+  var roster = sortRosterByName(getRosterList().filter(isStaffMember));
+  if (!roster.length) return "";
+  var rows = roster.map(function(m) {
+    return '<div class="stripe-roster-row">' +
+      '<div class="stripe-roster-main">' +
+      '<div class="stripe-roster-name">' +
+      '<input type="text" class="stripe-roster-name-input" value="' + esc(m.name) + '" data-roster-field="name" data-roster-id="' + esc(m.id) + '" title="館員名">' +
+      '<input type="text" class="stripe-roster-sposuru-input" value="' + esc(m.sposuruName || "") + '" placeholder="スポスル名" data-roster-field="sposuruName" data-roster-id="' + esc(m.id) + '" title="スポスルCSVの氏名（漢字）">' +
+      "</div>" +
+      '<div class="stripe-roster-meta">指導者（ストライプ制度の対象外）' +
+      (m.birthMd ? " ／ 誕生日: " + esc(formatBirthMdDisplay(m.birthMd)) : "") +
+      "</div></div>" +
+      '<div class="stripe-roster-actions">' +
+      '<button type="button" class="btn btn-danger btn-sm" data-action="removeRosterMember" data-roster-id="' + esc(m.id) + '">削除</button>' +
+      "</div></div>";
+  }).join("");
+  return '<div class="card stripe-roster-card">' +
+    '<div class="card-title">🥋 指導者（' + roster.length + "名）</div>" +
+    '<p style="font-size:.66rem;color:var(--muted);margin:-4px 0 10px;line-height:1.45">' +
+    "指導者はストライプ審査・出席管理の対象外です。グループを「指導者」にするとここに表示されます。</p>" +
+    rows +
     "</div>";
 }
 
@@ -6701,7 +6741,7 @@ function renderRosterLedgerSeniorCard() {
 }
 
 function renderRosterLedgerCard() {
-  return renderRosterLedgerJuniorCard() + renderRosterLedgerSeniorCard();
+  return renderRosterLedgerJuniorCard() + renderRosterLedgerSeniorCard() + renderRosterLedgerStaffCard();
 }
 
 function renderRosterLedgerSection() {
@@ -7045,7 +7085,7 @@ function renderFeedbackMemberChip(m, active) {
 
 function renderFeedbackDraftBoard(list) {
   var rows = (list || []).filter(function(m) {
-    return !isSeniorMember(m) && !isArchivedRosterMember(m) && !getMemberSeasonComment(m) && m.id !== feedbackRosterId;
+    return isStripeTargetMember(m) && !isArchivedRosterMember(m) && !getMemberSeasonComment(m) && m.id !== feedbackRosterId;
   });
   if (!rows.length) return "";
   var html = rows.map(function(m) {
@@ -7147,7 +7187,7 @@ function renderFeedbackPage() {
 }
 
 function renderStripesPage() {
-  var roster = getRosterList().filter(function(m) { return !isSeniorMember(m); }).slice().sort(function(a, b) {
+  var roster = getRosterList().filter(isStripeTargetMember).slice().sort(function(a, b) {
     if (b.stripes !== a.stripes) return b.stripes - a.stripes;
     return a.name.localeCompare(b.name, "ja");
   });
